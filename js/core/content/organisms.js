@@ -90,7 +90,7 @@ export const ORGANISMS = [
   {
     id: 'm_tuberculosis', name: 'Tuberculosis bacillus (Mycobacterium tuberculosis)', scatter: false,
     mic: { isoniazid: 0.06, rifampicin: 0.125, pyrazinamide: 25, ethambutol: 1, streptomycin: 0.5 },
-    fold: { isoniazid: 64, rifampicin: 128, pyrazinamide: 8, ethambutol: 8, streptomycin: 64 },
+    fold: { isoniazid: 128, rifampicin: 128, pyrazinamide: 8, ethambutol: 8, streptomycin: 64 },
     mut: { isoniazid: 6, rifampicin: 8, pyrazinamide: 5, ethambutol: 6, streptomycin: 6 },
     // new patients in Uganda: any isoniazid resistance ~5%, MDR ~1.4%
     resist0: { isoniazid: 0.05, rifampicin: 0.015, pyrazinamide: 0.02, ethambutol: 0.02, streptomycin: 0.05 },

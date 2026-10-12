@@ -134,7 +134,7 @@ export const ACTIVES = [
   {
     id: 'sulfur', name: 'Precipitated sulfur', channel: 'topical', class: 'scabicide',
     // 1 part sulfur to 10 parts lard, 3 times a day for 3 days (WTND). Cure rates in trials ~70–90%.
-    topical: { on: 'scabies', kill: 0.55, perApply: 1, irritate: 0.05, also: [{ on: 'tinea', kill: 0.06 }] }, // WTND p.205: sulfur in lard for ringworm too (kill an estimate)
+    topical: { on: 'scabies', kill: 0.55, perApply: 1, irritate: 0.05, also: [{ on: 'tinea', kill: 0.12 }] }, // WTND p.205: sulfur in lard for ringworm too (kill an estimate)
     cautions: ['Not for babies under 1 year (WTND).', 'Stop if the rash gets worse.'],
     ref: 'WTND p.199; Strong M, Johnstone P. Cochrane 2007;CD000320',
   },
@@ -491,7 +491,7 @@ export const ACTIVES = [
     id: 'isoniazid', name: 'Isoniazid (INH)', channel: 'systemic', class: 'anti-TB',
     // t½ 1–4 h by acetylator type (the wide spread); 300 mg gives ~3–5 mg/L
     pk: { F: 0.9, ka: 2, half: 3, vd: 0.6, fu: 0.9, csf: 0.9, spread: 0.45 },
-    abx: { kmax: 0.025, ec50: 1, hill: 1.5, window: 8, dormant: 0.05, calibrated: true },
+    abx: { kmax: 0.03, ec50: 1, hill: 1.5, window: 8, dormant: 0.013, calibrated: true },
     // liver injury in ~1% of courses, more with age and alcohol; rarely fatal (Saukkonen JJ et al. Am J Respir Crit Care
     // Med 2006;174:935). Onset weeks into the course: early, on the game calendar. Odds an estimate.
     idio: [{ per: 0.006, days: [3, 12], hours: 240, sign: 'tb_hepatitis', text: 'yellow eyes, dark urine, no appetite, vomiting (liver reaction to TB medicine)', harm: 0.006 }],
@@ -502,7 +502,7 @@ export const ACTIVES = [
     id: 'rifampicin', name: 'Rifampicin', channel: 'systemic', class: 'anti-TB · anti-leprosy',
     // 600 mg gives ~8–12 mg/L, ~80% bound; induces its own clearance over ~2 weeks
     pk: { F: 0.9, ka: 1.2, half: 3, vd: 0.9, fu: 0.2, csf: 1, spread: 0.35, induce: { max: 1.4, days: 10 } },
-    abx: { kmax: 0.015, ec50: 1, hill: 1.5, window: 8, dormant: 0.5, calibrated: true },
+    abx: { kmax: 0.035, ec50: 1, hill: 1.5, window: 8, dormant: 0.073, calibrated: true },
     toxic: [{ at: 1, sign: 'orange_urine', text: 'urine, tears and sweat turn red-orange (rifampicin, harmless)', harm: 0 }],
     idio: [{ per: 0.003, days: [3, 12], hours: 240, sign: 'tb_hepatitis', text: 'yellow eyes, dark urine, no appetite, vomiting (liver reaction to TB medicine)', harm: 0.006 }],
     cautions: ['Never alone: the germ learns to resist it.', 'Colours urine and tears orange.', 'Weakens birth-control pills.'],
@@ -512,7 +512,7 @@ export const ACTIVES = [
     id: 'pyrazinamide', name: 'Pyrazinamide', channel: 'systemic', class: 'anti-TB',
     // 25 mg/kg gives ~35–50 mg/L; acts in acid, on the slow bacilli
     pk: { F: 0.9, ka: 1.5, half: 9.5, vd: 0.7, fu: 0.9, csf: 1, spread: 0.3 },
-    abx: { kmax: 0.006, ec50: 1, hill: 1.5, window: 8, dormant: 1, calibrated: true },
+    abx: { kmax: 0.012, ec50: 1, hill: 1.5, window: 8, dormant: 0.175, calibrated: true },
     toxic: [{ at: 60, sign: 'pza_joints', text: 'aching, swollen joints (pyrazinamide)', harm: 0 }],
     idio: [{ per: 0.004, days: [3, 12], hours: 240, sign: 'tb_hepatitis', text: 'yellow eyes, dark urine, no appetite, vomiting (liver reaction to TB medicine)', harm: 0.006 }],
     ref: 'WTND p.361; Goodman & Gilman 13e ch.60; Zhang Y, Mitchison D. Int J Tuberc Lung Dis 2003;7:6',
@@ -520,7 +520,7 @@ export const ACTIVES = [
   {
     id: 'ethambutol', name: 'Ethambutol', channel: 'systemic', class: 'anti-TB',
     pk: { F: 0.8, ka: 1, half: 3.5, vd: 1.6, fu: 0.8, csf: 0.3, spread: 0.3 },
-    abx: { kmax: 0.008, ec50: 1, hill: 1.5, window: 8, dormant: 0, calibrated: true },
+    abx: { kmax: 0.025, ec50: 1, hill: 1.5, window: 8, dormant: 0, calibrated: true },
     // optic neuritis with high doses (>25 mg/kg/day) for weeks; mostly recovers on stopping
     toxic: [{ at: 10, sign: 'optic_neuritis', text: 'colours fade and sight blurs (ethambutol on the eyes)', harm: 0 }],
     ref: 'WTND p.361; Goodman & Gilman 13e ch.60',
@@ -529,7 +529,7 @@ export const ACTIVES = [
     id: 'streptomycin', name: 'Streptomycin', channel: 'systemic', class: 'anti-TB (injected)',
     // by mouth it is not absorbed; injected 15 mg/kg gives ~25–45 mg/L
     pk: { F: 0.01, ka: 2, half: 2.5, vd: 0.25, fu: 0.66, csf: 0.3, spread: 0.3 },
-    abx: { kmax: 0.012, ec50: 1, hill: 1.5, window: 8, dormant: 0, calibrated: true },
+    abx: { kmax: 0.025, ec50: 1, hill: 1.5, window: 8, dormant: 0, calibrated: true },
     toxic: [{ at: 55, sign: 'ototoxic', text: 'ringing ears, dizzy, hearing fading (streptomycin)', harm: 0 }],
     cautions: ['Too much for too long makes people deaf.', 'Not in pregnancy (the baby\'s hearing).'],
     ref: 'WTND p.361; Goodman & Gilman 13e ch.58',
@@ -537,7 +537,7 @@ export const ACTIVES = [
   {
     id: 'dapsone', name: 'Dapsone', channel: 'systemic', class: 'anti-leprosy',
     pk: { F: 0.9, ka: 1, half: 30, vd: 1, fu: 0.25, spread: 0.3 },
-    abx: { kmax: 0.004, ec50: 1, hill: 1.5, window: 8, dormant: 0.1, calibrated: true },
+    abx: { kmax: 0.0016, ec50: 1, hill: 1.5, window: 8, dormant: 0.1, calibrated: true },
     // breaks red cells (worse with G6PD deficiency) and turns haemoglobin to methaemoglobin at high levels
     toxic: [{ at: 6, sign: 'methaemoglobin', text: 'blue-grey lips, breathless, tired (too much dapsone)', harm: 0.02 }],
     // dapsone hypersensitivity syndrome: ~1.4% of people, ~10% of them die (Lorenz M et al. Lepr Rev 2012;83:305)
@@ -592,7 +592,7 @@ export const ACTIVES = [
   {
     id: 'whitfield', name: 'Benzoic and salicylic acid (Whitfield\'s ointment)', channel: 'topical', class: 'antifungal',
     // twice a day for 3–4 weeks clears most ringworm of the body (kill per application an estimate)
-    topical: { on: 'tinea', kill: 0.12, perApply: 1, irritate: 0.05 },
+    topical: { on: 'tinea', kill: 0.2, perApply: 1, irritate: 0.05 },
     ref: 'WTND pp.205, 371; Crawford F, Hollis S. Cochrane 2007;CD001434',
   },
   {

@@ -286,8 +286,8 @@ export const CONDITIONS = [
     // ~10^9 bacilli in a lung cavity, doubling in ~22 h (r log10/h); 1 in 100 semi-dormant (sleep/wake per hour).
     // Untreated smear-positive TB kills ~70% within 10 years, most in the first 3 (Tiemersma EW et al. PLoS One 2011;
     // 6:e17601): ~20% a year; hazard calibrated to that. Walks in after 4–12 weeks of cough.
-    params: { org: 'm_tuberculosis', pace: COMPRESS, since: [28 * 24 / COMPRESS, 84 * 24 / COMPRESS], A0: [8, 9.5], r: 0.0137, Asym: 6, Amax: 9.5, imm: 0.012,
-      sleep: 1e-5, wake: 1e-3, hazard: 1.5e-5, waste: 7e-5, hosp: 0.02, tb: true, fever: [0.3, 1.2] },
+    params: { org: 'm_tuberculosis', pace: COMPRESS, since: [28 * 24 / COMPRESS, 84 * 24 / COMPRESS], A0: [8, 9.5], r: 0.004, Asym: 6, Amax: 9.5, imm: 0.002,
+      sleep: 1e-5, wake: 1e-3, hazard: 3.5e-5, waste: 7e-5, hosp: 0.02, tb: true, fever: [0.3, 1.2] },
     complaint: ['I have coughed for weeks now, and I sweat at night.', '{who} has a cough that will not go, for more than a month, and is getting thin.', 'A long cough, and this week some blood in the spit.'],
     teach: { treat: ['isoniazid', 'rifampicin', 'pyrazinamide', 'ethambutol'], helps: [], harms: [], refer: 'The health centre can test the sputum and gives TB medicine free. Coughing much blood, or very weak: refer.' },
     learn: 'A cough of more than 3 weeks, often worst on waking; slight fever in the evening, night sweats, chest or back pain, slow weight loss and weakness; later blood in the spit. Four medicines together (isoniazid, rifampicin, pyrazinamide, ethambutol) for 2 months, then two for 4 more — every day, never stopping early, or it comes back and learns to resist. One medicine alone breeds resistant TB. Eat well and rest; the family should be checked.',
@@ -297,7 +297,7 @@ export const CONDITIONS = [
     id: 'tb_nodes', name: 'Tuberculosis of the neck glands (scrofula)', local: ['the neck lumps'], model: 'mycobacterial',
     epi: { w: 0.4, age: [[0, 5, 0.8], [5, 35, 1.2], [35, 99, 0.6]], season: { cool_dry: 1, hot_dry: 1, rains: 1, late_rains: 1 }, crowd: 1.3 },
     // fewer bacilli than a lung cavity; rarely fatal on its own (hazard an estimate)
-    params: { org: 'm_tuberculosis', pace: COMPRESS, since: [42 * 24 / COMPRESS, 120 * 24 / COMPRESS], A0: [6, 7.5], r: 0.0137, Asym: 4.5, Amax: 7.5, imm: 0.012,
+    params: { org: 'm_tuberculosis', pace: COMPRESS, since: [42 * 24 / COMPRESS, 120 * 24 / COMPRESS], A0: [6, 7.5], r: 0.004, Asym: 4.5, Amax: 7.5, imm: 0.002,
       sleep: 1e-5, wake: 1e-3, hazard: 2e-6, waste: 3e-5, hosp: 0.02, nodes: true, fever: [0, 0.6] },
     complaint: ['There are lumps in {poss} neck that have grown for months; one broke open and drains.', 'Swellings under the jaw and above the collar bone, for months, not painful.'],
     teach: { treat: ['isoniazid', 'rifampicin', 'pyrazinamide', 'ethambutol'], helps: [], harms: [], refer: 'Any chronic swollen glands or sore: tests at the health centre.' },
@@ -309,8 +309,8 @@ export const CONDITIONS = [
     epi: { w: 0.15, age: [[0, 10, 0.5], [10, 99, 1]], season: { cool_dry: 1, hot_dry: 1, rains: 1, late_rains: 1 }, crowd: 1.5 },
     // M. leprae doubles in ~13 days; from a few patches (10^5) to the lumpy form (10^10). Nerve damage builds over years
     // untreated and stays after cure. Rates are estimates; it hardly ever kills by itself.
-    params: { org: 'm_leprae', pace: COMPRESS, since: [180 * 24 / COMPRESS, 720 * 24 / COMPRESS], A0: [5, 10], r: 0.001, Asym: 4, Amax: 11, imm: 0.0009,
-      sleep: 1e-5, wake: 1e-4, hazard: 0, waste: 0, hosp: 0, nerve: 1.1e-5, leprosy: true },
+    params: { org: 'm_leprae', pace: COMPRESS, since: [180 * 24 / COMPRESS, 720 * 24 / COMPRESS], A0: [5, 10], r: 0.001, Asym: 4, Amax: 11, imm: 0.0002,
+      sleep: 1e-8, wake: 1e-4, hazard: 0, waste: 0, hosp: 0, nerve: 2.2e-5, leprosy: true },
     complaint: ['There is a pale patch on my arm that has grown for months. I cannot feel a thorn in it.', 'My hands tingle and are numb, and I burned my fingers on the pot without feeling it.'],
     teach: { treat: ['dapsone', 'rifampicin'], helps: [], harms: [], refer: 'Pain along the nerves, sudden weakness, red painful eyes (a lepra reaction): refer, but keep the medicine.' },
     learn: 'A slowly growing pale patch that does not itch or hurt, and later loses feeling; thick nerves at the elbow, knee and neck; numb hands and feet that get burned and cut without pain; in the lumpy form, thick ear lobes and lost eyebrows. Dapsone every day with rifampicin, for 6 months (patches only) to a year (lumps). Damage already done stays: protect numb hands, feet and eyes.',
@@ -322,7 +322,7 @@ export const CONDITIONS = [
     // Germs grow in a dirty wound, toxin binds over a week or two, then stiffness and spasms for weeks. Walks in 1–4 days
     // into the spasms. Without intensive care ~half die even in hospital (WTND p.184); in African hospitals ~43%
     // (Woldeamanuel YW et al. J Neurol Sci 2016;368:292). Hazard calibrated: untreated ~55%, newborns far more.
-    params: { org: 'c_tetani', since: [190, 300], L0: [1, 2], r: 0.05, Lmax: 6.5, imm: 0.06, heal: 336, toxin: 0.008, bind: 0.02, recover: 340, hazard: 0.006, tetanus: true, fever: [0.3, 1.2] },
+    params: { org: 'c_tetani', since: [190, 300], L0: [1, 2], r: 0.08, Lmax: 6, imm: 0.12, heal: 500, toxin: 1.2, bind: 0.02, recover: 340, hazard: 0.006, tetanus: true, fever: [0.3, 1.2] },
     complaint: ['{who} cannot open the mouth, the neck is stiff, and the body jerks in painful spasms.', 'My jaw is locked and swallowing is hard; I stepped on a nail two weeks ago.'],
     teach: { treat: ['tetanus_ig', 'tetanus_antitoxin', 'metronidazole', 'benzylpenicillin', 'diazepam'], helps: [], harms: [], refer: 'Tetanus is deadly: refer at once. Meanwhile clean the wound, antitoxin, penicillin or metronidazole, diazepam for the spasms, quiet and dark.' },
     learn: 'A stiff jaw (lockjaw), then a stiff neck and body, and painful spasms set off by touch, noise or light; the knee jerk jumps high. In newborns: stops sucking and cries all the time, 3–10 days after birth, from a dirty cord. Clean the wound, give penicillin (or metronidazole), human immune globulin (or horse antitoxin, with adrenaline ready), diazepam for the spasms; touch and move the person little. Vaccination prevents it; so does a clean wound and a clean cord.',
@@ -333,7 +333,7 @@ export const CONDITIONS = [
     epi: { w: 0.7, age: [[0, 1, 3], [1, 5, 2], [5, 30, 1.2], [30, 99, 0.4]], season: { cool_dry: 1, hot_dry: 2.2, rains: 0.6, late_rains: 0.7 }, crowd: 1.4 },
     // Untreated bacterial meningitis nearly always kills; treated, ~10% (meningococcal) to ~30% (pneumococcal) die in
     // Africa (WHO 2015). The germ must be killed in the CSF (`csf`: only the CSF share of the blood level reaches it).
-    params: { org: 'n_meningitidis', csf: true, since: [6, 36], L0: [6, 7.5], r: 0.08, Lsym: 4, Lmax: 10, imm: 0.02, onset: 48, hazard: 0.025, meningitis: true, fever: [1.5, 3] },
+    params: { org: 'n_meningitidis', csf: true, since: [6, 36], L0: [6, 7.5], r: 0.08, Lsym: 4, Lmax: 10, imm: 0.02, onset: 48, hazard: 0.06, meningitis: true, fever: [1.5, 3] },
     complaint: ['{who} has a terrible headache, high fever and a stiff neck since {ago}, and vomits.', '{who} is hot, very sleepy and will not bend the neck. It started {ago}.'],
     teach: { treat: ['ceftriaxone', 'benzylpenicillin', 'chloramphenicol'], helps: ['paracetamol'], harms: [], refer: 'Every minute counts: start an injected antibiotic and take the person to hospital.' },
     learn: 'Fever, severe headache, a stiff neck (cannot put the head between the knees), vomiting; in babies a bulging soft spot, a strange cry, sleepiness; later fits and unconsciousness. It can follow measles, an ear infection or TB. Injected antibiotics at once (ceftriaxone, or ampicillin/penicillin with chloramphenicol) and hospital.',
@@ -345,7 +345,7 @@ export const CONDITIONS = [
     // Severe cholera loses up to ~1 L an hour in an adult; untreated up to half die, with fluids <1% (WHO 2017). Most
     // deaths are dehydration (the water model). Doxycycline halves the stool and its duration (Leibovici-Weissman Y et al.
     // Cochrane 2014;CD008625).
-    params: { org: 'v_cholerae', since: [4, 24], L0: [6.5, 8], r: 0.1, Lsym: 4, Lmax: 9, imm: 0.07, onset: 40, hazard: 0, stool: { perDay: 20, mlKg: [160, 160, 170, 170] }, cholera: true, fever: [0, 0.3] },
+    params: { org: 'v_cholerae', since: [4, 24], L0: [6.5, 8], r: 0.1, Lsym: 4, Lmax: 9, imm: 0.12, onset: 68, hazard: 0, stool: { perDay: 20, mlKg: [160, 160, 170, 170] }, cholera: true, fever: [0, 0.3] },
     complaint: ['{who} has poured out watery stools like rice water since {ago}, and vomits.', 'Stool like rice water, again and again, since {ago}. I am so weak and thirsty.'],
     teach: { treat: ['oral_fluid'], helps: ['doxycycline', 'ciprofloxacin', 'erythromycin'], harms: ['tropane'], refer: 'Cannot drink, no urine, or the pulse is weak: needs a drip at the health centre. Report cholera to the health authorities.' },
     learn: 'Huge amounts of watery stool like rice water, often vomiting, and dehydration within hours, worst in older children and adults. Give the rehydration drink almost without stopping, as much as the person can take. Doxycycline (erythromycin for children) only in severe cases shortens it. Clean water and latrines prevent it.',
@@ -388,7 +388,7 @@ export const CONDITIONS = [
     id: 'pid', name: 'Pelvic infection (PID)', local: ['the low-belly fever'], model: 'bacterial',
     epi: { w: 0 },
     // complication of gonorrhoea or chlamydia in women (the strain carries over); abscess or peritonitis now and then
-    params: { org: 'n_gonorrhoeae', L0: [5.5, 7], r: 0.05, Lsym: 4, Lmax: 9, imm: 0.01, onset: 96, hazard: 0.0004, pelvic: true, fever: [1, 2.2] },
+    params: { org: 'n_gonorrhoeae', L0: [5.5, 7], r: 0.05, Lsym: 4, Lmax: 9, imm: 0.01, onset: 96, hazard: 0.0001, pelvic: true, fever: [1, 2.2] },
     complaint: ['Pain low in my belly, fever, and a bad-smelling discharge.'],
     teach: { treat: ['ceftriaxone', 'doxycycline', 'metronidazole'], helps: ['paracetamol'], harms: [], refer: 'Very ill, a hard belly, or no better in 2 days: refer.' },
     learn: 'Fever, pain low in the belly and on moving the cervix, a discharge, pain during sex: the infection has climbed to the womb and tubes. Ceftriaxone, then doxycycline and metronidazole for 2 weeks; treat the partner. It can leave a woman unable to have children.',
@@ -452,7 +452,7 @@ export const CONDITIONS = [
     id: 'cellulitis', name: 'Cellulitis or erysipelas', local: ['St Anthony\'s fire'], model: 'bacterial',
     epi: { w: 1, age: [[0, 5, 0.6], [5, 40, 0.8], [40, 99, 1.6]], season: { cool_dry: 0.9, hot_dry: 1, rains: 1.2, late_rains: 1.2 } },
     // spreads to the blood now and then (hazard an estimate)
-    params: { org: 's_pyogenes', since: [24, 72], L0: [6, 7], r: 0.05, Lsym: 4, Lmax: 9.5, imm: 0.035, onset: 96, hazard: 0.002, cellulitis: true, fever: [1, 2.3] },
+    params: { org: 's_pyogenes', since: [24, 72], L0: [6, 7], r: 0.05, Lsym: 4, Lmax: 9.5, imm: 0.05, onset: 120, hazard: 0.002, cellulitis: true, fever: [1, 2.3] },
     complaint: ['A hot, bright red, swollen patch on {poss} leg that spreads every day, with fever and chills.', 'The skin of my face by the nose is red, hot and very painful, spreading, since {ago}.'],
     teach: { treat: ['penicillin_v', 'benzylpenicillin'], helps: ['hot_compress', 'aspirin'], harms: [], refer: 'Very ill, the patch turning dark or blistering, or no better after 2 days: refer.' },
     learn: 'A painful, hot, bright red, swollen patch that spreads fast (with a sharp border in erysipelas), with fever, chills and swollen glands; often after a break in the skin. Penicillin until 2 days after the signs are gone, hot compresses, aspirin for the pain.',
@@ -474,7 +474,7 @@ export const CONDITIONS = [
     epi: { w: 2.5, age: [[0, 5, 2], [5, 15, 1.2], [15, 99, 0.6]], season: { cool_dry: 1, hot_dry: 1.3, rains: 1, late_rains: 1 }, crowd: 1.4 },
     // Clears by itself in ~1 week in most; antibiotic ointment clears it sooner (cure by day 2–5: ~64% vs 41% on placebo;
     // Sheikh A et al. Cochrane 2012;CD001211). The ointment acts on the eye surface (`site`).
-    params: { org: 'h_influenzae', site: 'eye', since: [12, 60], L0: [5, 6.5], r: 0.04, Lsym: 4, Lmax: 8, imm: 0.06, onset: 72, hazard: 0, pinkeye: true },
+    params: { org: 'h_influenzae', site: 'eye', since: [12, 60], L0: [5, 6.5], r: 0.04, Lsym: 4, Lmax: 8, imm: 0.09, onset: 72, hazard: 0, pinkeye: true },
     complaint: ['{poss} eyes are red with pus, and the lids are stuck together in the morning, {when}.', 'Both eyes red and burning, with yellow crusts, {when}.'],
     teach: { treat: ['tetracycline_eye'], helps: [], harms: [], refer: 'Great pain, a grey spot on the cornea, or no better after 5–6 days of ointment: refer.' },
     learn: 'Red eyes with pus, burning, lids stuck together after sleep; common in children and very catching. Clean the pus with a cloth and boiled water, then put antibiotic eye ointment inside the lower lid 3–4 times a day. Do not share towels; wash hands.',

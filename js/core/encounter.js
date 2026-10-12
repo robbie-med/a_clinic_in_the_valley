@@ -25,6 +25,9 @@ export const INSTRUCTIONS = [
   { id: 'dressing', label: 'Keep it covered with a clean cloth, change daily', min: 1, needs: [['cloth', 2]] },
   // ——— infections (WTND p.239)
   { id: 'treat_partner', label: 'Bring your partner for the same medicine; no sex until both are cured', min: 2 },
+  // directly observed treatment: missed doses and stopping early fall (WHO TB programmes; Volmink J, Garner P. Cochrane
+  // 2007;CD003343 found DOT itself adds little over a well-supported self-run course, so the effect is modest: estimates)
+  { id: 'supporter', label: 'Choose someone at home to keep the tablets and watch every dose', min: 3 },
 ];
 export const PROCEDURES = [
   { id: 'clean', label: 'Clean the wound with soap and boiled water, remove dirt', min: 12, needs: [['soap', 1], ['cloth', 1]], station: 'hearth',

@@ -330,7 +330,8 @@ const MODELS = {
       const P = COND.get(c.id).params;
       c.age += dt;
       const ab = abx(c, x, dt, c.L), anti = x.ds.relief.antitoxin || 0;
-      c.L = Math.max(-1, c.L + dt * (P.r * (1 - c.L / P.Lmax) * (1 - ab.inhib) - P.imm * hostDefence(p) - ab.kill - (x.hosp ? 0.2 : 0)));
+      // the wound heals over ~2 weeks and the germ loses its airless pocket
+      c.L = Math.max(-1, c.L + dt * (P.r * (1 - c.L / P.Lmax) * (1 - ab.inhib) - P.imm * hostDefence(p) * Math.min(1, c.age / P.heal) - ab.kill - (x.hosp ? 0.2 : 0)));
       const made = c.L > 0 ? P.toxin * c.vir * 10 ** (c.L - P.Lmax) * dt : 0;
       c.F = Math.max(0, (c.F + made) * (1 - anti) - c.F * P.bind * dt);
       c.B = Math.max(0, c.B + c.F * P.bind * dt - c.B * dt / P.recover);
@@ -518,7 +519,7 @@ export function simulate(p, toT, C) {
       for (const [td, k] of dosesDue(rx, t0, t1)) {
         if (rx.left <= 0) { if (!rx.ranOut) { rx.ranOut = true; ev.push({ t: td, kind: 'ranout', text: `ran out of ${rx.name}` }); } continue; }
         // an injection is given by your hand, so it is never missed
-        if (rx.route !== 'inj' && makeRng(p.seed, 'dose', rx.item, rx.start, k)() > takeChance(p, rx)) { rx.missed = (rx.missed || 0) + 1; continue; }
+        if (rx.route !== 'inj' && makeRng(p.seed, 'dose', rx.item, rx.start, k)() > takeChance(p, rx, instr)) { rx.missed = (rx.missed || 0) + 1; continue; }
         const amt = Math.min(rx.amount, rx.left);
         rx.left -= amt; rx.taken = (rx.taken || 0) + 1;
         applyDose(p, rx, amt, td, topical, wormKills);
@@ -536,7 +537,8 @@ export function simulate(p, toT, C) {
         if (rx.fluid) { fluidIn += amt / 1000; naLoad += (amt / 1000) * rx.fluid.na; }
       }
       // stop when better: the classic way a course is cut short
-      if (!rx.instr && !rx.stopped && p.feelBetter && !rx.fluid && rng() < (rx.counselled ? 0.0015 : 0.008)) {
+      // someone who watches every dose (a treatment supporter, as TB programmes use) makes stopping far rarer
+      if (!rx.instr && !rx.stopped && p.feelBetter && !rx.fluid && rng() < (rx.counselled ? 0.0015 : 0.008) * (instr.has('supporter') ? 0.1 : 1)) {
         rx.stopped = t0; ev.push({ t: t0, kind: 'stopped', text: `stopped ${rx.name} (felt better)` });
       }
     }
@@ -619,9 +621,10 @@ function idiosyncrasy(p, rx, td) {
     if (g() < r.per) (p.react ||= []).push({ active: id, sign: r.sign, text: r.text, harm: r.harm, t: td + lerp(r.days[0], r.days[1], g()) * 24 * HOUR, hours: r.hours });
   }
 }
-function takeChance(p, rx) {
+function takeChance(p, rx, instr) {
   let a = p.adh ?? 0.8;
   if (rx.counselled) a += 0.1;
+  if (instr?.has('supporter')) a += 0.1;
   if (rx.perDay > 3) a -= 0.08;
   if (rx.bitter) a -= 0.07;
   if (rx.route === 'topical' && rx.perDay >= 3) a -= 0.05;
