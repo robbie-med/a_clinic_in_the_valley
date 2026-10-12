@@ -1,0 +1,57 @@
+// findings.js — what you can learn about a patient, and how. History questions (ask), examination
+// (look / feel / listen / count) and measurements that need a tool. Each costs game minutes. The
+// values come from the patient's real state (signs.js); this table says how to get at them.
+
+export const QUESTIONS = [
+  { id: 'q_duration', label: 'How long has this been going on?', min: 1, reveals: ['duration'] },
+  { id: 'q_stool', label: 'Any loose stools? How many, what do they look like?', min: 2, reveals: ['stools', 'blood_stool', 'worms_seen'] },
+  { id: 'q_vomit', label: 'Vomiting? Can (s)he keep drinks down?', min: 1, reveals: ['vomiting', 'drinking'] },
+  { id: 'q_urine', label: 'Passing urine? What colour?', min: 1, reveals: ['urine', 'thirst'] },
+  { id: 'q_fever', label: 'Fever? Chills or sweats? Does it come and go?', min: 2, reveals: ['fever_hx', 'chills', 'fever_pattern', 'headache'] },
+  { id: 'q_cough', label: 'Cough? Worse at night? Runny nose, sore throat?', min: 2, reveals: ['cough', 'night_cough', 'runny', 'throat'] },
+  { id: 'q_breath', label: 'Short of breath? Lying flat, walking?', min: 1, reveals: ['breathless_walk', 'orthopnea'] },
+  { id: 'q_itch', label: 'Itching? Where, and when is it worst?', min: 1, reveals: ['itch_night', 'itch_family', 'anal_itch'] },
+  { id: 'q_pain', label: 'Where does it hurt? Since when, what makes it worse?', min: 2, reveals: ['pain_site', 'cramp'] },
+  { id: 'q_injury', label: 'How did the injury happen? Was it cleaned?', min: 1, reveals: ['injury_how'] },
+  { id: 'q_preg', label: 'Could you be pregnant? When was your last monthly bleeding?', min: 1, reveals: ['pregnancy', 'nausea_preg'], only: (p) => p.sex === 'f' && p.age >= 13 && p.age < 50 },
+  { id: 'q_vision', label: 'Headache? Blurred vision or spots? Swelling of face/hands?', min: 1, reveals: ['headache', 'vision', 'face_swelling'] },
+  { id: 'q_meds', label: 'Any medicines or remedies taken already?', min: 1, reveals: ['meds_taken', 'tox_symptoms'] },
+  { id: 'q_eat', label: 'Eating? Losing weight?', min: 1, reveals: ['appetite', 'weight_loss'] },
+];
+
+export const EXAMS = [
+  { id: 'x_general', label: 'Look: general condition', min: 1, reveals: ['alert', 'pallor', 'thin', 'flushed'] },
+  { id: 'x_eyes', label: 'Look: eyes and mouth', min: 1, reveals: ['sunken_eyes', 'dry_mouth', 'tears', 'pupils', 'yellow_vision'] },
+  { id: 'x_pinch', label: 'Skin pinch on the belly', min: 1, reveals: ['skin_pinch'] },
+  { id: 'x_fontanel', label: 'Feel the soft spot (baby)', min: 1, reveals: ['fontanel'], only: (p) => p.age < 1.5 },
+  { id: 'x_forehead', label: 'Feel the forehead', min: 0.5, reveals: ['feels_hot'] },
+  { id: 'x_thermo', label: 'Take the temperature', min: 3, tool: 'thermometer', reveals: ['temp'] },
+  { id: 'x_rr', label: 'Count breaths for a minute', min: 1, tool: 'watch', reveals: ['rr'] },
+  { id: 'x_pulse', label: 'Count the pulse for a minute', min: 1, tool: 'watch', reveals: ['hr', 'pulse_regular'] },
+  { id: 'x_chest', label: 'Look at the chest breathing', min: 1, reveals: ['indrawing', 'grunting'] },
+  { id: 'x_listen', label: 'Listen to the chest', min: 2, reveals: ['crackles'], better: 'stethoscope' },
+  { id: 'x_belly', label: 'Feel the belly', min: 2, reveals: ['spleen', 'tender', 'pot_belly'] },
+  { id: 'x_skin', label: 'Look at the skin (hands, wrists, waist)', min: 2, reveals: ['burrows', 'skin_sores'], better: 'magnifier' },
+  { id: 'x_wound', label: 'Examine the wound / burn', min: 2, reveals: ['wound_size', 'pus', 'redness', 'red_streaks', 'glands', 'burn_area', 'blisters', 'burn_deep'] },
+  { id: 'x_feet', label: 'Press on the feet and shins', min: 1, reveals: ['edema'] },
+  { id: 'x_weigh', label: 'Weigh', min: 2, tool: 'scale', reveals: ['weight'] },
+  { id: 'x_muac', label: 'Arm circumference tape', min: 1, tool: 'muac_tape', reveals: ['muac'], only: (p) => p.age >= 0.5 && p.age < 5 },
+  { id: 'x_bp', label: 'Blood pressure', min: 3, tool: 'bp_cuff', reveals: ['bp'] },
+  { id: 'x_back', label: 'Examine the back, bend and lift', min: 2, reveals: ['back_exam'] },
+];
+
+/** How strongly each finding points toward each condition (for the differential helper). */
+export const POINTS = {
+  stools: { watery_diarrhea: 3, dysentery: 2 }, blood_stool: { dysentery: 6 }, worms_seen: { ascaris: 6, pinworm: 3 },
+  vomiting: { watery_diarrhea: 1, malaria: 1, nausea_pregnancy: 3 }, sunken_eyes: { watery_diarrhea: 2 }, skin_pinch: { watery_diarrhea: 2 },
+  fever_hx: { malaria: 2, pneumonia: 2, dysentery: 1 }, chills: { malaria: 3 }, fever_pattern: { malaria: 4 }, headache: { malaria: 1, pre_eclampsia: 2 },
+  temp: { malaria: 2, pneumonia: 2, dysentery: 1 }, feels_hot: { malaria: 1, pneumonia: 1 },
+  cough: { common_cold: 2, cough_child: 3, pneumonia: 2 }, night_cough: { cough_child: 3 }, runny: { common_cold: 4 }, throat: { common_cold: 2 },
+  rr: { pneumonia: 4 }, indrawing: { pneumonia: 5 }, grunting: { pneumonia: 4 }, crackles: { pneumonia: 3, heart_failure: 2 },
+  spleen: { malaria: 3 }, pallor: { malaria: 2 }, itch_night: { scabies: 5 }, itch_family: { scabies: 3 }, burrows: { scabies: 6 }, anal_itch: { pinworm: 6 },
+  pot_belly: { ascaris: 3 }, wound_size: { wound_minor: 3, wound_infected: 1 }, pus: { wound_infected: 5 }, redness: { wound_infected: 2 }, red_streaks: { wound_infected: 4 },
+  burn_area: { burn_minor: 6 }, blisters: { burn_minor: 3 }, pain_site: { back_pain: 2 }, back_exam: { back_pain: 4 },
+  edema: { heart_failure: 3, pre_eclampsia: 3 }, orthopnea: { heart_failure: 5 }, breathless_walk: { heart_failure: 3 },
+  pregnancy: { nausea_pregnancy: 3, pre_eclampsia: 2 }, nausea_preg: { nausea_pregnancy: 5 }, vision: { pre_eclampsia: 4 }, face_swelling: { pre_eclampsia: 4 }, bp: { pre_eclampsia: 6, heart_failure: 1 },
+  cramp: { dysentery: 1, watery_diarrhea: 1 },
+};

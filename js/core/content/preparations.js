@@ -1,0 +1,66 @@
+// preparations.js — how a plant becomes a medicine, and how much of each compound comes across.
+//
+// Extraction efficiency (fraction of the compound in the plant that ends up in the preparation) by
+// method and compound. These are ESTIMATES from solubility (quinine base is near-insoluble in water,
+// soluble as a salt in acid and in alcohol; artemisinin is poorly water-soluble and heat-labile;
+// salicin and the cardiac glycosides dissolve in hot water) — not measured values. They exist so the
+// choice of method matters the way it really does.
+//
+// Liquid volumes: ml of finished preparation per gram of DRY herb (a fresh herb counts by its dry mass).
+
+export const METHODS = {
+  dry:            { name: 'Dried', verb: 'Dry on a rack', form: 'dried' },
+  powder:         { name: 'Powder', verb: 'Grind to powder', form: 'powder', unit: 'g', tool: 'mortar', min: 10, shelfDays: 180 },
+  infusion:       { name: 'Tea (infusion)', verb: 'Steep in just-boiled water, 10 minutes', form: 'liquid', unit: 'ml', mlPerG: 25, station: 'hearth', tool: 'cooking_pot', min: 12, shelfDays: 1 },
+  decoction:      { name: 'Decoction', verb: 'Boil hard for 20 minutes', form: 'liquid', unit: 'ml', mlPerG: 20, station: 'hearth', tool: 'cooking_pot', min: 25, shelfDays: 2 },
+  acid_decoction: { name: 'Sour decoction', verb: 'Boil 20 minutes with lime juice', form: 'liquid', unit: 'ml', mlPerG: 20, station: 'hearth', tool: 'cooking_pot', min: 25, shelfDays: 3, extra: [['lime', 1]] },
+  cold_soak:      { name: 'Cold soak', verb: 'Grind and soak a day in water', form: 'liquid', unit: 'ml', mlPerG: 60, station: 'jar', tool: 'mortar', min: 5, hours: 24, shelfDays: 3 },
+  tincture:       { name: 'Tincture', verb: 'Soak a week in spirit (1 g : 5 ml)', form: 'liquid', unit: 'ml', mlPerG: 5, station: 'jar', min: 5, hours: 168, shelfDays: 720, spirit: 5 },
+};
+
+// method → compound → fraction extracted
+export const EXTRACT = {
+  powder:         { salicin: 0.9, quinine: 0.85, artemisinin: 0.85, digitoxin: 0.95, tropane: 0.95, gingerol: 1, papain_bitc: 1, guava_flavonoid: 0.8, aloin: 1, cornsilk_k: 0.9 },
+  infusion:       { salicin: 0.5, quinine: 0.15, artemisinin: 0.4, digitoxin: 0.5, tropane: 0.7, gingerol: 0.5, guava_flavonoid: 0.5, cornsilk_k: 0.6, aloin: 0.7 },
+  decoction:      { salicin: 0.7, quinine: 0.3, artemisinin: 0.25, digitoxin: 0.4, tropane: 0.7, gingerol: 0.6, guava_flavonoid: 0.6, cornsilk_k: 0.7, aloin: 0.8 },
+  acid_decoction: { salicin: 0.65, quinine: 0.75, artemisinin: 0.2, digitoxin: 0.35, tropane: 0.8, gingerol: 0.55, guava_flavonoid: 0.55, cornsilk_k: 0.7 },
+  cold_soak:      { salicin: 0.3, quinine: 0.1, artemisinin: 0.1, digitoxin: 0.3, tropane: 0.6, gingerol: 0.3, guava_flavonoid: 0.3, cornsilk_k: 0.4, aloin: 0.8 },
+  tincture:       { salicin: 0.8, quinine: 0.65, artemisinin: 0.7, digitoxin: 0.85, tropane: 0.85, gingerol: 0.8, guava_flavonoid: 0.7, cornsilk_k: 0.5 },
+};
+
+// Which methods make sense for which herb (the rest are pointless or impossible).
+export const HERB_METHODS = {
+  willow: ['dry', 'powder', 'decoction', 'tincture'],
+  cinchona: ['dry', 'powder', 'decoction', 'acid_decoction', 'tincture'],
+  artemisia: ['dry', 'powder', 'infusion', 'tincture'],
+  foxglove: ['dry', 'powder', 'infusion', 'tincture'],
+  brugmansia: ['cold_soak', 'dry'],
+  aloe: ['cold_soak'],
+  papaya: ['dry', 'powder'],
+  guava: ['dry', 'infusion', 'decoction'],
+  ginger: ['dry', 'powder', 'infusion'],
+  cornsilk: ['dry', 'decoction'],
+  neem: [],
+  eucalyptus: ['dry'],
+};
+
+/** Drying time (hours) by season; drying in the rains, outside, risks mould. */
+export const DRY_HOURS = { cool_dry: 36, hot_dry: 24, rains: 72, late_rains: 48 };
+
+/** Hand-made preparations that are not herb × method. Yields per batch; strength is relative. */
+export const SPECIALS = [
+  { id: 'aloe_gel', name: 'Aloe gel', unit: 'app', from: [['fresh_aloe', 1]], tool: 'knife', min: 3, n: 6, topical: { aloe_gel: 1 }, shelfDays: 3, icon: 'cactus', color: '#a0e0b0',
+    note: 'The clear inner gel, skin and yellow sap removed. One application per small burn.' },
+  { id: 'neem_paste', name: 'Neem and turmeric paste', unit: 'app', from: [['#herb_neem', 1], ['turmeric', 5]], tool: 'mortar', min: 8, n: 3, topical: { azadirachtin: 1 }, shelfDays: 2, icon: 'bubbling-bowl', color: '#5a8a3a',
+    note: 'Ground fresh neem leaves with turmeric, rubbed on the skin.' },
+  { id: 'sulfur_ointment', name: 'Sulfur ointment (1:10)', unit: 'app', from: [['sulfur', 10], ['lard', 100]], station: 'hearth', tool: 'cooking_pot', min: 15, n: 4, topical: { sulfur: 1 }, shelfDays: 365, icon: 'covered-jar', color: '#e8d860',
+    note: '1 part sulfur to 10 parts lard, warmed and stirred. One application covers the body below the neck.' },
+  { id: 'steam_eucalyptus', name: 'Eucalyptus steam bowl', unit: 'app', from: [['#herb_eucalyptus', 1]], station: 'hearth', tool: 'cooking_pot', min: 8, n: 3, topical: { eucalyptol: 1 }, shelfDays: 1, icon: 'bubbling-bowl', color: '#9ac0c0',
+    note: 'Leaves in a bowl of just-boiled water; breathe the steam under a cloth.' },
+  { id: 'garlic_drink', name: 'Garlic drink', unit: 'ml', from: [['garlic', 1]], tool: 'mortar', min: 5, n: 600, oralFrom: 'garlic', shelfDays: 1, icon: 'water-flask', color: '#f0f0e0',
+    note: 'WTND: 4 crushed cloves in a glass of water, juice or milk, a glass a day for 3 weeks (pinworm).' },
+  { id: 'ors_sugar', name: 'Rehydration drink (sugar–salt)', unit: 'ml', from: [['salt', 3], ['sugar', 40]], station: 'hearth', tool: 'cooking_pot', min: 10, n: 1000, fluid: true, shelfDays: 1, icon: 'water-flask', color: '#c8e8f8',
+    note: '1 litre boiled water, ½ level teaspoon salt, 8 level teaspoons sugar. Taste: less salty than tears (WTND p.152).' },
+  { id: 'ors_cereal', name: 'Rehydration drink (rice)', unit: 'ml', from: [['salt', 3], ['rice_flour', 50]], station: 'hearth', tool: 'cooking_pot', min: 15, n: 1000, fluid: true, shelfDays: 0.33, icon: 'bowl-of-rice', color: '#f0f0e0',
+    note: 'Powdered rice and salt boiled 5–7 minutes to a thin gruel. Spoils within hours in the heat.' },
+];

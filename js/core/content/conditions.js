@@ -1,0 +1,158 @@
+// conditions.js — the illnesses that walk in. Each row says who gets it and when (epi), how it runs
+// in the body (model + params, simulated by disease.js hour by hour), what it shows (findings come
+// from the model's state, see signs.js), what the patient says, and what the book teaches about it.
+//
+// Nothing here says "item X cures Y". Cures happen because a compound reaches the right place at the
+// right concentration for long enough (pk.js), or because lost water is put back. `teach` is only for
+// the handbook and for judging care afterwards.
+//
+// Page refs: Where There Is No Doctor (Hesperian, 2011 printing). Paraphrased, never copied.
+
+export const CONDITIONS = [
+  {
+    id: 'watery_diarrhea', name: 'Watery diarrhoea', local: ['the runs', 'loose belly'], model: 'viral',
+    epi: { w: 10, age: [[0, 2, 6], [2, 5, 4], [5, 15, 1.2], [15, 99, 0.6]], season: { cool_dry: 0.8, hot_dry: 1.3, rains: 1.5, late_rains: 1.1 }, water: 1.5 },
+    params: { days: [4, 1.5], peak: 1.5, stool: { perDay: 9, mlKg: [90, 60, 30, 15] }, vomit: 0.6, fever: [0.4, 0.8], cramp: 0.4 },
+    complaint: ['{who} has had watery stools {when}.', 'Runny stools, many times, {when}. {pron} won\'t eat.', 'The belly is running like water {when}.'],
+    teach: { treat: ['oral_fluid'], helps: ['guava_flavonoid'], harms: ['aloin', 'tropane'], refer: 'Severe dehydration, cannot drink, or blood in stool with high fever.' },
+    learn: 'Most children who die of diarrhoea die of lost water, not of the germ. Give the rehydration drink (or any liquid) often in sips, keep feeding, keep breastfeeding. Watch for thirst, little dark urine, dry mouth, sunken eyes and a skin pinch that is slow to fall back. Medicine is rarely needed.',
+    ref: 'WTND pp.151–160', icon: 'water-drop', color: '#7ab0d0',
+  },
+  {
+    id: 'dysentery', name: 'Bacillary dysentery (Shigella)', local: ['bloody flux'], model: 'bacterial',
+    epi: { w: 2.5, age: [[0, 5, 3], [5, 15, 1.5], [15, 99, 1]], season: { cool_dry: 0.7, hot_dry: 1.2, rains: 1.6, late_rains: 1.1 }, water: 2 },
+    params: { L0: [5.5, 7], r: 0.06, Lsym: 4, Lmax: 10, imm: 0.11, onset: 60, hazard: 0.006, stool: { perDay: 12, mlKg: [25, 20, 12, 8] }, blood: true, fever: [1.3, 2.2], cramp: 0.8 },
+    complaint: ['There is blood and slime in {poss} stools {when}, and fever.', 'Belly cramps, blood in the stool, many small stools {when}.'],
+    teach: { treat: ['oral_fluid'], helps: ['guava_flavonoid'], harms: ['tropane'], refer: 'Needs an antibiotic (ciprofloxacin): send to the health centre, sooner for small or thin children.' },
+    learn: 'Many small stools with blood and mucus, cramps and fever: think bacterial dysentery. Fluids as for any diarrhoea, and it usually needs an antibiotic — home remedies only ease the cramps.',
+    ref: 'WTND pp.156–158', icon: 'water-drop', color: '#c05050',
+  },
+  {
+    id: 'common_cold', name: 'Common cold', local: ['catarrh', 'a cold'], model: 'viral',
+    epi: { w: 8, age: [[0, 5, 2], [5, 15, 1.5], [15, 99, 1]], season: { cool_dry: 1.8, hot_dry: 0.7, rains: 1.1, late_rains: 1.3 } },
+    params: { days: [7, 2], peak: 2.5, runny: 0.9, congestion: 0.8, throat: 0.6, cough: 0.5, fever: [0.2, 0.7] },
+    complaint: ['Runny nose and a cough {when}.', '{who} has a blocked nose and sore throat {when}.'],
+    teach: { treat: [], helps: ['eucalyptol', 'honey'], harms: [], refer: 'Fast breathing or chest drawing in: that is pneumonia, not a cold.' },
+    learn: 'A cold goes away by itself in about a week. Drink plenty, rest, breathe steam for a blocked nose. Antibiotics and "cold medicines" do not help and cost money.',
+    ref: 'WTND pp.163–164', icon: 'sun-cloud', color: '#a0b0c0',
+  },
+  {
+    id: 'cough_child', name: 'Cough after a cold (bronchitis)', local: ['chest cough'], model: 'viral',
+    epi: { w: 4, age: [[0, 2, 1], [2, 12, 2], [12, 99, 0.4]], season: { cool_dry: 1.7, hot_dry: 0.8, rains: 1, late_rains: 1.2 } },
+    params: { days: [14, 4], peak: 3, cough: 1, nightCough: 0.8, runny: 0.3, fever: [0, 0.4] },
+    complaint: ['{who} has coughed {when}, worst at night.', 'A cough that will not stop, {when} now.'],
+    teach: { treat: [], helps: ['honey'], harms: [], refer: 'Fast breathing, chest drawing in, or a cough longer than 3 weeks with weight loss (TB).' },
+    learn: 'Most coughs in children follow a cold and last up to 2–3 weeks. Honey in warm water eases night cough (not under 1 year). Count the breathing: fast breathing means pneumonia.',
+    ref: 'WTND pp.168–170', icon: 'sun-cloud', color: '#90a0b0',
+  },
+  {
+    id: 'pneumonia', name: 'Pneumonia', local: ['chest fever'], model: 'bacterial',
+    epi: { w: 2.2, age: [[0, 5, 4], [5, 15, 1], [15, 60, 0.6], [60, 99, 2]], season: { cool_dry: 1.8, hot_dry: 0.8, rains: 1, late_rains: 1.2 } },
+    params: { L0: [6, 7.5], r: 0.05, Lsym: 4, Lmax: 10, imm: 0.08, onset: 120, hazard: 0.003, chest: true, fever: [1.6, 2.8], cough: 1 },
+    complaint: ['{who} is hot and breathing fast {when}.', 'Cough and high fever {when}, and the breathing is hard.'],
+    teach: { treat: [], helps: ['honey'], harms: [], refer: 'Needs an antibiotic (amoxicillin) — refer. Chest drawing in or grunting: refer now.' },
+    learn: 'Fast shallow breathing (a young child over 40–50 breaths a minute), the skin between the ribs sucking in, high fever, sometimes grunting. Pneumonia kills more children than any other infection; it needs an antibiotic.',
+    ref: 'WTND p.171', icon: 'heart-beats', color: '#c07050',
+  },
+  {
+    id: 'malaria', name: 'Malaria (falciparum)', local: ['fever with shaking', 'homa'], model: 'malaria',
+    epi: { w: 8, age: [[0, 1, 2], [1, 5, 4], [5, 15, 2], [15, 99, 1]], season: { cool_dry: 0.5, hot_dry: 0.35, rains: 1.6, late_rains: 2.4 }, mosquito: 2.5, pregnant: 2 },
+    params: { P0: [10.2, 11.4], mf: 12, pyro: [50, 3000], hbDrop: 0.6, hazard: 0.001 },
+    complaint: ['Fever with shaking {when}, and headache.', '{who} was very hot last night and shivering, then sweating. It started {ago}.', 'Fevers come and go {when}. Weak, no appetite.'],
+    teach: { treat: ['quinine'], helps: ['salicin'], harms: ['artemisinin_alone'], refer: 'Fits, confusion, cannot drink, very pale, very weak: severe malaria — refer at once.' },
+    learn: 'Chills, then high fever, then sweating, often every second or third day; headache; in children vomiting and fast breathing. Where malaria is common and there is no test, treat unexplained high fever as malaria with the medicine that works locally. Cinchona bark (quinine) cures if enough is taken for 7 days. Artemisia tea clears the fever but the parasites come back.',
+    ref: 'WTND pp.186–187, 363–367', icon: 'thermometer-hot', color: '#d0a040',
+  },
+  {
+    id: 'wound_minor', name: 'Cut or scrape', local: ['a cut'], model: 'wound',
+    epi: { w: 5, age: [[0, 5, 1], [5, 15, 2], [15, 60, 1.6], [60, 99, 0.8]], season: { cool_dry: 1, hot_dry: 1, rains: 1.3, late_rains: 1.4 } },
+    params: { size: [1, 5], dirt: [0.2, 0.8], I0: [0, 1.5], days: 7 },
+    complaint: ['{who} cut {refl} with a panga {ago}.', 'A cut on the leg from a thorn, {ago}.', 'Fell on the rocks {ago}. The knee is torn open.'],
+    teach: { treat: ['clean'], helps: ['honey', 'aloe_gel'], harms: [], refer: 'Deep wound with spurting blood, or a wound from a dirty nail in someone never vaccinated (tetanus).' },
+    learn: 'Clean is everything. Wash the wound and the skin around it with soap and boiled water, take out every bit of dirt, cover it with a clean cloth. Honey on a dressing helps clean wounds heal and keeps germs down.',
+    ref: 'WTND pp.84–87', icon: 'bandage-roll', color: '#d07060',
+  },
+  {
+    id: 'wound_infected', name: 'Infected wound', local: ['a sore with pus'], model: 'wound',
+    epi: { w: 2.5, age: [[0, 5, 1], [5, 15, 2], [15, 99, 1.2]], season: { cool_dry: 0.9, hot_dry: 1, rains: 1.4, late_rains: 1.4 } },
+    params: { size: [1.5, 6], dirt: [0.5, 1], I0: [3, 4.5], days: 4 },
+    complaint: ['The cut on {poss} foot is swollen and full of pus {when}.', 'An old wound, now hot and red and paining, {when}.'],
+    teach: { treat: ['clean', 'hot_compress'], helps: ['honey'], harms: [], refer: 'Red streaks up the limb, swollen glands with fever: the infection is spreading — needs an antibiotic.' },
+    learn: 'Swollen, red, hot, painful, pus, bad smell. Raise the limb, hot compresses 20 minutes 4 times a day, clean out the pus. If red lines run up the arm or leg or there is fever, it is spreading: antibiotics.',
+    ref: 'WTND pp.88–89, 195', icon: 'bandage-roll', color: '#b08040',
+  },
+  {
+    id: 'burn_minor', name: 'Burn', local: ['a burn'], model: 'burn',
+    epi: { w: 2, age: [[0, 5, 3], [5, 15, 1.2], [15, 99, 0.7]], season: { cool_dry: 1.4, hot_dry: 1, rains: 1, late_rains: 1 } },
+    params: { tbsa: [0.5, 6], deep: 0.15, days: 14 },
+    complaint: ['{who} fell against the cooking pot {ago}. It is blistered.', 'Hot porridge spilled on {poss} arm {ago}.'],
+    teach: { treat: ['clean'], helps: ['aloe_gel', 'honey'], harms: [], refer: 'Burns larger than the palm ×10 in a child (10% of body), on face/hands/genitals, or deep (white, no feeling).' },
+    learn: 'Cool the burn in cold water at once. Do not break blisters. Keep it very clean; aloe gel or honey on clean cloth help small burns heal. Large burns lose much water — give plenty to drink and get help.',
+    ref: 'WTND pp.96–97, 13', icon: 'fire-bowl', color: '#e07040',
+  },
+  {
+    id: 'scabies', name: 'Scabies', local: ['the itch'], model: 'scabies',
+    epi: { w: 4, age: [[0, 15, 2.5], [15, 99, 1]], season: { cool_dry: 1.3, hot_dry: 1.2, rains: 0.9, late_rains: 0.8 }, crowd: 1.5 },
+    params: { mites: [8, 30], growth: 0.004, sens: [0.6, 1] },
+    complaint: ['{who} itches all over, worst at night, {when}.', 'Little itchy bumps between the fingers, {when}. The brothers have it too.'],
+    teach: { treat: ['sulfur'], helps: ['azadirachtin'], harms: [], refer: null },
+    learn: 'Tiny itchy bumps, worst at night, between fingers, on wrists, waist, genitals. Treat the whole family at once, boil or sun the clothes and bedding. Sulfur mixed with lard (1 to 10) rubbed over the whole body 3 times a day for 3 days; not for babies under 1. The itch can last 2 weeks after the mites are dead.',
+    ref: 'WTND p.199', icon: 'spider-web', color: '#c0a080',
+  },
+  {
+    id: 'ascaris', name: 'Roundworm', local: ['worms'], model: 'worms',
+    epi: { w: 4, age: [[0, 2, 0.6], [2, 15, 3], [15, 99, 0.6]], season: { cool_dry: 1, hot_dry: 0.9, rains: 1.2, late_rains: 1.1 }, water: 1.4 },
+    params: { worms: [4, 40], life: 365, target: 'worms_ascaris', heavy: 50 },
+    complaint: ['{who} passed a long worm {ago}.', 'The belly is big and paining, and {pron} is thin. Worms, I think.'],
+    teach: { treat: ['papain_bitc'], helps: [], harms: [], refer: 'Swollen hard belly with vomiting and no stool: blocked gut — refer.' },
+    learn: 'Long white worms in the stool or vomit; swollen belly; poor growth; sometimes a dry cough when the young worms pass through the lungs. Latrines, washing hands and clean food prevent them. Dried papaya seed powder helps; modern worm medicine works better.',
+    ref: 'WTND pp.140, 13', icon: 'curling-vines', color: '#e0d0b0',
+  },
+  {
+    id: 'pinworm', name: 'Pinworm', local: ['threadworm'], model: 'worms',
+    epi: { w: 2.5, age: [[0, 3, 0.5], [3, 12, 3], [12, 99, 0.6]], season: { cool_dry: 1, hot_dry: 1, rains: 1, late_rains: 1 }, crowd: 1.3 },
+    params: { worms: [20, 120], life: 40, target: 'worms_pinworm', reinfect: 0.025, heavy: 1e9 },
+    complaint: ['{who} scratches the bottom all night, {when} now.', 'Little white threads in the stool, and itching at night.'],
+    teach: { treat: ['hygiene'], helps: ['allicin'], harms: [], refer: null },
+    learn: 'Itching around the anus at night; tiny white thread worms. They pass from bottom to fingers to mouth: cut nails, wash hands and bottom every morning, wash bedding. Garlic is the book\'s home remedy; hygiene is the real cure.',
+    ref: 'WTND pp.141, 12', icon: 'curling-vines', color: '#f0f0e0',
+  },
+  {
+    id: 'back_pain', name: 'Back pain', local: ['the back'], model: 'pain',
+    epi: { w: 4, age: [[0, 15, 0.05], [15, 40, 1], [40, 99, 1.8]], season: { cool_dry: 1, hot_dry: 1, rains: 1.2, late_rains: 1.3 } },
+    params: { pain: [0.4, 0.8], halfDays: 18 },
+    complaint: ['My back has been paining {when}, from digging.', 'The low back is stiff and paining {when}.'],
+    teach: { treat: [], helps: ['salicin'], harms: [], refer: 'Back pain with fever, weight loss, or legs going weak: TB of the spine or worse.' },
+    learn: 'Most back pain from work gets better in a few weeks. Keep moving gently, sleep on a firm surface, lift with the legs. A pain remedy helps the days pass.',
+    ref: 'WTND pp.173–174', icon: 'weight-lifting-up', color: '#a08060',
+  },
+  {
+    id: 'heart_failure', name: 'Heart failure (dropsy)', local: ['swollen legs', 'water in the body'], model: 'heart',
+    epi: { w: 1.2, age: [[0, 45, 0], [45, 60, 1], [60, 99, 3]], season: { cool_dry: 1.2, hot_dry: 1, rains: 1, late_rains: 1 } },
+    params: { V0: [2.5, 5], c: [0.35, 0.6], hazard: 0.004 },
+    complaint: ['My feet are swollen and I am short of breath on the path, {when}.', 'I cannot sleep lying flat, I must sit up to breathe — {when} now.'],
+    teach: { treat: ['digitoxin'], helps: ['cornsilk_k'], harms: [], refer: 'Breathless at rest, coughing pink froth: refer at once.' },
+    learn: 'Weak heart: swollen feet worse in the evening, breathless walking and when lying flat, fast pulse. Less salt, sleep propped up. Digitalis (foxglove) strengthens the beat but the poisonous dose is close to the useful one — small doses, count the pulse every day, stop if under 60 or if nausea or yellow vision comes.',
+    ref: 'WTND pp.325, 176', icon: 'heart-beats', color: '#c04060',
+  },
+  {
+    id: 'nausea_pregnancy', name: 'Morning sickness', local: ['sickness of pregnancy'], model: 'pregnancy',
+    epi: { w: 2, pregnant: 6, onlyPregnant: true, early: true, season: { cool_dry: 1, hot_dry: 1, rains: 1, late_rains: 1 } },
+    params: { weeks: [6, 13], peak: 10, end: 17 },
+    complaint: ['I am expecting and I vomit every morning, {when} now.', 'I cannot keep food down. My monthly has stopped.'],
+    teach: { treat: [], helps: ['gingerol'], harms: ['tropane', 'digitoxin'], refer: 'Vomiting everything for days, no urine, weight falling: refer.' },
+    learn: 'Common in the 2nd and 3rd month. Small dry meals often, eat before getting up. Ginger tea helps many women. Avoid medicines in pregnancy unless truly needed.',
+    ref: 'WTND p.248', icon: 'vomiting', color: '#c0c070',
+  },
+  {
+    id: 'pre_eclampsia', name: 'Pre-eclampsia', local: ['swelling of pregnancy'], model: 'preeclampsia',
+    epi: { w: 0.6, pregnant: 6, onlyPregnant: true, late: true, season: { cool_dry: 1, hot_dry: 1, rains: 1, late_rains: 1 } },
+    params: { weeks: [28, 38], sev: [0.2, 0.5], rise: 0.008, hazard: 0.004 },
+    complaint: ['My face and hands are swollen and my head is paining, {when}.', 'I am 8 months gone. My feet and face swell, and I see spots.'],
+    teach: { treat: [], helps: [], harms: ['cornsilk_k'], refer: 'Refer at once: she needs a hospital before fits begin.' },
+    learn: 'In late pregnancy, sudden swelling of the face and hands, headache, blurred vision, high blood pressure: toxaemia of pregnancy. It can turn to fits and kill mother and baby. A diuretic tea hides the swelling and treats nothing. Get her to a hospital.',
+    ref: 'WTND p.249', icon: 'heart-beats', color: '#a04080',
+  },
+];
+
+export const COND = new Map(CONDITIONS.map((c) => [c.id, c]));
