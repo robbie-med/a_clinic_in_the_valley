@@ -92,7 +92,10 @@ export const FLORA_ACTIVES = [
     // ending in kidney failure, and urothelial cancer years later (IARC group 1). Thousands of cases in
     // the Balkans and in Taiwan, and the Belgian slimming-clinic outbreak of 1992.
     pk: { F: 0.5, ka: 1.5, half: 4, vd: 1.5, spread: 0.35 },
-    toxic: [{ at: 0.001, sign: 'aa_kidney', text: 'passing little urine, swollen and sick (the kidneys failing)', harm: 0.25 }],
+    // There is no cumulative-damage model here, so the threshold stands for an ordinary dose of the
+    // root and the hazard is spread over the course: roughly one in twenty people who take a week of it
+    // end in kidney failure, which is about what the Belgian outbreak showed (105 of ~1800 exposed).
+    toxic: [{ at: 0.008, sign: 'aa_kidney', text: 'passing little urine, swollen and sick (the kidneys failing)', harm: 0.1, calibrated: true }],
     note: 'The worst of the herbal harms: it feels like nothing at the time. Most of the damage shows months or years later as kidney failure or bladder cancer.',
     cautions: ['No dose is safe. Banned from medicine in most countries.', 'Often taken by mistake: several Chinese and Indian herbs share a name or a look with birthwort.'],
     ref: 'Debelle FD, Vanherweghem J-L, Nortier JL. Kidney Int 2008;74:158; Grollman AP et al. PNAS 2007;104:12129; IARC Monographs vol.100A',
@@ -104,7 +107,9 @@ export const FLORA_ACTIVES = [
     // sometimes death. Outbreaks have come from contaminated grain and from herbal teas; unborn and
     // breastfed babies are hit hardest.
     pk: { F: 0.5, ka: 1.5, half: 5, vd: 1.2, spread: 0.4 },
-    toxic: [{ at: 0.004, sign: 'pa_liver', text: 'a swollen tender belly, yellow eyes, dark urine (the liver veins blocking)', harm: 0.2 }],
+    // Again no cumulative model: the threshold sits where it takes several strong cups a day, or a
+    // tincture, to reach — a single cup of comfrey tea does not close the hepatic veins.
+    toxic: [{ at: 0.02, sign: 'pa_liver', text: 'a swollen tender belly, yellow eyes, dark urine (the liver veins blocking)', harm: 0.15, calibrated: true }],
     note: 'Damage adds up over weeks of tea. Comfrey on unbroken skin is a different matter from comfrey drunk.',
     cautions: ['Never by mouth in pregnancy or for a nursing mother or a baby.', 'There is no treatment once the liver veins close.'],
     ref: 'EMA public statement on pyrrolizidine alkaloids, 2014 (EMA/HMPC/893108/2011); Chen Z, Huo JR. Neth J Med 2010;68:252; WHO/IPCS EHC 80',
@@ -220,7 +225,9 @@ export const FLORA_ACTIVES = [
     // Cinnabar (zhu sha) is mercury sulfide: barely soluble, so most of a dose passes through — but some
     // is absorbed, and mercury leaves the brain and kidneys slowly (t½ ~60 days). Repeated courses have
     // caused kidney damage, tremor and nerve damage. There is no condition it treats.
-    pk: { F: 0.02, ka: 0.3, half: 1400, vd: 0.5, spread: 0.5 },
+    // F is tiny because mercuric sulfide hardly dissolves: a fraction of a percent of a dose is taken
+    // up. That is why people survive it at all, and why the harm comes from months of pills.
+    pk: { F: 0.002, ka: 0.3, half: 1400, vd: 0.5, spread: 0.5 },
     toxic: [
       { at: 0.03, sign: 'mercury_early', text: 'metal taste, sore gums, trembling hands, pins and needles', harm: 0.03 },
       { at: 0.1, sign: 'mercury_severe', text: 'shaking, confusion, passing little urine (mercury poisoning)', harm: 0.3 },
@@ -234,7 +241,9 @@ export const FLORA_ACTIVES = [
     // Realgar (xiong huang) is arsenic disulfide. Little dissolves, but what does is arsenic: vomiting
     // and diarrhoea acutely, then skin changes, nerve damage and cancer with long use. Arsenic trioxide
     // does treat one rare leukaemia — in a hospital, by drip, nothing like this.
-    pk: { F: 0.05, ka: 0.5, half: 60, vd: 0.2, spread: 0.5 },
+    // Realgar is also poorly soluble (F ~1%), so a pinch gives the early signs and a spoonful is a
+    // lethal dose of arsenic.
+    pk: { F: 0.01, ka: 0.5, half: 60, vd: 0.2, spread: 0.5 },
     toxic: [
       { at: 0.02, sign: 'arsenic_early', text: 'burning mouth, vomiting, watery stools, garlic breath', harm: 0.05 },
       { at: 0.06, sign: 'arsenic_severe', text: 'rice-water stools, collapse, the heart failing (arsenic poisoning)', harm: 0.5 },

@@ -15,6 +15,13 @@ independent.
 - **Every clinical number needs a `ref`.** Mark effect sizes fitted to a trial as `calibrated`, and
   mark extraction efficiencies as estimates. After changing any number, run `npm test`. The outcome
   bands in `test/sim.test.mjs` must still hold; recalibrate rather than loosening them blindly.
+- **`js/core/content/flora.js` is generated** by `tools/build_flora.mjs` from USDA Dr. Duke's databases
+  (public domain) and Kew's WCVP (CC BY 4.0): never hand-edit it, and never hand-rate a species. A
+  plant's strength is its measured content × extraction (`preparations.js`) × PK. Effects and toxicity
+  live once per compound class in `content/flora_actives.js`; a compound that maps to no class is inert.
+  The generated table feeds `content/flora_herbs.js` (herb-shaped rows, generic sprite pool per life
+  form) and `core/flora.js` (which species this seed's valley grows, plus `floraNear`, `folkUses`,
+  `lookalikes`, `climateFit`).
 - Any drug may be made in the lab: this valley follows no real country's drug law. Recipes for drugs
   that are controlled in the real world stay at game level (inputs, station, time, yield), with no
   real reagents, conditions or step-by-step chemistry.
