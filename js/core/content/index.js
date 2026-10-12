@@ -9,6 +9,7 @@ import { METHODS, EXTRACT, HERB_METHODS, SPECIALS } from './preparations.js';
 import { INGREDIENTS, TOOLS, MATERIALS, PRODUCE } from './goods.js';
 import { PLACEABLES } from './build.js';
 import { MEDICINES } from './medicines.js';
+import { pixelIcon } from './pixel_icons.js';
 
 const mid = ([a, b]) => (a + b) / 2;
 
@@ -165,6 +166,7 @@ export function buildContent() {
   G('swamp', { name: 'Swamp', sprites: range('dngn/floor/swamp', 4), color: '#4a5a3a', walk: 0.6 });
   G('shallow', { name: 'Shallow water', sprites: ['dngn/water/shallow_water', 'dngn/water/shallow_water2'], color: '#4a8ab0', walk: 0.5, water: 'shallow' });
   G('deep', { name: 'Deep water', sprites: ['dngn/water/deep_water', 'dngn/water/deep_water2'], color: '#2a5a8a', walk: 0, water: 'deep' });
+  for (const it of items.values()) { const px = pixelIcon(it); if (px) it.icon = px; }  // pixel art where the table has it
   return C;
 }
 

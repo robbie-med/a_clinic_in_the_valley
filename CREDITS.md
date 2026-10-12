@@ -33,7 +33,17 @@
 
 ## Art
 - **Dungeon Crawl Stone Soup tiles** (CC0 / public domain): https://github.com/crawl/crawl. The atlas
-  is copied from `dont get lost` (`assets/tiles.png`, built by `tools/build_atlas.py`).
+  is copied from `dont get lost` (`assets/tiles.png`, built by `tools/build_atlas.py <rltiles> <art dir>`, which also packs the extra CC0 tiles below).
+- **Dungeon Crawl Stone Soup Supplemental** (CC0): 9 flowering-grass tiles
+  (https://opengameart.org/content/dungeon-crawl-32x32-tiles-supplemental, same DCSS artists as above).
+- **496 pixel art icons for medieval/fantasy RPG** — Henrique Lazarini (7Soul1), CC0:
+  https://opengameart.org/node/39455 (7 icons: leaf, clover, nut, four bottles/tubes).
+- **CC0 herb icons** (Stendhal) — AntumDeluge (Jordan Irwin), CC0, from OpenClipart vectors by rg1024, frankes,
+  Firkin, martinix and a Ferdinand Lucas Bauer illustration: https://opengameart.org/content/cc0-herb-icons
+  (5 icons).
+- **CC0 potion icons** (compilation) — AntumDeluge, CC0: https://opengameart.org/content/cc0-potion-icons.
+  Only the Dungeon Crawl Stone Soup phials are used (2 icons); the page states CC0 for the whole compilation.
+  Which pixel icon an item gets is the table in `js/core/content/pixel_icons.js`; the rest keep glyphs.
 - **game-icons.net** (CC BY 3.0): https://github.com/game-icons/icons. The exact authors are listed in
   `assets/icons-authors.json`; they include Lorc, Delapouite, Skoll, Sbed, Zeromancer, Caro Asercion,
   Lord Berandas and the Badges set.
