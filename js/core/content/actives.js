@@ -7,7 +7,6 @@
 //              E = 1 − exp(−m·perMg); for `duration` hours it changes its target by per·E (symptoms:
 //              fraction relieved; worms: fraction killed per dose). Negative per = makes it worse.
 //   topical  — strength is relative (1 = typical batch); acts per application.
-//   topical  — acts where it is applied (skin, wound); effect per application.
 //   fluid    — rehydration: water, sodium and glucose replace losses.
 //
 // Concentrations are mg/L. Every number has a ref; where the literature gives a range the middle is

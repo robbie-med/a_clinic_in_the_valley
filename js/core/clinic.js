@@ -19,17 +19,39 @@ export function newClinic() {
 // ——— the valley's resistance index: { org: { drug: share of strains resistant } }
 // Every course of an antibiotic selects resistant strains among the bacteria people carry, and resistant
 // strains bred inside a patient spread from their household. Without the drug, resistance costs the
-// bacteria fitness and slowly fades. The rates are estimates, tuned so that heavy use visibly erodes a
-// drug within a game year (Goossens H et al. Lancet 2005;365:579; Andersson DI, Hughes D. Nat Rev
-// Microbiol 2010;8:260).
+// germ fitness and slowly fades. One clinic is a small share of a valley's antibiotic use, so this moves
+// over decades, not seasons: sustained heavy use (a few courses a day) shifts a drug by ~0.1–0.2 over
+// ~20 game years. Bacterial resistance barely fades once established (trimethoprim stayed put after an
+// 85% cut in use: Sundqvist M et al. J Antimicrob Chemother 2010;65:350); malaria's fades within about a
+// decade (chloroquine came back in Malawi ~12 years after withdrawal: Laufer MK et al. N Engl J Med
+// 2006;355:1959). Rates are estimates (Goossens H et al. Lancet 2005;365:579; Andersson DI, Hughes D.
+// Nat Rev Microbiol 2010;8:260).
 export const resistance = (cl) => (cl.resist ||= baseResistance());
-export function selectPressure(cl, activeId, k = 1) {
+/** A course of the drug selects every germ it touches; pass orgId to select one (a strain spreading from a household). */
+export function selectPressure(cl, activeId, k = 1, orgId = null) {
   const R = resistance(cl);
-  for (const o of ORGANISMS) if (activeId in o.mic) { const r = R[o.id][activeId] ?? 0; R[o.id][activeId] = r + 0.0015 * k * (1 - r); }
+  for (const o of ORGANISMS) if (activeId in o.mic && (!orgId || o.id === orgId)) { const r = R[o.id][activeId] ?? 0; R[o.id][activeId] = r + 0.00007 * k * (1 - r); }
+}
+/** Fade resistance once for every day passed since the last fade (whether or not the clinic was open). */
+export function fadeResistance(cl, today) {
+  cl.fadedTo ??= today;
+  for (; cl.fadedTo < today; cl.fadedTo++) resistanceDay(cl);
 }
 function resistanceDay(cl) {
   const R = resistance(cl);
-  for (const o of ORGANISMS) for (const d of Object.keys(o.mic)) { const r = R[o.id][d] ?? 0, r0 = o.resist0[d] ?? 0; R[o.id][d] = r + (r0 - r) * 0.004; }
+  for (const o of ORGANISMS) {
+    const fade = o.parasite ? 0.004 : 0.0012; // per day: half-life ~4 years for malaria, ~15 for bacteria
+    for (const d of Object.keys(o.mic)) { const r = R[o.id][d] ?? 0, r0 = o.resist0[d] ?? 0; R[o.id][d] = r + (r0 - r) * fade; }
+  }
+}
+/** The season's lab bulletin: the valley's real resistance, sampled (n isolates each), fixed once issued. */
+export function healthReport(G) {
+  const cl = G.meta.clinic, s = Math.floor((day(G.W.time) - 1) / 10);
+  if (cl.report?.s === s) return cl.report;
+  const R = resistance(cl), rng = makeRng(G.meta.seed, 'report', s), n = 40, data = {};
+  for (const o of ORGANISMS) { data[o.id] = {}; for (const d of Object.keys(o.mic)) { let k = 0; for (let i = 0; i < n; i++) if (rng() < (R[o.id][d] ?? 0)) k++; data[o.id][d] = k / n; } }
+  cl.report = { s, day: s * 10 + 1, season: season(G.W.time), n, data };
+  return cl.report;
 }
 const feeFactor = (fee) => clamp(1.15 - fee * 0.07, 0.4, 1.15);
 
@@ -45,7 +67,6 @@ export function dayPlan(G, d) {
   do { n++; pr *= rng(); } while (pr > L && n < 30);
   n = Math.min(n - 1, 3 + seats * 2);
   const places = [[R.village, 2.2], ...R.hamlets.map((h) => [h, 1 / (1 + h.dist / 35)])];
-  resistanceDay(cl);
   const list = [];
   for (let k = 0; k < n; k++) {
     const h = weighted(places, rng());
@@ -89,6 +110,7 @@ export function dueArrivals(G) {
 export function tickHome(G) {
   const cl = G.meta.clinic, t = G.W.time;
   const news = [];
+  fadeResistance(cl, day(t));
   for (const p of Object.values(cl.patients)) {
     if (!['home', 'leaving', 'hospital'].includes(p.status)) continue;
     const ev = simulate(p, t);
@@ -111,7 +133,7 @@ export function tickHome(G) {
     }
     if (p.status === 'dead') continue;
     // a resistant strain bred in this patient spreads through the household
-    for (const c of p.conds) for (const id of Object.keys(c.res || {})) if (!c.spread?.[id]) { (c.spread ||= {})[id] = 1; selectPressure(cl, id, 6); }
+    for (const c of p.conds) for (const id of Object.keys(c.res || {})) if (!c.spread?.[id]) { (c.spread ||= {})[id] = 1; selectPressure(cl, id, 6, c.org); }
     if (p.status === 'hospital' && t > p.hospital.until) { p.status = 'home'; G.meta.ledger.push({ t, kind: 'note', pid: p.id, text: `${who(p)} is back from the health centre.` }); }
     // recovered?
     if (!p.conds.length && !p.recovered) {

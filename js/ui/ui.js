@@ -17,7 +17,7 @@ import { VENDORS } from '../core/content/vendors.js';
 import { stock, buy, sell, offer, LOT, lotPrice, nextVisit, CATALOGUE, catalogueItems, orderTotal, placeOrder } from '../core/economy.js';
 import { startEncounter, ask, examine, differential, questionsFor, examsFor, remedies, rxLine, doseInfo, stockOf, finishEncounter, doProcedure, toolsAt, INSTRUCTIONS, PROCEDURES } from '../core/encounter.js';
 import { EXAMS } from '../core/content/findings.js';
-import { who, hamletOf, ageWords, OPEN, CLOSE, resistance } from '../core/clinic.js';
+import { who, hamletOf, ageWords, OPEN, CLOSE, healthReport } from '../core/clinic.js';
 import { medianWeight } from '../core/patient.js';
 import { bodySVG, REGIONS } from './body.js';
 import { makeRng } from '../core/rng.js';
@@ -519,7 +519,7 @@ export function makeUI(G) {
       const pend = G.meta.orders || [];
       if (pend.length) detail.append(h('h4', {}, 'On the way'), h('ul', {}, pend.map((o) => h('li', {}, `No. ${o.n}: ${o.goods.length} item${o.goods.length > 1 ? 's' : ''}, due day ${day(o.due)}`))));
     } else if (S.ledTab === 'report') {
-      const r = healthReport();
+      const r = healthReport(G);
       list.append(h('p', { class: 'note' }, `District health office, laboratory bulletin for ${SEASON_NAMES[r.season].toLowerCase()} (day ${r.day}). Share of germs from the valley that resist each medicine, from ${r.n} samples of each. A new bulletin comes each season.`));
       for (const o of ORGANISMS) list.append(h('h4', {}, o.name), h('ul', {}, Object.keys(o.mic).map((d) => { const v = r.data[o.id][d]; return h('li', { class: v >= 0.5 ? 'bad' : v >= 0.2 ? '' : 'good' }, `${ACTIVE.get(d).name}: ${Math.round(v * 100)}% resistant`); })));
       detail.append(h('p', { class: 'hint' }, 'Every course of an antibiotic, needed or not, breeds resistance in the germs people carry. Doses too small or stopped too soon breed it fastest. Left unused for a long time, a medicine slowly regains its power.'));
@@ -528,15 +528,6 @@ export function makeUI(G) {
     }
     panel.append(head('Ledger'), h('div', { class: 'pbody craft' }, h('div', { class: 'scroll' }, tabs, list), detail));
   };
-  /** The season's lab bulletin: the valley's real resistance, sampled (n isolates each), fixed once issued. */
-  function healthReport() {
-    const cl = G.meta.clinic, s = Math.floor((day(G.W.time) - 1) / 10);
-    if (cl.report?.s === s) return cl.report;
-    const R = resistance(cl), rng = makeRng(G.meta.seed, 'report', s), n = 40, data = {};
-    for (const o of ORGANISMS) { data[o.id] = {}; for (const d of Object.keys(o.mic)) { let k = 0; for (let i = 0; i < n; i++) if (rng() < (R[o.id][d] ?? 0)) k++; data[o.id][d] = k / n; } }
-    cl.report = { s, day: s * 10 + 1, season: season(G.W.time), n, data };
-    return cl.report;
-  }
   // ———————————————————————————————————— map
   PANELS.map = () => {
     const R = G.W.R, N = G.W.N;

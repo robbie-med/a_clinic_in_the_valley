@@ -66,7 +66,8 @@ compound, with sources.
     penicillins, concentration-dependent for ciprofloxacin, mostly growth-stopping for the rest);
   - a level that sits between the MIC and the mutant-prevention level can breed resistance in the
     patient;
-  - every course raises the valley's resistance index, and it fades slowly when a drug is rested;
+  - every course nudges the valley's resistance index; one clinic shifts it over decades, not seasons, and it
+    fades slowly when a drug is rested (bacteria barely, malaria within about a decade);
   - the district health office sends a resistance bulletin each season (Ledger);
   - true penicillin allergy (~2%) shows as hives, rarely anaphylaxis.
 
@@ -100,6 +101,19 @@ compound, with sources.
     reputation rises. Hire him into a built dispensary and his work is faster, though it still takes
     real-world times.
 - **Phase 4:** clinic → hospital: lab, ward, maternity, theatre, staff, community health.
+- **Later: the world's materia medica.** Herbs and animal materials from other traditions (Chinese, Ayurvedic,
+  Western), each modelled like the valley's own: its compounds and their % content, PK, and effects only as
+  strong as the clinical evidence shows (none, if there is none).
+  - Sources: TCMBank (herb → ingredient; https://tcmbank.cn), USDA Dr. Duke's Phytochemical and Ethnobotanical
+    Database (public domain, plant → compound with ppm), HerbMedPro (American Botanical Council; evidence per
+    herb), PubMed. TCMBank's targets are network-pharmacology predictions, not effect sizes: never use them as
+    `effects`. Cite facts per entry; don't bulk-copy any licensed database.
+  - Getting what doesn't grow here (e.g. staghorn, deer antler):
+    - a town medicine shop with an import catalogue: weeks by post, priced by distance, and often fake
+      (adulterated antler and ginseng are common in real markets);
+    - plants grown from bought seed or cuttings where the valley's climate allows, at a strength that
+      depends on how well they suit it;
+    - local plants and animals with their own real chemistry, never a stand-in for the imported one.
 - After phase 1, if wanted: PWA hosting, APK and save sync, copied from `dont get lost`.
 
 ## The book

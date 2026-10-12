@@ -8,7 +8,7 @@ import { simulate, HOUR } from '../js/core/disease.js';
 import { conc, pkParams } from '../js/core/pk.js';
 import { ACTIVE } from '../js/core/content/actives.js';
 import { baseResistance } from '../js/core/content/organisms.js';
-import { newClinic, resistance, selectPressure, dayPlan } from '../js/core/clinic.js';
+import { newClinic, resistance, selectPressure, fadeResistance } from '../js/core/clinic.js';
 
 const DAY = 24 * HOUR;
 function cohort(cond, n, { age, sex, days, rx, resist, tag = '' }) {
@@ -84,17 +84,21 @@ test('infected wound: dicloxacillin heals; amoxicillin meets penicillinase; MRSA
   assert.ok(amox.cured < diclox.cured * 0.6, `amoxicillin ${amox.cured} vs dicloxacillin ${diclox.cured}`);
   assert.ok(mrsa.cured < none.cured + 0.05, `MRSA ${mrsa.cured} vs none ${none.cured}`);
 });
-test('the valley: antibiotic use raises resistance, which fades slowly without it', () => {
+test('the valley: antibiotic use raises resistance over decades, and it fades slowly without it', () => {
   const cl = newClinic();
   const r0 = resistance(cl).s_pneumoniae.amoxicillin;
-  for (let i = 0; i < 300; i++) selectPressure(cl, 'amoxicillin');
+  for (let i = 0; i < 40; i++) selectPressure(cl, 'amoxicillin');
+  assert.ok(resistance(cl).s_pneumoniae.amoxicillin < r0 + 0.01, 'a busy season barely moves it');
+  for (let i = 40; i < 3000; i++) selectPressure(cl, 'amoxicillin'); // a few courses a day for ~20 game years
   const r1 = resistance(cl).s_pneumoniae.amoxicillin;
-  assert.ok(r1 > r0 + 0.2, `300 courses: ${r0} → ${r1}`);
+  assert.ok(r1 > r0 + 0.1, `3000 courses: ${r0} → ${r1}`);
   assert.equal(resistance(cl).shigella.amoxicillin > baseResistance().shigella.amoxicillin, true, 'every organism the drug touches is selected');
-  const G = { meta: { seed: 1, clinic: cl }, W: { R: { village: { id: 'village' }, hamlets: [] } } };
-  for (let d = 1; d <= 100; d++) dayPlan(G, d);
+  fadeResistance(cl, 1); fadeResistance(cl, 101); // 100 days pass in one jump (slept, away)
   const r2 = resistance(cl).s_pneumoniae.amoxicillin;
   assert.ok(r2 < r1 && r2 > r0, `after 100 days without: ${r2}`);
+  const e0 = resistance(cl).e_coli.ciprofloxacin;
+  selectPressure(cl, 'ciprofloxacin', 6, 'shigella');
+  assert.equal(resistance(cl).e_coli.ciprofloxacin, e0, 'a resistant Shigella spreading at home leaves E. coli alone');
 });
 test('penicillin allergy shows itself on the first doses', () => {
   let allergic = 0, reacted = 0;
