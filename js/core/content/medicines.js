@@ -55,4 +55,27 @@ export const MEDICINES = [
     note: 'Once a day. Adults 1–2 g; children 50–80 mg/kg.' },
   { id: 'adrenaline_1mg', name: 'Adrenaline 1 mg/ml (1:1000) ampoule', actives: { adrenaline: 1 }, inj: { ka: 3 }, route: ['inj'], unit: 'ampoule', price: 0.25, pack: 10, stack: 50, icon: 'vial', color: '#f0d0d0', ref: 'WTND p.70',
     note: 'For allergic shock. Keep it with you whenever you inject penicillin.' },
+
+  // ——— chronic illness and emergencies (WTND chapters 10, 11, 13, 22; Green Pages pp.380–392). Prices: MSH 2015 medians
+  // (approximate) as above; antivenoms and RUTF are not in the MSH guide (WHO snakebite guidelines 2010: US$40–200 a
+  // vial in Africa; UNICEF Supply Catalogue: ~US$0.33 a sachet of RUTF).
+  tab('salb_4', 'Salbutamol 4 mg tablets', { salbutamol: 4 }, 0.004, '#f0f0ff', { ref: 'WTND p.384', note: 'Adults 1 tablet 3 times a day; children half. For an attack.' }),
+  syr('salb_syrup', 'Salbutamol syrup 2 mg in 5 ml', { salbutamol: 0.4 }, 0.003, '#d0e0ff', { ref: 'WTND p.384', shelfDays: 365, note: 'Adults 10 ml, children 1–12 years 5 ml, babies 2½ ml, 3 times a day.' }),
+  tab('pred_5', 'Prednisolone 5 mg tablets', { prednisolone: 5 }, 0.006, '#f8f0f0', { ref: 'WTND p.385', note: 'Severe asthma: adults 30–60 mg every morning for 3 to 7 days; children less (WTND p.385).' }),
+  tab('pheno_30', 'Phenobarbital 30 mg tablets', { phenobarbital: 30 }, 0.008, '#ffffff', { ref: 'WTND p.389', note: 'Epilepsy: adults 1–3 mg/kg a day; children 4–8 mg/kg a day, at night. Often for life.' }),
+  tab('diaz_5', 'Diazepam 5 mg tablets', { diazepam: 5 }, 0.003, '#f0f8d0', { ref: 'WTND p.389', note: 'Relaxes muscles before setting a bone (adult 10 mg). Habit-forming.' }),
+  { id: 'diaz_rectal', name: 'Diazepam 10 mg/2 ml ampoule (into the anus)', actives: { diazepam: 10 }, inj: { ka: 4, rectal: true }, route: ['inj'], unit: 'ampoule', price: 0.16, pack: 10, stack: 50, icon: 'vial', color: '#f0f8d0', ref: 'WTND p.389',
+    note: 'For a fit lasting more than 15 minutes: draw up into a syringe without a needle and squirt into the anus. Adults 5–10 mg, children 7–12 years 3–5 mg, under 7 years 0.2 mg/kg. Repeat once after 15 minutes if needed.' },
+  tab('hctz_25', 'Hydrochlorothiazide 25 mg tablets', { hydrochlorothiazide: 25 }, 0.004, '#f0f0e0', { ref: 'WTND p.125', note: 'High blood pressure: 12.5–25 mg once a day, for life. Not during diarrhoea.' }),
+  tab('amlo_5', 'Amlodipine 5 mg tablets', { amlodipine: 5 }, 0.007, '#ffffff', { ref: 'WTND p.125', note: 'High blood pressure: 5–10 mg once a day, for life.' }),
+  tab('folic_5', 'Folic acid 5 mg tablets', { folic_acid: 5 }, 0.003, '#f0e060', { ref: 'WTND p.392', note: 'Anaemia from too little folate, and in pregnancy.' }),
+  tab('antacid_500', 'Aluminium/magnesium hydroxide 500 mg chewable tablets', { antacid: 500 }, 0.006, '#f8f8f8', { ref: 'WTND p.380', note: 'Chew 1–2 tablets an hour after meals and at bedtime.' }),
+  tab('omep_20', 'Omeprazole 20 mg capsules', { omeprazole: 20 }, 0.017, '#c080c0', { ref: 'WTND p.381', note: 'Ulcer: 20 mg twice a day for 2 weeks with the two antibiotics, then once a day (WTND p.381).' }),
+  { id: 'rutf_sachet', name: 'Therapeutic food sachet (RUTF, 92 g, 500 kcal)', actives: { rutf: 92000 }, unit: 'sachet', price: 0.4, pack: 150, stack: 300, icon: 'peas', color: '#c09050', ref: 'WTND pp.110–113',
+    note: 'Peanut paste with milk, oil, sugar, vitamins. A severely thin child eats 2–3 a day, little and often, for 6–8 weeks, with plenty of clean water.' },
+  tab('iodized_oil', 'Iodized oil capsules (200 mg iodine)', { iodine: 200 }, 0.2, '#e0c060', { ref: 'WTND p.130', note: 'One capsule protects for about a year where there is no iodized salt.' }),
+  { id: 'snake_av', name: 'Snake antivenom, polyvalent (horse serum) vial', actives: { snake_antivenom: 1 }, inj: { ka: 20 }, route: ['inj'], unit: 'vial', price: 100, pack: 2, stack: 10, icon: 'vial', color: '#e0e8f0', ref: 'WTND pp.105, 387',
+    note: 'Into a vein, slowly, as soon as possible after the bite. Often 2 or more vials; children need as much as adults. Have adrenaline ready.' },
+  { id: 'scorpion_av', name: 'Scorpion antivenom (horse serum) vial', actives: { scorpion_antivenom: 1 }, inj: { ka: 20 }, route: ['inj'], unit: 'vial', price: 60, pack: 2, stack: 10, icon: 'vial', color: '#f0e8e0', ref: 'WTND pp.106, 387',
+    note: 'For a small child stung on the body or head, within 2 hours. 1–3 vials. Have adrenaline ready.' },
 ];

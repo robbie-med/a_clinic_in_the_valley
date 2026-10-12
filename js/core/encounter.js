@@ -12,6 +12,7 @@ import { payment, collect, scheduleReturn, who, selectPressure } from './clinic.
 import { gainXp } from './crafting.js';
 import { stackPotency } from './crafting.js';
 import { makeRng } from './rng.js';
+import { reactsTo } from './disease.js';
 
 export const INSTRUCTIONS = [
   { id: 'finish', label: 'Explain the medicine, and to finish every dose even when better', min: 3 },
@@ -22,6 +23,9 @@ export const INSTRUCTIONS = [
   { id: 'rest_move', label: 'Keep moving gently; lift with the legs', min: 1 },
   { id: 'hot_compress', label: 'Hot compresses 20 minutes, 4 times a day; raise the limb', min: 2 },
   { id: 'dressing', label: 'Keep it covered with a clean cloth, change daily', min: 1, needs: [['cloth', 2]] },
+  // ——— chronic illness and emergencies (WTND pp.98–105, 127)
+  { id: 'splint', label: 'Splint or bind it firmly; keep it still and raised; do not walk on it', min: 4, needs: [['cloth', 1]] },
+  { id: 'diet', label: 'No sugar or sweets; beans, whole grains, vegetables; lose weight if fat; shoes always', min: 3 },
 ];
 export const PROCEDURES = [
   { id: 'clean', label: 'Clean the wound with soap and boiled water, remove dirt', min: 12, needs: [['soap', 1], ['cloth', 1]], station: 'hearth',
@@ -171,11 +175,11 @@ export function injectNow(G, enc, itemId, amount) {
   p.rx.push({ item: itemId, name: it.name, q, left: amount, amount, perDay: 1, days: 1, start: now, route: 'inj', actives: it.actives, inj: it.inj, counselled: true });
   enc.rx.push({ item: itemId, name: it.name, amount, perDay: 1, days: 1, route: 'inj', qty: amount, given: now });
   for (const a of Object.keys(it.actives || {})) { const m = ACTIVE.get(a).abxAs || a; if (ORGANISMS.some((o) => m in o.mic)) selectPressure(G.meta.clinic, m); }
-  const boiled = G.stations.has('hearth');
-  if (makeRng(p.seed, 'abscess', now)() < (boiled ? 0.001 : 0.02)) (p.pending ||= []).push({ id: 'wound_infected', t: now + 48 * HOUR });
-  if (!boiled) p.flags.dirtyNeedle = now; // for blood-borne infections later (hepatitis B)
-  let text = `Injected ${it.name.toLowerCase()}.`;
-  const al = Object.keys(it.actives || {}).find((id) => p.allergy && ACTIVE.get(id).allergen === p.allergy);
+  const boiled = G.stations.has('hearth'), rectal = !!it.inj?.rectal; // a solution squirted into the anus (diazepam) leaves no abscess
+  if (!rectal && makeRng(p.seed, 'abscess', now)() < (boiled ? 0.001 : 0.02)) (p.pending ||= []).push({ id: 'wound_infected', t: now + 48 * HOUR });
+  if (!boiled && !rectal) p.flags.dirtyNeedle = now; // for blood-borne infections later (hepatitis B)
+  let text = rectal ? `Gave ${it.name.toLowerCase()} into the anus with a syringe without a needle.` : `Injected ${it.name.toLowerCase()}.`;
+  const al = Object.keys(it.actives || {}).find((id) => reactsTo(p, id, itemId, now));
   // same draw as disease.js, so what you see now is what the body does
   if (al) text += makeRng(p.seed, 'ana', itemId, now, 0)() < 0.1 ? ' Within minutes: cold grey sweat, a weak fast pulse, wheezing, the lips swelling — allergic shock!' : ' Soon itchy welts rise on the skin.';
   enc.log.push({ who: 'You', text });

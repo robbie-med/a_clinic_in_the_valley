@@ -42,9 +42,10 @@ export function vitals(p, t) {
   if (p.lastTox?.some((s) => s.startsWith('anticholinergic'))) hr += 35;
   if (p.lastTox?.includes('digitalis_arrhythmia')) hr = Math.min(hr, 48);
   let rr = normalRR(p.age) + fever * 2 + (pn ? pn.s * (p.age < 5 ? 34 : 16) : 0) + (d > 0.08 ? 10 : 0) + (mal ? mal.sev * 8 : 0) + (hf && hf.V > 3.5 ? (hf.V - 3.5) * 5 : 0);
+  const cx = chronicVitals(p); hr += cx.hr; rr += cx.rr; // chronic illness and emergencies (below)
   hr = Math.round(hr + (rng() - 0.5) * 8); rr = Math.round(rr + (rng() - 0.5) * 4);
-  const bpS = Math.round((p.age < 12 ? 98 : 118 + Math.max(0, p.age - 40) * 0.5) + (pe ? 25 + pe.sev * 45 : 0) - (d > 0.08 ? 20 : 0) + (rng() - 0.5) * 8);
-  const bpD = Math.round((p.age < 12 ? 60 : 76) + (pe ? 14 + pe.sev * 25 : 0) + (rng() - 0.5) * 6);
+  const bpS = cx.bp + Math.round((p.age < 12 ? 98 : 118 + Math.max(0, p.age - 40) * 0.5) + (pe ? 25 + pe.sev * 45 : 0) - (d > 0.08 ? 20 : 0) + (rng() - 0.5) * 8);
+  const bpD = Math.round(cx.bp * 0.5) + Math.round((p.age < 12 ? 60 : 76) + (pe ? 14 + pe.sev * 25 : 0) + (rng() - 0.5) * 6);
   return { temp, hr, rr, bpS, bpD, d, hb, ds, irregular: !!p.lastTox?.some((s) => s === 'digitalis_arrhythmia' || s === 'quinine_toxic') };
 }
 
@@ -235,5 +236,112 @@ export function signs(p, t, tools = new Set()) {
     const muac = Math.round((13.6 + (p.nutrition - 0.85) * 14) * 10) / 10;
     set('muac', `${muac.toFixed(1)} cm${muac < 11.5 ? ' — SEVERE malnutrition (red)' : muac < 12.5 ? ' — moderate malnutrition (yellow)' : ' (green)'}`, muac < 12.5, muac);
   }
+  // ——— chronic illness and emergencies (WTND chapters 10, 11, 13, 22)
+  {
+    const tox = p.lastTox || [];
+    const as = cond('asthma'), fit = p.conds.find((c) => COND.get(c.id).model === 'fits'), str = cond('stroke'), ht = cond('hypertension');
+    const mal = cond('marasmus'), kw = cond('kwashiorkor'), db = cond('diabetes'), go = cond('goitre'), ul = cond('ulcer'), ar = cond('arthritis');
+    const sn = cond('snakebite'), sc = cond('scorpion_sting'), ke = cond('kerosene'), fr = cond('fracture'), sp = cond('sprain');
+    // breathing
+    const wz = (as?.s || 0) > 0.15, wzHeard = wz && (as.s > 0.4 || tools.has('stethoscope'));
+    set('wheeze', wzHeard ? (as.s > 0.6 ? 'Loud wheezing all over the chest; the breath out is long and whistling.' : 'Wheezing on breathing out.') : 'No wheeze.', wzHeard);
+    set('attacks', as ? 'Yes — attacks like this before, worse at night, with colds, smoke or dust.' : 'No attacks like this before.', !!as);
+    if ((as?.s || 0) > 0.55) { set('indrawing', 'The skin between the ribs and above the collar bones sucks in with each breath.', true); set('cough', 'Coughing, with a tight chest.', true); }
+    if ((as?.s || 0) > 0.95) set('alert', 'Fighting for each breath, cannot finish a sentence; the lips are going blue.', true);
+    if ((ke?.s || 0) > 0.2) { set('cough', 'A choking cough.', true); if (ke.s > 0.5) set('crackles', 'Crackles over both lungs.', true); }
+    set('swallowed', ke ? 'Yes — kerosene, from a soda bottle.' : 'Nothing like that.', !!ke);
+    set('breath_smell', ke && ke.age < 24 ? 'The breath smells of kerosene.' : 'No unusual smell on the breath.', !!(ke && ke.age < 24));
+    // fits
+    if (fit) {
+      const ep = fit.id === 'epilepsy', many = Math.max(1, Math.round(fit.rate * 30));
+      set('fits_hx', ep ? `Yes — falls, stiffens and jerks, the eyes roll up, then sleeps. About ${many} a month.` : 'Yes — with the fever: stiff, then jerking, a few minutes, then slept.', true);
+      if (fit.status) set('alert', 'Fitting now: jerking all over, eyes rolled back, does not answer.', true);
+      else if (fit.ago < 2) set('alert', 'Dull and sleepy after the fit.', true);
+    } else set('fits_hx', 'No fits.', false);
+    if (tox.includes('barb_drowsy') || tox.includes('benzo_drowsy')) set('alert', 'Very sleepy and unsteady, words slurred.', true);
+    if (tox.includes('barb_resp') || tox.includes('benzo_resp')) set('alert', 'Cannot be woken; breathing slow and shallow.', true);
+    // stroke
+    const side = makeRng(p.seed, 'side')() < 0.5 ? 'right' : 'left';
+    if (str && str.s > 0.1) {
+      set('weak_side', `The ${side} arm and leg are ${str.s > 0.5 ? 'limp, cannot lift them' : 'weak'}; the other side strong.`, true);
+      set('face_droop', `The ${side} side of the face droops when smiling.`, str.s > 0.25);
+      set('speech', str.s > 0.35 ? 'The words come out slurred and wrong.' : 'Speaks clearly.', str.s > 0.35);
+      set('stroke_hx', 'Yes — it came suddenly, all at once.', true);
+      if (str.s > 0.8 && str.age < 72) set('alert', 'Unconscious, breathing noisy, face reddish.', true);
+    } else {
+      set('weak_side', 'Both sides equally strong.', false);
+      set('stroke_hx', 'No.', false);
+    }
+    // high blood pressure, diabetes, goitre, ulcer
+    if ((ht?.L || 0) > 45 && !F.headache?.pos) set('headache', 'Yes, headaches often, and dizzy spells.', true);
+    const sugar = (db?.L || 0) > 4.5;
+    set('polyuria', sugar ? 'Yes — passes much urine, day and night, and is always thirsty.' : 'No.', sugar);
+    if (sugar) set('thirst', 'Always thirsty.', true);
+    set('hunger', (db?.L || 0) > 6 ? 'Always hungry, yet losing weight.' : 'Normal appetite.', (db?.L || 0) > 6);
+    if ((db?.L || 0) > 8) set('weight_loss', 'Has become thinner.', true);
+    set('urine_sugar', sugar ? 'Sweet! The others agree it is the sweetest urine.' : 'Not sweet.', sugar);
+    set('foot_numb', (db?.L || 0) > 8 ? 'The feet are numb and burn; a dry crack on one heel.' : 'Feeling in the feet normal.', (db?.L || 0) > 8);
+    set('goitre', go ? (go.L > 1.6 ? 'A large soft swelling on the front of the neck that moves up on swallowing.' : go.L > 0.8 ? 'A swelling on the front of the neck, seen when the head is tilted back.' : 'The thyroid is felt a little enlarged.') : 'No lump in the neck.', !!go && go.L > 0.5);
+    const burn = (ul?.s || 0) > 0.15;
+    set('epigastric', burn ? `Yes — a burning in the pit of the stomach, eased by eating, worse at night and when hungry${(V.ds.relief.acid || 0) > 0.3 ? ' (the medicine calms it)' : ''}.` : 'No stomach pain.', burn);
+    const tar = (ul?.L || 0) > 0.8 && rng() < 0.3;
+    set('black_stool', tar ? 'Black, sticky stools like tar.' : 'Stools a normal colour.', tar);
+    if ((ul?.s || 0) > 0.3 && !F.tender?.pos) set('tender', 'Tender in the pit of the stomach.', true);
+    // malnutrition
+    const thinHair = (kw?.s || 0) > 0.3 || (mal?.L || 0) > 0.35;
+    set('hair', thinHair ? 'Thin, straight, pale hair that pulls out easily.' : 'Hair normal.', thinHair);
+    set('skin_patches', (kw?.s || 0) > 0.4 ? 'Dark peeling patches on the legs, like old paint flaking.' : '—', (kw?.s || 0) > 0.4);
+    if ((kw?.s || 0) > 0.25) set('edema', 'Feet, hands and face swollen; a finger press leaves a dent.', true);
+    if (p.age < 6) set('diet_hx', mal || kw ? 'Thin maize porridge, twice a day; stopped the breast early. Sad, does not play.' : 'Eats with the family, three or more times a day.', !!(mal || kw));
+    // bites, stings, injuries
+    set('bite_hx', sn ? 'Yes — a snake, in the grass: brown and thick.' : sc ? 'Yes — a scorpion, in the firewood.' : 'No bite or sting.', !!(sn || sc));
+    set('fang_marks', sn ? 'Two fang marks a finger-width apart.' : '—', !!sn);
+    set('sting_mark', sc ? 'A tiny red puncture, very tender to touch.' : '—', !!sc);
+    if (sn) {
+      const sw = sn.D0 > 0 && !sn.neuro;
+      set('local_swelling', sw ? `Swelling ${sn.D0 > 1 ? 'up past the knee, blistered and dark near the bite' : 'around the bite, spreading'}.` : 'Little swelling.', sw);
+      set('bleeding', !sn.neuro && sn.s > 0.4 ? 'Blood oozes from the gums and the bite; the urine is red.' : 'No bleeding.', !sn.neuro && sn.s > 0.4);
+      set('ptosis', sn.neuro && sn.s > 0.4 ? 'The eyelids droop; cannot keep the eyes open; speech thick.' : 'Eyelids normal.', sn.neuro && sn.s > 0.4);
+      set('pain_site', 'The bite burns and throbs.', true);
+    }
+    if (sc) {
+      set('sting_systemic', sc.s > 0.4 ? 'Sweating, drooling, restless jerking movements.' : 'No sweating or drooling.', sc.s > 0.4);
+      set('pain_site', 'Burning pain at the sting, spreading up the limb.', true);
+    }
+    if (fr || sp) {
+      const l = fr || sp, eased = 1 - (V.ds.relief.pain || 0);
+      set('deformity', fr ? 'The forearm is bent just above the wrist, swollen; it grates and hurts terribly when moved.' : 'The bones lie straight.', !!fr);
+      set('swollen_joint', sp ? 'The ankle is swollen and bruised; standing on it hurts.' : '—', !!sp);
+      set('pain_site', `${fr ? 'The broken arm' : 'The twisted ankle'}, ${l.s * eased > 0.4 ? 'bad' : 'aching'}.`, true);
+      set('injury_how', p.complaint || 'A fall.', true);
+    }
+    if (ar) {
+      set('joints', 'Knees and finger joints thick, stiff and creaking; little heat.', true);
+      set('pain_site', `The knees and hands, ${ar.s * (1 - (V.ds.relief.pain || 0)) > 0.4 ? 'bad' : 'aching'}, worse after work.`, true);
+    }
+    // what the new medicines show
+    const T = { beta_tremor: 'hands trembling, heart racing', beta_toxic: 'heart racing and stumbling', adrenaline_fast: 'heart pounding', steroid_mood: 'cannot sleep, restless', barb_drowsy: 'very sleepy, unsteady', barb_resp: 'cannot be woken', benzo_drowsy: 'very sleepy', benzo_resp: 'cannot be woken',
+      barb_withdrawal: 'shaking and sleepless since stopping the medicine', benzo_withdrawal: 'anxious, shaking, sleepless since stopping the medicine', adrenal_crisis: 'weak, faint, vomiting since stopping the medicine',
+      low_potassium: 'weak, cramping muscles', ankle_swelling: 'swollen ankles', ccb_shock: 'faint and cold', iodine_hyper: 'shaky, sweating, losing weight', serum_sickness: 'fever, rash, aching joints' };
+    for (const s of tox) if (T[s]) F.tox_symptoms.v = F.tox_symptoms.v.replace(s, T[s]);
+  }
   return F;
+}
+
+// ——— chronic illness and emergencies: what they add to pulse, breathing and blood pressure
+function chronicVitals(p) {
+  const c = (id) => p.conds.find((q) => q.id === id), tox = p.lastTox || [];
+  const as = c('asthma'), ht = c('hypertension'), ke = c('kerosene'), sn = c('snakebite'), sc = c('scorpion_sting');
+  let hr = 0, rr = 0, bp = 0;
+  if (as) { rr += as.s * (p.age < 5 ? 30 : 18); hr += as.s * 30; }
+  if (ht) bp += Math.round(ht.L);
+  if (p.conds.some((q) => q.status)) hr += 30; // fitting
+  if (ke) rr += ke.s * (p.age < 5 ? 35 : 18);
+  if (sn) { hr += sn.s * 30; bp -= Math.round(sn.s * 25); } // bleeding into the limb: shock
+  if (sc) { hr += sc.s * 40; bp += Math.round(sc.s * 20); } // the venom's adrenaline storm
+  if (tox.includes('beta_tremor') || tox.includes('adrenaline_fast')) hr += 25;
+  if (tox.includes('beta_toxic')) hr += 50;
+  if (tox.includes('barb_resp') || tox.includes('benzo_resp')) rr -= 8;
+  if (tox.includes('ccb_shock')) bp -= 40;
+  return { hr, rr, bp };
 }

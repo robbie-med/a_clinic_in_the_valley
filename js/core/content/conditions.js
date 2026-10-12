@@ -7,6 +7,7 @@
 // the handbook and for judging care afterwards.
 //
 // Page refs: Where There Is No Doctor (Hesperian, 2011 printing). Paraphrased, never copied.
+import { COMPRESS } from '../time.js';
 
 export const CONDITIONS = [
   {
@@ -269,6 +270,201 @@ export const CONDITIONS = [
     teach: { treat: ['vitamin_a'], helps: ['paracetamol', 'oral_fluid'], harms: [], refer: 'Fast breathing, fits, very drowsy, unable to drink, or bloody diarrhoea: refer at once.' },
     learn: 'Begins like a bad cold with high fever, red watery eyes and cough. On the 3rd or 4th day tiny white spots like grains of salt appear inside the cheeks, then a blotchy rash spreads from the face down. Dangerous in thin children: pneumonia, diarrhoea, blindness. Give vitamin A (two doses, a day apart), keep feeding and giving drinks. Vaccination prevents it.',
     ref: 'WTND pp.311–312', icon: 'spider-web', color: '#d05050',
+  },
+
+  // ——— chronic illness and emergencies (WTND chapters 10, 11, 13, 22). Months and years run COMPRESS times faster
+  // (time.js: a game year is 40 days), so `tau`, recovery and complication rates of slow processes are given in real
+  // time and divided down here; attacks, fits, bites and poisonings run in real hours.
+  {
+    id: 'asthma', name: 'Asthma attack', local: ['the tight chest', 'whistling chest'], model: 'asthma',
+    epi: { w: 2, age: [[0, 2, 0.3], [2, 15, 1.4], [15, 60, 1], [60, 99, 0.8]], season: { cool_dry: 1.4, hot_dry: 1.3, rains: 0.8, late_rains: 0.9 } },
+    // Attacks of 12–60 h. Oral steroids cut relapse after an attack by ~60% (Rowe BH et al. Cochrane 2007;CD000195):
+    // steroidFewer. hazard is calibrated so ~2–5% of untreated attacks in those who walk in kill (an estimate: asthma
+    // deaths are mostly untreated severe attacks, Global Asthma Report 2018).
+    params: { since: [2, 30], base: [0.1, 0.4], attack: [0.45, 1.15], hours: [12, 60], perWeek: 0.4, steroidFaster: 2, steroidFewer: 0.6, hazard: 0.012, calibrated: true },
+    complaint: ['{who} cannot get breath {when}, and the chest whistles.', 'The chest is tight and {pron} fights for air, {when}. It has happened before.', 'Wheezing and coughing {when}, worse at night.'],
+    teach: { treat: ['salbutamol', 'prednisolone'], helps: ['adrenaline'], harms: ['codeine', 'diazepam'], refer: 'Lips or nails turning blue, too breathless to speak, or no better after salbutamol: refer at once.' },
+    learn: 'Attacks of hard breathing with a whistle (wheeze) on breathing out; the skin between the ribs sucks in. Usually no fever. Often from childhood, worse in some months, at night, with colds, smoke or dust. Calm the person, give plenty to drink, clean air. Salbutamol opens the airways; for a severe attack add prednisolone by mouth for 3–7 days. If there is nothing else, adrenaline under the skin.',
+    ref: 'WTND pp.167, 384–385', icon: 'sun-cloud', color: '#80a0c0',
+  },
+  {
+    id: 'hypertension', name: 'High blood pressure', local: ['pressure', 'high blood'], model: 'chronic',
+    epi: { w: 1.5, age: [[0, 30, 0], [30, 45, 0.6], [45, 60, 1.5], [60, 99, 2.5]] },
+    // level: systolic pressure above normal (mmHg). Stroke and heart disease double with every 20 mmHg (Lewington S et al.
+    // Lancet 2002;360:1903); 10 mmHg lower cuts strokes ~40% (Law MR et al. BMJ 2009;338:b1665). perYear (game years) at
+    // normal pressure is an estimate for rural Africa. The pressure settles on a new medicine over ~2 weeks (tau,
+    // compressed with its years). Less salt lowers it ~5 mmHg (He FJ et al. BMJ 2013;346:f1325).
+    params: { since: [72, 400], level: [22, 70], by: ['bp'], instr: 'low_salt', instrCut: 0.12, tau: 14 / COMPRESS, full: 60,
+      risk: [{ to: 'stroke', perYear: 0.006, per: 2, step: 20 }, { to: 'heart_failure', perYear: 0.004, per: 2, step: 20 }] },
+    complaint: ['My head pains often and I get dizzy, {when}.', 'My heart pounds and I am short of breath on the path, {when}.', 'I came for my pressure. They measured it high at the mission once.'],
+    teach: { treat: ['amlodipine', 'hydrochlorothiazide'], helps: ['low_salt'], harms: [], refer: 'Sudden weakness, chest pain or pressure above 180: refer.' },
+    learn: 'At first high blood pressure has no signs; it is found with a cuff. Later: headaches, pounding heart, breathless on effort, dizziness. Over years it brings stroke, heart failure and kidney disease. Little salt, less fat, no smoking, lose weight if fat. If it stays high, a medicine every day for life lowers it: the danger falls with it.',
+    ref: 'WTND pp.125, 326, 410', icon: 'heart-beats', color: '#c03040',
+  },
+  {
+    id: 'stroke', name: 'Stroke', local: ['the falling sickness of the old', 'one side dead'], model: 'pain',
+    epi: { w: 0.4, age: [[0, 40, 0], [40, 60, 0.6], [60, 99, 2]] },
+    // Early case fatality ~20–35% in poorer countries, most in the first week (Feigin VL et al. Lancet Neurol 2009;8:355):
+    // hazard calibrated. The damage mends partly over months (halfDays, compressed).
+    params: { since: [3, 48], pain: [0.5, 1], halfDays: 90 / COMPRESS, hazard: 0.0086, early: 7 * 24, calibrated: true },
+    complaint: ['{who} fell down {ago} and one side will not move. The words come out wrong.', 'My father\'s face is pulled to one side and his arm is dead, since {ago}.'],
+    teach: { treat: [], helps: [], harms: [], refer: 'Refer if it can be done: there is little a village clinic can do. Unconscious: on the side, nothing by mouth.' },
+    learn: 'Sudden weakness or paralysis of one side, a face pulled to one side, slurred speech, sometimes unconsciousness. Lay the person with the head a little raised, on the side if unconscious, nothing by mouth while unconscious. Afterwards some movement often returns over months; help them walk with a stick. Lowering high blood pressure prevents most strokes.',
+    ref: 'WTND pp.327, 326', icon: 'person', color: '#806080',
+  },
+  {
+    id: 'epilepsy', name: 'Epilepsy', local: ['the falling sickness', 'fits'], model: 'fits',
+    epi: { w: 1, age: [[0, 1, 0.3], [1, 30, 1.2], [30, 99, 0.6]] },
+    // 1 to ~15 fits a month. A few run on (status, ~3%) and kill some; falls into the cooking fire burn many with
+    // epilepsy in rural Africa. Rates are estimates (Ngugi AK et al. Neurology 2011;77:1005; WTND p.178).
+    params: { since: [4, 72], perDay: [0.03, 0.5], status: 0.03, stop: 0.35, hazard: 0.02, arrive: 0.05, injure: { to: 'burn_minor', per: 0.01 } },
+    complaint: ['{who} falls down and shakes, the eyes roll back. It happened again {ago}.', 'Fits come and go, {when}. Last one {ago}.'],
+    teach: { treat: ['phenobarbital'], helps: ['diazepam'], harms: [], refer: 'A fit lasting more than 15 minutes that diazepam does not stop: refer.' },
+    learn: 'Fits in someone otherwise healthy, hours to months apart: falls, jerks, eyes roll back, then sleeps. Not catching. Phenobarbital every night prevents most fits; it does not cure, often for life, at the lowest dose that works. During a fit move hard things away and put nothing in the mouth. A fit over 15 minutes: diazepam solution into the anus.',
+    ref: 'WTND pp.178, 389–390', icon: 'person', color: '#a080c0',
+  },
+  {
+    id: 'febrile_fits', name: 'Fits with fever', local: ['fever fits'], model: 'fits',
+    epi: { w: 1, age: [[0, 0.5, 0], [0.5, 5, 3], [5, 99, 0]], season: { cool_dry: 1, hot_dry: 0.8, rains: 1.3, late_rains: 1.3 } },
+    // ~1 in 5 fit again in the same illness; ~5% last over 30 minutes (Berg AT, Shinnar S. Neurology 1996;47:562).
+    // Fever medicine does not prevent them (Offringa M et al. Cochrane 2017;CD003031): nothing here acts on it.
+    params: { since: [1, 10], days: [1, 2.5], perDay: [0.1, 0.4], status: 0.05, stop: 0.35, hazard: 0.005, arrive: 0.05, fever: [1.3, 2.3] },
+    complaint: ['{who} was hot with fever and then shook all over and did not answer, {ago}.', 'The child had a fit with the fever this morning.'],
+    teach: { treat: ['diazepam'], helps: ['paracetamol'], harms: [], refer: 'Stiff neck, very drowsy long after the fit, a baby under 6 months, or a fit that will not stop: meningitis or malaria of the brain — refer.' },
+    learn: 'A young child with high fever may have a short fit; most stop by themselves and do no harm. Cool the child with water, look for the cause of the fever (malaria, meningitis). Fever medicine makes the child comfortable but does not stop fits coming. If a fit lasts more than 15 minutes, diazepam into the anus.',
+    ref: 'WTND pp.178, 75–76, 389', icon: 'thermometer-hot', color: '#d08060',
+  },
+  {
+    id: 'marasmus', name: 'Severe malnutrition (marasmus)', local: ['the wasting', 'skin and bones'], model: 'chronic',
+    epi: { w: 1.1, age: [[0, 0.5, 0.2], [0.5, 5, 3], [5, 99, 0]], season: { cool_dry: 1, hot_dry: 1.1, rains: 1.1, late_rains: 1.3 } },
+    // level: missing nourishment (patient.nutrition = 0.95 − level; MUAC < 11.5 cm below ~0.7). Untreated ~10–20% die
+    // within two months, with RUTF ~3–5% (WHO 2013 SAM guideline; Ciliberto 2005): hazard calibrated; recovery with
+    // RUTF takes 6–8 weeks (tau, compressed). Advice to feed often with oil and sugar (WTND p.110) helps less.
+    params: { since: [200, 700], level: [0.27, 0.45], nut: 0.95, by: ['feed'], instr: 'feeding', instrCut: 0.55, tau: 48 / COMPRESS, full: 0.4, safe: 0.12, hazard: 0.02, heal: 0.15, calibrated: true },
+    complaint: ['{who} is getting thinner and thinner {when} and will not play.', '{who} stopped the breast and now is only skin and bones.'],
+    teach: { treat: ['rutf', 'feeding'], helps: ['vitamin_a'], harms: [], refer: 'Will not eat, very drowsy, or with fever, cough or diarrhoea as well: refer.' },
+    learn: 'Dry malnutrition: the child is starved, small, wasted, skin and bones, the arm under 11.5 cm round. Feed more food, more often: 5 times a day and between, with oil, nuts or sugar added to the main food, beans, eggs, milk. Therapeutic peanut paste (RUTF) at home is the surest. Infections are worse and longer in these children.',
+    ref: 'WTND pp.107–113, 297', icon: 'bowl-of-rice', color: '#b09060',
+  },
+  {
+    id: 'kwashiorkor', name: 'Severe malnutrition (kwashiorkor)', local: ['the swelling sickness', 'wet malnutrition'], model: 'chronic',
+    epi: { w: 0.6, age: [[0, 1, 0.3], [1, 5, 3], [5, 99, 0]], season: { cool_dry: 1, hot_dry: 1.1, rains: 1.1, late_rains: 1.3 } },
+    // Swollen from hunger, not fat. Deaths higher than in marasmus (WHO 2013): hazard calibrated.
+    params: { since: [150, 500], level: [0.15, 0.3], nut: 0.95, by: ['feed'], instr: 'feeding', instrCut: 0.55, tau: 40 / COMPRESS, full: 0.25, safe: 0.04, hazard: 0.03, heal: 0.06, oedema: true, calibrated: true },
+    complaint: ['{poss} feet and face are swollen {when}, and the skin peels.', '{who} is swollen and sad, will not eat, {when}.'],
+    teach: { treat: ['rutf', 'feeding'], helps: ['vitamin_a'], harms: ['cornsilk_k'], refer: 'Will not eat, very drowsy, cold, or with fever or diarrhoea: refer.' },
+    learn: 'Wet malnutrition: feet, hands and face swollen, thin arms under the swelling, peeling or dark patches on the skin, thin pale hair, a sad child who will not play. It needs more food more often: energy foods (oil, sugar) and body-building foods (beans, milk, eggs). The swelling goes first.',
+    ref: 'WTND pp.112–114', icon: 'bowl-of-rice', color: '#c0a070',
+  },
+  {
+    id: 'anaemia', name: 'Anaemia (thin blood)', local: ['little blood', 'weak blood'], model: 'chronic',
+    epi: { w: 2, age: [[0, 0.5, 0], [0.5, 5, 1], [5, 15, 0.5], [15, 50, 1.3], [50, 99, 0.6]], sex: { f: 1, m: 0.35 }, pregnant: 3 },
+    // level: haemoglobin missing (g/dL); they walk in with Hb 4.5–9.5 (hbTo). Mostly too little iron (from food, monthly bleeding, pregnancy); some lack
+    // folate (need). With the right one Hb rises ~1–2 g/dL in 3 weeks and is whole in ~3 months (tau, compressed).
+    // Death in very severe anaemia as for hookworm.
+    params: { since: [200, 700], hbTo: [4.5, 9.5], hb: true, by: ['iron', 'folate'], need: 0.85, tau: 40 / COMPRESS, full: 6, hazard: 0.0006, heal: 0.6 },
+    complaint: ['I am tired all the time and breathless on the hill, {when}.', '{who} is pale and weak {when}, no strength.'],
+    teach: { treat: ['iron'], helps: ['folic_acid'], harms: [], refer: 'Very pale, breathless at rest, swollen, or pregnant and very pale: refer.' },
+    learn: 'Thin blood: pale skin, inner eyelids, gums and nails; tired, weak, breathless; very severe, a swollen face and feet and a racing heart. Eat iron-rich foods (meat, liver, beans, dark leaves), cook in iron pots. Iron tablets for moderate or severe anaemia, above all in pregnancy; folic acid as well in pregnancy. Treat what causes it (worms, malaria, dysentery).',
+    ref: 'WTND pp.124, 392', icon: 'water-drop', color: '#e0a0a0',
+  },
+  {
+    id: 'diabetes', name: 'Diabetes', local: ['sugar sickness', 'sweet urine'], model: 'chronic',
+    epi: { w: 0.8, age: [[0, 30, 0.05], [30, 45, 0.5], [45, 99, 1.5]] },
+    // level: fasting blood sugar above normal (mmol/L). The book gives diet only; diet lowers it a little (estimate,
+    // HbA1c −0.5 to −1%). Foot sores come at ~2–6% a year in diabetics (Boulton AJ et al. Lancet 2005;366:1719), more
+    // with higher sugar; per game year.
+    params: { since: [200, 1000], level: [4, 14], instr: 'diet', instrCut: 0.25, tau: 30 / COMPRESS, full: 12,
+      risk: [{ to: 'wound_infected', perYear: 0.02, per: 1.6, step: 4 }] },
+    complaint: ['I am always thirsty and pass much urine, {when}, and I grow thin.', 'I am tired and hungry all the time {when}. The ants come to my urine.'],
+    teach: { treat: ['diet'], helps: [], harms: [], refer: 'A child or young adult with these signs needs insulin: refer. Unconscious: refer at once.' },
+    learn: 'Too much sugar in the blood: always thirsty, passing much urine, hungry, tired, losing weight; later itchy skin, blurred sight, numb feet, sores that do not heal. Test: taste the urine (with others) or use strips. Over 40, a strict diet for life: no sugar or sweets, plenty of fibre, lose weight if fat. Shoes always; look after the feet.',
+    ref: 'WTND p.127', icon: 'salt-shaker', color: '#e0e0a0',
+  },
+  {
+    id: 'goitre', name: 'Goitre', local: ['the neck lump'], model: 'chronic',
+    epi: { w: 0.8, age: [[0, 8, 0.2], [8, 99, 1]], sex: { f: 1, m: 0.4 } },
+    // level: size (0.5 just felt … 2.5 large). Iodine shrinks young soft goitres over months (tau, compressed), old hard
+    // ones little (Zimmermann MB et al. Lancet 2008;372:1251).
+    params: { since: [500, 2000], level: [0.6, 2.5], by: ['iodine'], tau: 180 / COMPRESS, full: 2, heal: 0.4 },
+    complaint: ['A lump has grown on my throat {when}.', 'My neck is swelling in front, {when}. My mother had the same.'],
+    teach: { treat: ['iodine'], helps: [], harms: [], refer: 'Trembling, nervous, eyes bulging (a different goitre), or it presses on the breathing: refer.' },
+    learn: 'A swelling on the front of the throat from lack of iodine, common in the hills. Iodized salt prevents it and shrinks many; iodized oil if there is no iodized salt. Old hard goitres only shrink with surgery. Lack of iodine in pregnancy can harm the baby.',
+    ref: 'WTND p.130', icon: 'salt-shaker', color: '#d0b080',
+  },
+  {
+    id: 'ulcer', name: 'Stomach ulcer (acid indigestion)', local: ['burning stomach', 'heartburn'], model: 'chronic',
+    epi: { w: 1.5, age: [[0, 15, 0.05], [15, 99, 1]] },
+    // Weeks, not years: real time. ~30–40% heal by themselves in a month (self), omeprazole ~80–90% (G&G ch.49); NSAIDs
+    // and steroids make them worse and bleed (gi_harm). hazard: bleeding to death, ~0.1–0.4% a year in active ulcers
+    // (estimate), several times that on aspirin.
+    params: { since: [200, 1500], level: [0.4, 1], self: [0.3, 0.9], by: ['acid'], worse: 'gi_harm', tau: 10, full: 1, heal: 0.15, hazard: 2e-6 },
+    complaint: ['A burning pain in the pit of my stomach {when}, worse at night and when I am hungry.', 'My stomach burns after I eat {when}. Food and water calm it.'],
+    teach: { treat: ['omeprazole', 'antacid'], helps: ['amoxicillin', 'metronidazole'], harms: ['aspirin', 'ibuprofen', 'prednisolone'], refer: 'Vomiting blood or coffee grounds, black tarry stools, or a hard very painful belly: refer at once.' },
+    learn: 'A burning pain in the pit of the stomach or chest, often eased by food or water, worse when hungry, at night, after alcohol, coffee, spicy or fatty food. Small frequent meals, much water, no tobacco. Antacids (aluminium and magnesium hydroxide) calm it; omeprazole heals the sore, with two antibiotics against the germ that causes most ulcers. Aspirin and ibuprofen make ulcers worse: use paracetamol.',
+    ref: 'WTND pp.128–129, 380–381', icon: 'fire-bowl', color: '#c06040',
+  },
+  {
+    id: 'snakebite', name: 'Snakebite', local: ['the snake'], model: 'venom',
+    epi: { w: 0.6, age: [[0, 5, 0.5], [5, 15, 1], [15, 60, 1.3], [60, 99, 0.7]], season: { cool_dry: 0.6, hot_dry: 0.8, rains: 1.6, late_rains: 1.3 } },
+    // ~30% of bites carry no venom. Untreated envenoming kills ~10–20% in Africa; antivenom given early cuts that several
+    // fold (WHO snakebite guidelines for Africa 2010): hazard calibrated. Splinting slows the venom (WTND p.105; estimate).
+    params: { since: [1, 8], dry: 0.3, dose: [0.4, 2], absorb: 0.15, half: 30, v1: 1, ratio50: 0.08, bind: 'snake_antivenom', slow: 'splint', neuro: 0.25, hazard: 0.015, calibrated: true },
+    complaint: ['{who} was bitten by a snake in the field {ago}.', 'A snake bit {poss} foot on the path {ago}. It is swelling.'],
+    teach: { treat: ['snake_antivenom', 'splint'], helps: ['adrenaline', 'paracetamol'], harms: ['aspirin'], refer: 'Any bleeding, drooping eyelids, trouble breathing or swallowing, or swelling spreading up the limb: antivenom at the health centre — carry them, do not let them walk.' },
+    learn: 'Fang marks mean a poisonous snake. Keep still, do not walk; take off rings; wrap the limb and splint it; carry to help. Do not cut, suck, tie tight, or put ice. Antivenom, as early as possible — but it is horse serum: have adrenaline ready for allergic shock. Bleeding gums, blood in the urine, drooping eyelids or weak breathing are danger signs.',
+    ref: 'WTND pp.104–105, 387', icon: 'curling-vines', color: '#608040',
+  },
+  {
+    id: 'scorpion_sting', name: 'Scorpion sting', local: ['the scorpion'], model: 'venom',
+    epi: { w: 0.5, age: [[0, 5, 1], [5, 99, 1]], season: { cool_dry: 0.8, hot_dry: 1.5, rains: 1, late_rains: 0.9 } },
+    // Rarely dangerous to adults; to children under 5 sometimes deadly (WTND p.106). Venom per kg does it; hazard calibrated
+    // to ~1–4% of stung small children dying untreated (estimate, Chippaux JP, Goyffon M. Acta Trop 2008;107:71).
+    params: { since: [1, 3], dose: [0.05, 0.4], absorb: 1.5, half: 4, v1: 0.5, ratio50: 0.08, bind: 'scorpion_antivenom', hazard: 0.012, calibrated: true },
+    complaint: ['A scorpion stung {who} {ago}. {pron} is crying with pain.', 'I was stung by a scorpion in the firewood {ago}. It burns.'],
+    teach: { treat: ['paracetamol'], helps: ['scorpion_antivenom'], harms: [], refer: 'A small child stung on the body or head, sweating, drooling, jerking or breathing badly: refer fast.' },
+    learn: 'Most stings only hurt: paracetamol and something cold on the sting. Small children can die of it, above all when stung on the body or head: antivenom within 2 hours if there is any, and help fast. If breathing stops, mouth-to-mouth.',
+    ref: 'WTND pp.106, 387', icon: 'spider-web', color: '#a08040',
+  },
+  {
+    id: 'kerosene', name: 'Kerosene swallowed', local: ['drank paraffin'], model: 'venom',
+    epi: { w: 0.4, age: [[0, 1, 0.3], [1, 5, 3], [5, 99, 0.1]] },
+    // The harm is kerosene breathed into the lungs (pneumonitis) over 1–3 days; ~1–3% of children brought in die
+    // (Lucas GN. Ceylon Med J 1994;39:59): hazard calibrated. Nothing neutralises it; vomiting puts more in the lungs.
+    params: { since: [1, 6], dose: [0.03, 0.3], absorb: 0.2, half: 36, v1: 1, hazard: 0.004, fever: [0.4, 1.4], calibrated: true },
+    complaint: ['{who} drank kerosene from a bottle {ago}. Now {pron} coughs.', '{who} swallowed paraffin {ago} and is breathing fast.'],
+    teach: { treat: [], helps: ['oral_fluid'], harms: [], refer: 'Breathing fast or hard, blue lips, or drowsy: refer.' },
+    learn: 'Keep kerosene, petrol and poisons out of reach and never in soft-drink bottles. Do not make the child vomit after kerosene: it goes into the lungs. Give water or milk to drink if awake. Watch the breathing for 3 days; fast breathing and cough mean the lungs are hurt.',
+    ref: 'WTND p.103', icon: 'water-bottle', color: '#c0a060',
+  },
+  {
+    id: 'fracture', name: 'Broken arm or wrist', local: ['a broken bone'], model: 'pain',
+    epi: { w: 0.8, age: [[0, 5, 0.5], [5, 15, 1.5], [15, 60, 1], [60, 99, 1.3]] },
+    // Weeks, not years: real time. A cast for a month (WTND p.98); splinting eases the pain (instrCut, estimate).
+    params: { since: [1, 30], pain: [0.6, 0.95], halfDays: 12, instr: 'splint', instrCut: 0.6, limb: 'broken' },
+    complaint: ['{who} fell from a tree {ago} and the arm is bent and swollen.', 'I fell on my hand {ago}. The wrist is swollen and I cannot move it.'],
+    teach: { treat: ['splint'], helps: ['paracetamol', 'ibuprofen', 'diazepam'], harms: [], refer: 'The bone through the skin, a broken thigh, hip, neck or back, or the hand cold and numb: refer.' },
+    learn: 'Keep the bone still: splint it before moving the person, then a cast for about a month and no force for another. If the bones are far out of place and the break is recent it can be set, gently, best with someone experienced; diazepam or codeine first. Never rub a broken limb. Children mend fast, old people slowly.',
+    ref: 'WTND pp.98–99, 14', icon: 'bandaged', color: '#c0c0b0',
+  },
+  {
+    id: 'sprain', name: 'Sprain', local: ['a twisted ankle'], model: 'pain',
+    epi: { w: 1.5, age: [[0, 5, 0.3], [5, 60, 1], [60, 99, 0.6]] },
+    params: { since: [2, 48], pain: [0.4, 0.8], halfDays: 5, instr: 'splint', instrCut: 0.75, limb: 'sprain' },
+    complaint: ['I twisted my ankle on the path {ago}. It is swollen.', '{who} turned {poss} foot playing {ago} and limps.'],
+    teach: { treat: ['splint'], helps: ['paracetamol', 'ibuprofen', 'aspirin'], harms: [], refer: 'No better after 2 days, or the foot floppy and the toes will not move: refer.' },
+    learn: 'Rest the joint, wrap it firmly, keep it raised; cold soaks the first day, then hot soaks. Aspirin or paracetamol. A bad sprain takes 3–4 weeks. Never rub or massage it.',
+    ref: 'WTND p.102', icon: 'bandaged', color: '#b0a090',
+  },
+  {
+    id: 'arthritis', name: 'Arthritis (painful joints)', local: ['the old joints'], model: 'pain',
+    epi: { w: 1.5, age: [[0, 40, 0.05], [40, 60, 1], [60, 99, 2.5]] },
+    // Chronic: does not mend. Hot compresses and rest ease it (instrCut, estimate).
+    params: { since: [200, 2000], pain: [0.4, 0.8], halfDays: 3650, instr: 'hot_compress', instrCut: 0.85, arthritis: true },
+    complaint: ['My knees pain and are stiff {when}, worse after work.', 'The joints of my hands and knees ache {when}.'],
+    teach: { treat: ['aspirin'], helps: ['paracetamol', 'ibuprofen', 'hot_compress'], harms: ['prednisolone'], refer: 'One joint suddenly hot and swollen with fever: infected — needs an antibiotic and help.' },
+    learn: 'Most joint pain of older people cannot be cured but can be eased: rest, hot cloths on the joints, gentle exercises to keep them moving. Aspirin at a higher dose than for other pain (adults 3 tablets 4 times a day, with food; less if the ears ring).',
+    ref: 'WTND p.173', icon: 'weight-lifting-up', color: '#a08070',
   },
 ];
 
