@@ -22,6 +22,12 @@ compound, with sources.
 
   Where people live decides what they catch: malaria near standing water, diarrhoea where the
   river is the water source.
+- **People** (`people.js`, very basic for now): each hamlet has households whose people age, conceive, give
+  birth and die on the 40-day calendar year (rural East African birth and death rates), so the valley grows
+  over generations. Patients are drawn from them. A pregnant patient carries a foetus that takes in what her
+  blood carries: drugs (`foetal` data on actives: vitamin A early on, NSAIDs late, ...) and illness (malaria,
+  severe anaemia, high fever) add harm, and birth turns it into a stillbirth, a small baby or a marked one.
+  Babies join the mother's household. Drugs in a baby under 2 months have their own harms (`newborn` data).
 - **Patients** (`patient.js`, `clinic.js`) each have:
   - a seeded age, sex, weight, nutrition, pregnancy and haemoglobin;
   - their own drug clearance;
@@ -129,6 +135,8 @@ compound, with sources.
     - plants grown from bought seed or cuttings where the valley's climate allows, at a strength that
       depends on how well they suit it;
     - local plants and animals with their own real chemistry, never a stand-in for the imported one.
+- **Later: full pregnancy/foetus/newborn physiology** (foetal growth, preterm labour, labour itself, breast milk
+  carrying drugs, a newborn's slow drug clearance, bilirubin), replacing the basic models in `people.js`.
 - After phase 1, if wanted: PWA hosting, APK and save sync, copied from `dont get lost`.
 
 ## The book
@@ -137,7 +145,7 @@ Unpack it with `gpg -d sources/wtnd-book.tar.gz.gpg | tar xz -C sources` (ask th
 
 ## Code
 - `js/core/` — pure simulation (runs in Node): content tables, region, world diffs, PK, disease,
-  signs, encounter, clinic, economy, crafting, actions, time.
+  signs, encounter, clinic, people, economy, crafting, actions, time.
 - `js/game/` — Phaser 3 scene (tilemap, paperdoll villagers, walking, day/night), icons, sound.
 - `js/ui/` — DOM HUD and panels; `body.js` is the examinable figure.
 - `js/store.js` — IndexedDB saves (meta + one "valley" diff record).

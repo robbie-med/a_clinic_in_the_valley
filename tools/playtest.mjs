@@ -11,7 +11,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 const out = process.argv[2] && !process.argv[2].startsWith('--') ? process.argv[2] : 'playtest-out';
 const mobile = process.argv.includes('--mobile');
 mkdirSync(out, { recursive: true });
-const PORT = 3411;
+const PORT = +process.env.PORT || 3411;
 const server = await serve(PORT);
 const errors = [];
 let browser;

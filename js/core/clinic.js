@@ -8,6 +8,7 @@ import { COND } from './content/conditions.js';
 import { addItem } from './inventory.js';
 import { deliverOrders } from './economy.js';
 import { ORGANISMS, baseResistance } from './content/organisms.js';
+import { tickPeople, drawResident, personNow, hold, patientEvents } from './people.js';
 
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 export const OPEN = 7 * 60, CLOSE = 18 * 60, LAST_ARRIVAL = 15.5 * 60;
@@ -88,7 +89,9 @@ export function dueArrivals(G) {
     if (a.spawned || a.t > t) continue;
     a.spawned = true;
     if (t - a.t > 3 * HOUR) { cl.missed = (cl.missed || 0) + 1; continue; } // came while you were away, went home
-    const p = makePatient({ seed: G.meta.seed, key: a.key, t: a.t, season: season(a.t), hamlet: hamletOf(G, a.hamlet), resist: resistance(cl) });
+    const q = drawResident(G, a.hamlet, a.key); // someone who lives there (people.js)
+    const p = makePatient({ seed: G.meta.seed, key: a.key, t: a.t, season: season(a.t), hamlet: hamletOf(G, a.hamlet), resist: resistance(cl), who: q && personNow(G, q, a.t) });
+    if (p.who) hold(G, p);
     p.status = 'arriving'; p.firstSeen = a.t;
     cl.patients[p.id] = p;
     out.push(p.id);
@@ -111,9 +114,11 @@ export function tickHome(G) {
   const cl = G.meta.clinic, t = G.W.time;
   const news = [];
   fadeResistance(cl, day(t));
+  tickPeople(G);
   for (const p of Object.values(cl.patients)) {
     if (!['home', 'leaving', 'hospital'].includes(p.status)) continue;
     const ev = simulate(p, t);
+    patientEvents(G, p, ev);
     for (const e of ev) {
       if (e.kind === 'died') {
         p.status = 'dead';
@@ -127,8 +132,8 @@ export function tickHome(G) {
       } else if (e.kind === 'tox' && !p.toxReturn) {
         p.toxReturn = true;
         scheduleReturn(G, p, e.t + 6 * HOUR, `complains: ${e.text}`);
-      } else if (e.kind === 'birth') {
-        news.push({ kind: 'birth', pid: p.id, text: `${p.name} of ${hamletOf(G, p.hamlet).name} has given birth.` });
+      } else if (e.kind === 'birth' || e.kind === 'stillbirth' || e.kind === 'miscarriage') {
+        news.push({ kind: 'birth', pid: p.id, text: `${p.name} of ${hamletOf(G, p.hamlet).name}: ${e.text}.` });
       }
     }
     if (p.status === 'dead') continue;
