@@ -34,6 +34,11 @@ export const INSTRUCTIONS = [
   { id: 'miso_at_birth', label: 'Take the 3 misoprostol tablets as soon as the baby is born (never before)', min: 2, needs: [['miso_200', 3]], atBirth: { item: 'miso_200', amount: 3 } },
   { id: 'sunlight', label: 'Feed the baby often; lay him undressed in bright light by a window (not in the sun)', min: 2 },
   { id: 'kangaroo', label: 'Carry the baby skin to skin inside your clothes, day and night; breastfeed every 2 hours', min: 3 },
+  // ——— infections (WTND p.239)
+  { id: 'treat_partner', label: 'Bring your partner for the same medicine; no sex until both are cured', min: 2 },
+  // directly observed treatment: missed doses and stopping early fall (WHO TB programmes; Volmink J, Garner P. Cochrane
+  // 2007;CD003343 found DOT itself adds little over a well-supported self-run course, so the effect is modest: estimates)
+  { id: 'supporter', label: 'Choose someone at home to keep the tablets and watch every dose', min: 3 },
 ];
 export const PROCEDURES = [
   { id: 'clean', label: 'Clean the wound with soap and boiled water, remove dirt', min: 12, needs: [['soap', 1], ['cloth', 1]], station: 'hearth',
@@ -185,7 +190,13 @@ export function injectNow(G, enc, itemId, amount) {
   for (const a of Object.keys(it.actives || {})) { const m = ACTIVE.get(a).abxAs || a; if (ORGANISMS.some((o) => m in o.mic)) selectPressure(G.meta.clinic, m); }
   const boiled = G.stations.has('hearth'), rectal = !!it.inj?.rectal; // a solution squirted into the anus (diazepam) leaves no abscess
   if (!rectal && makeRng(p.seed, 'abscess', now)() < (boiled ? 0.001 : 0.02)) (p.pending ||= []).push({ id: 'wound_infected', t: now + 48 * HOUR });
-  if (!boiled && !rectal) p.flags.dirtyNeedle = now; // for blood-borne infections later (hepatitis B)
+  if (!boiled && !rectal) {
+    p.flags.dirtyNeedle = now;
+    // hepatitis B from a syringe last used on a carrier (~8% of adults in East Africa carry it, ~30% of exposures to
+    // an e-antigen carrier infect; ~1% overall, an estimate), 2–5 months later on the game calendar (WTND p.172)
+    const r = makeRng(p.seed, 'hbv', now);
+    if (r() < 0.01) (p.pending ||= []).push({ id: 'hepatitis', t: now + (60 + r() * 90) * DAY / COMPRESS });
+  }
   // status only: tetanus toxoid doses counted (people.js ttProtected); DMPA protects ~3 months, in game days (people.js)
   if (it.vaccine) (p.vacc ||= {})[it.vaccine] = (p.vacc[it.vaccine] || 0) + 1;
   if (it.fp) p.fpUntil = day(now) + it.fp.days / COMPRESS;

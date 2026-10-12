@@ -3,14 +3,15 @@
 // moves on, water is lost and replaced, and death is rolled against the hour's hazard.
 //
 // Models (conditions.js `model`): viral, bacterial, malaria, wound, burn, scabies, worms, pain, heart,
-// pregnancy, preeclampsia, labour, bleeding, fits. State lives on the condition record so it saves as plain JSON.
+// pregnancy, preeclampsia, labour, bleeding, fits, mycobacterial, tetanus, hiv. State lives on the condition record so
+// it saves as plain JSON.
 // Time: hour- and day-scale physiology runs in real hours; anything taking months (a pregnancy, pre-eclampsia
 // worsening over its weeks) runs COMPRESS times faster (time.js).
 import { COND } from './content/conditions.js';
 import { ACTIVE, ACTIVES } from './content/actives.js';
 import { ORG } from './content/organisms.js';
 import { drugState, toxSigns, gutExposure, hill } from './pk.js';
-import { makeRng } from './rng.js';
+import { makeRng, hashf } from './rng.js';
 import { COMPRESS } from './time.js';
 import { pregnancyHour, newbornHazard } from './people.js';
 import { YEAR_DAYS } from './time.js';
@@ -26,6 +27,8 @@ export function hostDefence(p) {
   if (p.age < 1) d *= 0.6; else if (p.age < 5) d *= 0.75; else if (p.age >= 65) d *= 0.75;
   d *= lerp(0.55, 1, clamp(p.nutrition ?? 1, 0, 1));
   if (p.pregnant) d *= 0.9;
+  const hiv = p.conds?.find((c) => c.cd4 !== undefined); // HIV: defence falls with the CD4 count (WTND p.399)
+  if (hiv) d *= lerp(0.45, 1, clamp(hiv.cd4 / 500, 0, 1));
   return d;
 }
 
@@ -53,8 +56,8 @@ const MODELS = {
       if (P.vomit && c.age < 48) loss += (5 / 1000 / 24) * p.weight * c.s * P.vomit;
       // measles kills the young and the thin; vitamin A cuts deaths ~60% under 2 (Huiming Y et al. Cochrane 2005;CD001479).
       // The 0.8 is calibrated: given on arrival, partway into the illness, it must land near that 60%.
-      const vuln = (p.age < 2 ? 2.5 : p.age < 5 ? 1.5 : 0.6) / hostDefence(p) ** 2;
-      const hazard = (P.hazard || 0) * c.s ** 2 * vuln * (1 - 0.8 * (x.ds.relief.vita || 0));
+      const vuln = (P.vuln ? P.vuln[ageBand(p.age)] : p.age < 2 ? 2.5 : p.age < 5 ? 1.5 : 0.6) / hostDefence(p) ** 2;
+      const hazard = (P.hazard || 0) * c.s ** 2 * vuln * (1 - 0.8 * (P.measles ? x.ds.relief.vita || 0 : 0));
       return { loss, hazard, done: c.age >= c.D };
     },
   },
@@ -65,8 +68,9 @@ const MODELS = {
       c.age = since;
       c.sev = lerp(0.7, 1.2, rng());
     },
-    step(p, c, dt, x) {
+    step(p, c, dt0, x) {
       const P = COND.get(c.id).params;
+      const dt = dt0 * (P.pace || 1); // a slow infection (months) runs on the game calendar, its treatment with it
       c.age += dt;
       const imm = P.imm * hostDefence(p) * Math.min(1, (c.age / P.onset) ** 2);
       const hosp = x.hosp ? 0.25 : 0; // antibiotic at the health centre: ~0.25 log10/h kill
@@ -75,11 +79,14 @@ const MODELS = {
       c.s = clamp((c.L - P.Lsym) / (P.Lmax - P.Lsym), 0, 1) * c.sev;
       if (P.sequel && ab.kill > 0.05) c.abxH = (c.abxH || 0) + dt;
       // the infection climbs to the next organ (bladder -> kidney, middle ear -> mastoid), carrying its strain
-      if (P.ascend && !c.ascended && c.s > P.ascend.minS && x.rng() < P.ascend.perH * dt) { c.ascended = true; (p.pending ||= []).push({ id: P.ascend.to, t: x.t, org: c.org, mic: { ...c.mic } }); }
+      if (P.ascend && !c.ascended && c.s > P.ascend.minS && (!P.ascend.sex || p.sex === P.ascend.sex) && x.rng() < P.ascend.perH * dt) { c.ascended = true; (p.pending ||= []).push({ id: P.ascend.to, t: x.t, org: c.org, mic: { ...c.mic } }); }
       let loss = 0;
       if (P.stool) loss += stoolLoss(p, P.stool, c.s * 1.4, x);
       const vuln = p.age < 5 ? 1.6 : p.age >= 65 ? 1.6 : 0.5;
-      return { loss, hazard: P.hazard * c.s ** 3 * vuln / hostDefence(p), done: c.L < 1 };
+      // cured, but an untreated partner (or household) passes the same strain back (WTND pp.237, 220)
+      const R = P.reinfect;
+      if (c.L < 1 && R && !x.instr.has(R.instr) && makeRng(p.seed, 'reinfect', c.id, Math.floor(x.t))() < R.odds) (p.pending ||= []).push({ id: c.id, t: x.t + lerp(R.days[0], R.days[1], x.rng()) * 24 * HOUR, org: c.org, mic: { ...c.mic } });
+      return { loss, hazard: P.hazard * c.s ** 3 * vuln / hostDefence(p) * (P.pace || 1), done: c.L < 1 };
     },
   },
   malaria: {
@@ -140,6 +147,8 @@ const MODELS = {
       const rate = (1 / (P.days * 24 + c.size * 12)) * (1 + (top.wound?.healBonus || 0)) * (c.I > 3 ? 0.15 : c.I > 2 ? 0.6 : 1);
       c.heal = clamp(c.heal + dt * rate, 0, 1);
       c.s = clamp(c.I / 7, 0, 1);
+      // dirt in the first days lets tetanus spores grow in someone never vaccinated (WTND pp.182, 89); own hashed draw
+      if (P.tetanus && !c.tet && c.age < 96 && !tetanusVaccinated(p) && hashf(p.seed, Math.floor(c.age), 7, 4093) < P.tetanus * c.dirt * dt) { c.tet = true; (p.pending ||= []).push({ id: 'tetanus', t: x.t }); }
       return { loss: 0, hazard: c.I > 6.5 ? 0.004 * (c.I - 6.5) ** 2 / hostDefence(p) : 0, done: c.heal >= 1 && c.I < 1.5 };
     },
   },
@@ -174,14 +183,14 @@ const MODELS = {
     step(p, c, dt, x) {
       const P = COND.get(c.id).params;
       c.age += dt;
-      const kill = x.topical.scabies?.killFrac || 0;           // fraction surviving this hour's applications
+      const kill = x.topical[P.on || 'scabies']?.killFrac || 0; // fraction killed by this hour's applications
       if (c.M > 0) {
         const before = c.M;
         c.M = c.M * Math.exp(P.growth * dt) * (1 - kill);
         if (c.M < 1 && x.rng() < 1 - c.M) c.M = 0;
         if (c.M === 0 && before > 0) c.resid = 1;              // the itch outlives the mites (~2 weeks)
       }
-      if (!x.instr.has('treat_family') && x.rng() < 0.0015 * dt) c.M += 1; // the family passes it back
+      if (!x.instr.has('treat_family') && x.rng() < (P.spread ?? 0.0015) * dt) c.M += 1; // the family passes it back
       c.resid = Math.max(0, c.resid - dt / (14 * 24));
       const itch = c.sens * Math.max(clamp(c.M / 12, 0, 1), c.resid * 0.6);
       c.s = itch;
@@ -472,6 +481,88 @@ const MODELS = {
       return { loss: 0, hazard: 1 - (1 - P.perFit) ** k, done: P.course ? c.age >= P.course[1] * 24 : !p.pregnant && c.sev < 0.05 };
     },
   },
+  // ——— infections (WTND chapters 13–18, 21 and pp.399–403)
+  // Tuberculosis and leprosy: months to years, so they run `pace` (time.js COMPRESS) times faster, and so does the drugs'
+  // work on them: six months of daily treatment is ~20 game days of daily doses. Two populations (log10 bacilli):
+  // A, dividing, which makes the illness and which every drug kills; D, slow and semi-dormant, which only the
+  // sterilising drugs reach (`abx.dormant`) and which wakes back into A: stop early and it relapses. Bacilli resistant
+  // to one drug are always there by chance (organisms.js `mut`); they are followed in R and take over when the drugs
+  // given leave them alone (one drug, or one that still works).
+  mycobacterial: {
+    init(p, c, rng, since) {
+      const P = COND.get(c.id).params;
+      c.A = lerp(P.A0[0], P.A0[1], rng());
+      c.cap = c.A + 0.06;                       // the load this person's immunity holds it to
+      c.D = c.A + Math.log10(P.sleep / P.wake);
+      c.sev = lerp(0.7, 1.2, rng()); c.waste = 0; c.nerve = 0; c.age = since;
+    },
+    step(p, c, dt0, x) {
+      const P = COND.get(c.id).params, o = ORG.get(c.org), dt = dt0 * P.pace;
+      c.age += dt;
+      const k = mycoKill(c, c.mic, x), hosp = x.hosp ? P.hosp : 0;  // the health centre starts the national regimen
+      const room = Math.max(0, 1 - 10 ** (c.A - c.cap)), imm = P.imm * hostDefence(p);
+      c.A = Math.max(-3, c.A + dt * (P.r * room * (1 - k.inhib) - imm - k.kill - hosp));
+      c.D -= dt * (k.dkill + hosp * 0.2);
+      const nA = 10 ** c.A, nD = 10 ** c.D, sleep = P.sleep * dt * nA, wake = P.wake * dt * nD;
+      c.A = Math.log10(Math.max(1e-3, nA + wake - sleep)); c.D = Math.log10(Math.max(1e-3, nD + sleep - wake));
+      if (c.A < 0) c.A = -3; if (c.D < 0) c.D = -3;  // fewer than one bacillus: gone
+      for (const [d, mut] of Object.entries(o.mut)) {
+        if (!(d in c.mic) || c.res?.[d]) continue;
+        const km = mycoKill(c, { ...c.mic, [d]: c.mic[d] * o.fold[d] }, x);
+        let R = (c.R?.[d] ?? c.A - mut) + dt * (P.r * room * (1 - km.inhib) - imm - km.kill - hosp);
+        R = Math.max(R, c.A - mut);              // fresh mutants keep coming from the dividing wild type
+        if (R > 3 && R > c.A) { c.mic[d] *= o.fold[d]; (c.res ||= {})[d] = x.t; c.A = Math.log10(10 ** c.A + 10 ** R); c.R = {}; break; }
+        (c.R ||= {})[d] = R;
+      }
+      c.s = clamp((c.A - P.Asym) / (P.Amax - P.Asym), 0, 1) * c.sev;
+      c.waste = clamp(c.waste + dt * P.waste * (c.s > 0.1 ? c.s : -0.5), 0, 0.3);
+      if (P.nerve) p.flags.nerve = Math.max(p.flags.nerve || 0, c.nerve = clamp(c.nerve + dt * P.nerve * clamp(c.A - 3, 0, 8) / 8, 0, 1));
+      return { loss: 0, hazard: P.hazard * c.s ** 2 * (1 + 3 * c.waste) / hostDefence(p) * P.pace, done: c.A < 0 && c.D < 0 };
+    },
+  },
+  // Tetanus: germs (log10 L) grow in a dirty wound and make toxin (F, free); free toxin binds to nerves (B, bound), and
+  // bound toxin makes the stiffness and spasms until new nerve endings grow (weeks). Antibiotics kill the germ, antitoxin
+  // mops up free toxin only, diazepam eases spasms. Death comes in spasms, choking and exhaustion (Yen LM, Thwaites CL.
+  // Lancet 2019;393:1657). Rates are estimates, the hazard calibrated to case fatality.
+  tetanus: {
+    init(p, c, rng, since) {
+      const P = COND.get(c.id).params;
+      c.L = lerp(P.L0[0], P.L0[1], rng()); c.F = 0; c.B = 0; c.age = since;
+      c.vir = lerp(0.4, 1.6, rng());
+    },
+    step(p, c, dt, x) {
+      const P = COND.get(c.id).params;
+      c.age += dt;
+      const ab = abx(c, x, dt, c.L), anti = x.ds.relief.antitoxin || 0;
+      // the wound heals over ~2 weeks and the germ loses its airless pocket
+      c.L = Math.max(-1, c.L + dt * (P.r * (1 - c.L / P.Lmax) * (1 - ab.inhib) - P.imm * hostDefence(p) * Math.min(1, c.age / P.heal) - ab.kill - (x.hosp ? 0.2 : 0)));
+      const made = c.L > 0 ? P.toxin * c.vir * 10 ** (c.L - P.Lmax) * dt : 0;
+      c.F = Math.max(0, (c.F + made) * (1 - anti) - c.F * P.bind * dt);
+      c.B = Math.max(0, c.B + c.F * P.bind * dt - c.B * dt / P.recover);
+      c.s = clamp(c.B, 0, 1.5);
+      const vuln = p.age < 0.2 ? 2.5 : p.age >= 60 ? 1.6 : 1;
+      const care = (1 - 0.6 * (x.ds.relief.spasm || 0)) * (x.hosp ? 0.5 : 1);
+      return { loss: 0, hazard: P.hazard * clamp(c.s - 0.2, 0, 1.3) ** 2 * vuln * care / hostDefence(p), done: c.L <= 0 && c.F < 0.005 && c.B < 0.05 };
+    },
+  },
+  // HIV: years, on the game calendar (`pace`). The CD4 count falls; below ~350 AIDS sets in (weight loss, fever,
+  // diarrhoea), every defence weakens (hostDefence) and TB comes easily. No cure; the book's antiretrovirals belong to
+  // the HIV programme and are not modelled here.
+  hiv: {
+    init(p, c, rng, since) {
+      const P = COND.get(c.id).params;
+      c.cd4 = lerp(P.cd4[0], P.cd4[1], rng()); c.waste = 0; c.age = since;
+    },
+    step(p, c, dt0, x) {
+      const P = COND.get(c.id).params, dt = dt0 * P.pace;
+      c.age += dt;
+      c.cd4 = Math.max(0, c.cd4 - P.decline * dt);
+      c.s = clamp((350 - c.cd4) / 300, 0, 1);
+      c.waste = clamp(c.waste + dt * P.waste * (c.s - 0.2), 0, 0.35);
+      if (!c.tb && x.rng() < P.tb * c.s * dt) { c.tb = true; (p.pending ||= []).push({ id: 'tb', t: x.t }); }
+      return { loss: stoolLoss(p, P.stool, c.s * 0.5, x), hazard: P.hazard * c.s ** 2 * dt, done: false };
+    },
+  },
 };
 /** Share of a condition's course left by what was done: `cut` [{ instr | relief, by }] (kangaroo care, sunlight). */
 const cutOf = (P, x) => (P.cut || []).reduce((k, e) => k * (1 - e.by * (e.instr ? +x.instr.has(e.instr) : x.ds.relief[e.relief] || 0)), 1);
@@ -507,11 +598,10 @@ function stoolLoss(p, S, s, x) {
 function abx(c, x, dt, pop) {
   const out = { kill: 0, inhib: 0 };
   if (!c.mic) return out;
-  for (const [id, C] of Object.entries(x.ds.conc)) {
-    const a = ACTIVE.get(id);
-    const m = a.abxAs || id; // benzylpenicillin is judged by the strain's penicillin MIC
-    if (!a.abx || !(m in c.mic) || C <= 0) continue;
-    const r = (C * (a.pk.fu ?? 1)) / c.mic[m];
+  for (const [a, free] of siteLevels(c, x)) {
+    const m = a.abxAs || a.id; // benzylpenicillin is judged by the strain's penicillin MIC
+    if (!(m in c.mic)) continue;
+    const r = free / c.mic[m];
     const f = hill(r, a.abx.ec50, a.abx.hill);
     out.kill = Math.max(out.kill, a.abx.kmax * f);
     out.inhib = Math.max(out.inhib, f);
@@ -535,6 +625,36 @@ function selectParasite(c, x, dt) {
     const f = hill(C, e.ec50 * c.mic[id], e.hill || 1);
     if (f > 0.1 && f < 0.9 && x.rng() < 0.0005 * dt * (c.P - 11)) { c.mic[id] *= ORG.get(c.org).fold[id] || 3; (c.res ||= {})[id] = x.t; }
   }
+}
+/** Free antibiotic reaching the infection now: [[active, mg/L]]. Blood level × fu; behind the blood–brain barrier
+ *  (`csf` on the condition) only the CSF share of it (`pk.csf`, 0.1 if unknown); plus ointment put on the infected
+ *  surface (`site`, e.g. the eye) this hour. */
+function siteLevels(c, x) {
+  const P = COND.get(c.id).params, out = [];
+  for (const [id, C] of Object.entries(x.ds.conc)) { const a = ACTIVE.get(id); if (a.abx && C > 0) out.push([a, C * (a.pk.fu ?? 1) * (P.csf ? a.pk.csf ?? 0.1 : 1)]); }
+  for (const [id, C] of Object.entries(x.topical[P.site]?.conc || {})) out.push([ACTIVE.get(id), C]);
+  return out;
+}
+/** Kill of mycobacteria by every drug at its site against these MICs: dividing bacilli (kill, log10/h: the strongest
+ *  drug), growth stopped (inhib), and the slow semi-dormant ones (dkill: summed, as each sterilising drug reaches its
+ *  own share of them). */
+function mycoKill(c, mic, x) {
+  const out = { kill: 0, inhib: 0, dkill: 0 };
+  for (const [a, free] of siteLevels(c, x)) {
+    const m = a.abxAs || a.id;
+    if (!(m in mic)) continue;
+    const f = hill(free / mic[m], a.abx.ec50, a.abx.hill);
+    out.kill = Math.max(out.kill, a.abx.kmax * f); out.inhib = Math.max(out.inhib, f); out.dkill += a.abx.kmax * f * (a.abx.dormant || 0);
+  }
+  return out;
+}
+/** Has this person had the tetanus injections? Decided once from the seed, by age and sex: DTP3 ~80% of children,
+ *  most women of childbearing age through antenatal TT (and so their newborns), few men past childhood (no boosters).
+ *  Estimates from WHO/UNICEF immunization coverage (WUENIC) and Uganda DHS 2016. */
+export function tetanusVaccinated(p) {
+  if ((p.vacc?.tetanus || 0) >= 2) return true; // two doses given here (encounter.js)
+  if (p.flags.ttVax === undefined) p.flags.ttVax = hashf(p.seed, 0, 0, 9101) < (p.age < 0.2 ? 0.75 : p.age < 15 ? 0.8 : p.sex === 'f' && p.age < 50 ? 0.6 : 0.2);
+  return p.flags.ttVax;
 }
 /** The strain an infection is caught from: each drug's MIC, resistant with the valley's odds. */
 export function pickStrain(c, orgId, rng, resist) {
@@ -614,7 +734,7 @@ export function simulate(p, toT, C) {
       for (const [td, k] of dosesDue(rx, t0, t1)) {
         if (rx.left <= 0) { if (!rx.ranOut) { rx.ranOut = true; ev.push({ t: td, kind: 'ranout', text: `ran out of ${rx.name}` }); } continue; }
         // an injection is given by your hand, so it is never missed
-        if (rx.route !== 'inj' && makeRng(p.seed, 'dose', rx.item, rx.start, k)() > takeChance(p, rx)) { rx.missed = (rx.missed || 0) + 1; continue; }
+        if (rx.route !== 'inj' && makeRng(p.seed, 'dose', rx.item, rx.start, k)() > takeChance(p, rx, instr)) { rx.missed = (rx.missed || 0) + 1; continue; }
         const amt = Math.min(rx.amount, rx.left);
         rx.left -= amt; rx.taken = (rx.taken || 0) + 1;
         applyDose(p, rx, amt, td, topical, wormKills);
@@ -632,7 +752,8 @@ export function simulate(p, toT, C) {
         if (rx.fluid) { fluidIn += amt / 1000; naLoad += (amt / 1000) * rx.fluid.na; }
       }
       // stop when better: the classic way a course is cut short
-      if (!rx.instr && !rx.stopped && p.feelBetter && !rx.fluid && rng() < (rx.counselled ? 0.0015 : 0.008)) {
+      // someone who watches every dose (a treatment supporter, as TB programmes use) makes stopping far rarer
+      if (!rx.instr && !rx.stopped && p.feelBetter && !rx.fluid && rng() < (rx.counselled ? 0.0015 : 0.008) * (instr.has('supporter') ? 0.1 : 1)) {
         rx.stopped = t0; ev.push({ t: t0, kind: 'stopped', text: `stopped ${rx.name} (felt better)` });
       }
     }
@@ -723,9 +844,10 @@ function idiosyncrasy(p, rx, td) {
     if (g() < r.per) (p.react ||= []).push({ active: id, sign: r.sign, text: r.text, harm: r.harm, t: td + lerp(r.days[0], r.days[1], g()) * 24 * HOUR, hours: r.hours });
   }
 }
-function takeChance(p, rx) {
+function takeChance(p, rx, instr) {
   let a = p.adh ?? 0.8;
   if (rx.counselled) a += 0.1;
+  if (instr?.has('supporter')) a += 0.1;
   if (rx.perDay > 3) a -= 0.08;
   if (rx.bitter) a -= 0.07;
   if (rx.route === 'topical' && rx.perDay >= 3) a -= 0.05;
@@ -746,19 +868,22 @@ function applyDose(p, rx, amt, td, topical, wormKills) {
   }
   for (const [id, strength] of Object.entries(rx.topical || {})) {
     const a = ACTIVE.get(id);
-    const T = a.topical, k = strength * (rx.q ?? 1);
-    const tgt = topical[T.on] ||= {};
-    if (T.kill) tgt.killFrac = 1 - (1 - (tgt.killFrac || 0)) * (1 - Math.min(0.95, T.kill * k));
-    if (T.infect) tgt.infect = (tgt.infect || 0) + T.infect * k * 0.3;
-    if (T.heal) tgt.healBonus = Math.max(tgt.healBonus || 0, T.heal * k);
-    if (T.relief) tgt.relief = Math.max(tgt.relief || 0, T.relief * k);
+    const k = strength * (rx.q ?? 1);
+    for (const T of [a.topical, ...(a.topical.also || [])]) {
+      const tgt = topical[T.on] ||= {};
+      if (T.kill) tgt.killFrac = 1 - (1 - (tgt.killFrac || 0)) * (1 - Math.min(0.95, T.kill * k));
+      if (T.infect) tgt.infect = (tgt.infect || 0) + T.infect * k * 0.3;
+      if (T.heal) tgt.healBonus = Math.max(tgt.healBonus || 0, T.heal * k);
+      if (T.relief) tgt.relief = Math.max(tgt.relief || 0, T.relief * k);
+      if (T.conc) (tgt.conc ||= {})[id] = Math.max(tgt.conc?.[id] || 0, T.conc * k); // mg/L on the surface this hour
+    }
     p.lastTopical = td;
   }
 }
 function trimDoses(list, t) { while (list.length > 2 && t - list[0][0] > 40 * 24 * HOUR) list.shift(); }
 
 function causeOfDeath(p, tox, d) {
-  if (p.ana !== undefined && p.t - p.ana < 2 * HOUR) return 'anaphylaxis (allergic to ' + (p.allergy || ACTIVE.get(p.anaTo)?.name.toLowerCase()) + ')';
+  if (p.ana !== undefined && p.t - p.ana < 2 * HOUR) return 'anaphylaxis (allergic to ' + (ACTIVE.get(p.anaTo)?.name.toLowerCase() || p.allergy) + ')';
   if (tox.some((s) => s.harm >= 0.2)) return 'poisoned by ' + ACTIVE.get(tox.find((s) => s.harm >= 0.2).active).name.split(' (')[0].toLowerCase();
   if (d > 0.1) return 'dehydration';
   if (p.killer?.t === p.t + HOUR && p.killer.h > 0 && COND.has(p.killer.id)) return COND.get(p.killer.id).name.toLowerCase();

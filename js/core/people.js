@@ -47,6 +47,9 @@ const ILLNESS = [
   { weeks: [13, 41], at: 1, harm: 'loss', per: 1e-5, when: (p) => hbNow(p) < 7, ref: 'Young MF et al. Ann N Y Acad Sci 2019;1450:47' },
   // high fever in the first trimester: neural tube defects ~3×, heart defects and clefts ~1.5× (Dreier JW et al. Pediatrics 2014;133:e674)
   { weeks: [3, 13], at: 1, harm: 'malformation', per: 1e-4, when: (p, t) => p.conds.length && vitals(p, t).temp >= 38.5, ref: 'Dreier JW et al. Pediatrics 2014;133:e674' },
+  // ——— infections: untreated syphilis kills ~1 in 4 babies before or at birth (Gomez GB et al. Bull World Health
+  // Organ 2013;91:217); per calibrated to ~25% over weeks 13–40
+  { weeks: [13, 41], at: 1, harm: 'loss', per: 6e-5, when: (p) => p.conds.some((c) => c.id === 'syphilis'), ref: 'Gomez GB et al. Bull World Health Organ 2013;91:217; WTND p.237' },
 ];
 
 // Daily iron in pregnancy: Hb at term ~0.9 g/dL higher than without, over ~20 weeks (Peña-Rosas JP et al. Cochrane

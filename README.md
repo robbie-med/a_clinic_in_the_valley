@@ -146,6 +146,13 @@ compound, with sources.
     vaccine, a clean cord), jaundice (sunlight), the cold small baby (skin to skin);
   - the DMPA injection lowers how many babies the valley has. A pregnancy lasts about 29 game days (COMPRESS),
     and women in the valley die in childbirth at about 600 per 100,000.
+- **The other infections** (WTND chapters 13–18, 21; models `mycobacterial`, `tetanus`, `hiv`):
+  - TB of the lungs and neck glands, and leprosy, on the game calendar: six months of TB treatment is about 20 game
+    days, cure depends on someone watching every dose, and isoniazid alone breeds resistance;
+  - tetanus (antitoxin, diazepam; dirty wounds give it to the unvaccinated), meningitis (judged by what reaches the
+    spinal fluid), cholera, hepatitis (an unboiled syringe can pass it on);
+  - infections spread by sex, with "bring your partner"; syphilis harms the baby; HIV kept basic (no antiretrovirals);
+  - impetigo, cellulitis, ringworm, pink eye, trachoma, eye injury, chickenpox and mumps.
 - **Hindsight**: the ledger shows what it really was, what helped and what harmed, once the
   patient recovers or dies.
 

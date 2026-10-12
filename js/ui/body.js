@@ -4,14 +4,14 @@
 
 /** Regions: id → { label, exams, at:[x,y] for pins }. Coordinates in the 200×420 viewBox. */
 export const REGIONS = {
-  head: { label: 'Head', exams: ['x_general', 'x_forehead', 'x_fontanel', 'x_ears', 'x_neck'] },
+  head: { label: 'Head', exams: ['x_general', 'x_forehead', 'x_fontanel', 'x_ears', 'x_neck', 'x_stiffneck'] },
   face: { label: 'Eyes & mouth', exams: ['x_eyes', 'x_throat', 'x_general'] },
   chest: { label: 'Chest', exams: ['x_chest', 'x_listen', 'x_rr'] },
-  belly: { label: 'Belly', exams: ['x_belly', 'x_pinch', 'x_urine_taste'] },
+  belly: { label: 'Belly & groin', exams: ['x_belly', 'x_pinch', 'x_urine_taste', 'x_genitals'] },
   arm: { label: 'Upper arm', exams: ['x_thermo', 'x_muac', 'x_bp', 'x_strength'] },
   wrist: { label: 'Wrist', exams: ['x_pulse'] },
-  hands: { label: 'Hands & skin', exams: ['x_skin', 'x_joints', 'x_limb', 'x_bite'] },
-  legs: { label: 'Legs & feet', exams: ['x_feet', 'x_joints', 'x_limb', 'x_bite'] },
+  hands: { label: 'Hands & skin', exams: ['x_skin', 'x_joints', 'x_limb', 'x_bite', 'x_feeling'] },
+  legs: { label: 'Legs & feet', exams: ['x_feet', 'x_joints', 'x_limb', 'x_bite', 'x_reflex'] },
   back: { label: 'Back', exams: ['x_back'] },
   wound: { label: 'Wound / burn', exams: ['x_wound'] },
 };

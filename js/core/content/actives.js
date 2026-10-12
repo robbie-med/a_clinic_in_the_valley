@@ -136,7 +136,7 @@ export const ACTIVES = [
   {
     id: 'sulfur', name: 'Precipitated sulfur', channel: 'topical', class: 'scabicide',
     // 1 part sulfur to 10 parts lard, 3 times a day for 3 days (WTND). Cure rates in trials ~70–90%.
-    topical: { on: 'scabies', kill: 0.55, perApply: 1, irritate: 0.05 },
+    topical: { on: 'scabies', kill: 0.55, perApply: 1, irritate: 0.05, also: [{ on: 'tinea', kill: 0.12 }] }, // WTND p.205: sulfur in lard for ringworm too (kill an estimate)
     cautions: ['Not for babies under 1 year (WTND).', 'Stop if the rash gets worse.'],
     ref: 'WTND p.199; Strong M, Johnstone P. Cochrane 2007;CD000320',
   },
@@ -173,14 +173,14 @@ export const ACTIVES = [
   // and the mutant-prevention level (`window`, × MIC) with a large population (disease.js).
   {
     id: 'amoxicillin', name: 'Amoxicillin', channel: 'systemic', class: 'antibiotic (penicillin)', allergen: 'penicillin',
-    pk: { F: 0.8, ka: 1.5, half: 1.2, vd: 0.3, fu: 0.82, spread: 0.25 },
+    pk: { F: 0.8, ka: 1.5, half: 1.2, vd: 0.3, fu: 0.82, csf: 0.12, spread: 0.25 },
     abx: { kmax: 0.35, ec50: 1, hill: 3, window: 4, calibrated: true },
     cautions: ['Penicillin allergy: rash, and rarely swelling of the throat. Ask before giving.'],
     ref: 'WTND p.352; Goodman & Gilman 13e ch.57; Craig WA. Clin Infect Dis 1998;26:1 (time above MIC)',
   },
   {
     id: 'penicillin_v', name: 'Penicillin V', channel: 'systemic', class: 'antibiotic (penicillin)', allergen: 'penicillin',
-    pk: { F: 0.6, ka: 2, half: 0.6, vd: 0.35, fu: 0.2, spread: 0.3 },
+    pk: { F: 0.6, ka: 2, half: 0.6, vd: 0.35, fu: 0.2, csf: 0.25, spread: 0.3 },
     abx: { kmax: 0.35, ec50: 1, hill: 3, window: 4, calibrated: true },
     cautions: ['Penicillin allergy.', 'Short half-life: it has to be taken 4 times a day.'],
     ref: 'WTND p.351; Goodman & Gilman 13e ch.57',
@@ -195,7 +195,7 @@ export const ACTIVES = [
   {
     id: 'cotrimoxazole', name: 'Cotrimoxazole (trimethoprim part)', channel: 'systemic', class: 'antibiotic (sulfa)',
     // Dosed by its trimethoprim content: a 480 mg tablet has 80 mg trimethoprim + 400 mg sulfamethoxazole.
-    pk: { F: 0.95, ka: 1, half: 10, vd: 1.6, fu: 0.56, spread: 0.3 },
+    pk: { F: 0.95, ka: 1, half: 10, vd: 1.6, fu: 0.56, csf: 0.7, spread: 0.3 },
     abx: { kmax: 0.15, ec50: 1, hill: 2, window: 8, calibrated: true },
     // Stevens–Johnson / toxic epidermal necrolysis: a few per 100 000 courses, mostly in the first 3 weeks; ~10–30% die
     // (Roujeau JC et al. N Engl J Med 1995;333:1600; per-course odds an estimate). harm 0.03 ≈ 1 in 10 die over 2 weeks.
@@ -217,7 +217,7 @@ export const ACTIVES = [
   },
   {
     id: 'doxycycline', name: 'Doxycycline', channel: 'systemic', class: 'antibiotic (tetracycline)',
-    pk: { F: 0.93, ka: 0.8, half: 18, vd: 0.8, fu: 0.12, spread: 0.25 },
+    pk: { F: 0.93, ka: 0.8, half: 18, vd: 0.8, fu: 0.12, csf: 1.5, spread: 0.25 },
     abx: { kmax: 0.15, ec50: 1, hill: 2, window: 8, calibrated: true },
     // Tetracyclines bind calcium in teeth calcifying from mid-pregnancy and stain them. Doxycycline binds far less:
     // a systematic review found no staining or malformation linked to it (Cross R et al. Expert Opin Drug Saf
@@ -231,7 +231,7 @@ export const ACTIVES = [
   {
     id: 'chloramphenicol', name: 'Chloramphenicol', channel: 'systemic', class: 'antibiotic',
     // Newborns cannot clear it (glucuronidation): the "grey baby". Dose-related marrow suppression above ~25 mg/L.
-    pk: { F: 0.8, ka: 1, half: 4, vd: 0.9, fu: 0.5, spread: 0.35 },
+    pk: { F: 0.8, ka: 1, half: 4, vd: 0.9, fu: 0.5, csf: 1, spread: 0.35 },
     abx: { kmax: 0.15, ec50: 1, hill: 2, window: 8, calibrated: true },
     toxic: [
       { at: 25, sign: 'marrow', text: 'pale and tired, bruises easily (chloramphenicol on the marrow)', harm: 0.02 },
@@ -245,7 +245,7 @@ export const ACTIVES = [
   },
   {
     id: 'ciprofloxacin', name: 'Ciprofloxacin', channel: 'systemic', class: 'antibiotic (quinolone)',
-    pk: { F: 0.7, ka: 1.2, half: 4, vd: 2.5, fu: 0.7, spread: 0.3 },
+    pk: { F: 0.7, ka: 1.2, half: 4, vd: 2.5, fu: 0.7, csf: 0.4, spread: 0.3 },
     abx: { kmax: 0.5, ec50: 2, hill: 1.2, window: 8, calibrated: true },
     cautions: ['Traditionally avoided in children and pregnancy (joint cartilage); WHO accepts it for dysentery in children.', 'Do not take with milk or antacids.'],
     ref: 'WTND p.358; WHO Pocket book of hospital care for children 2013 (dysentery); Goodman & Gilman 13e ch.56',
@@ -424,7 +424,7 @@ export const ACTIVES = [
   // ——— phase 2c
   {
     id: 'metronidazole', name: 'Metronidazole', channel: 'systemic', class: 'anti-amoebic · anti-giardia · anaerobes',
-    pk: { F: 1, ka: 1.5, half: 8, vd: 0.8, fu: 0.9, spread: 0.25 },
+    pk: { F: 1, ka: 1.5, half: 8, vd: 0.8, fu: 0.9, csf: 0.9, spread: 0.25 },
     abx: { kmax: 0.3, ec50: 1, hill: 1.5, window: 8, calibrated: true },
     // The book's alcohol warning: a controlled trial found no reaction (Visapää JP et al. Ann Pharmacother 2002;36:971;
     // Williams CS, Woodcock KR. Ann Pharmacother 2000;34:255), so none is modelled.
@@ -464,14 +464,14 @@ export const ACTIVES = [
   {
     id: 'benzylpenicillin', name: 'Benzylpenicillin (penicillin G)', channel: 'systemic', class: 'antibiotic (penicillin, injected)', allergen: 'penicillin',
     abxAs: 'penicillin_v', // the same molecule's family: a strain's penicillin MIC (organisms.js) is shared
-    pk: { F: 0.2, ka: 2, half: 0.5, vd: 0.3, fu: 0.4, spread: 0.3 },
+    pk: { F: 0.2, ka: 2, half: 0.5, vd: 0.3, fu: 0.4, csf: 0.25, spread: 0.3 },
     abx: { kmax: 0.35, ec50: 1, hill: 3, window: 4, calibrated: true },
     cautions: ['Penicillin allergy: an injection can bring on allergic shock within minutes. Have adrenaline ready (WTND p.70).'],
     ref: 'WTND pp.350–351; Goodman & Gilman 13e ch.57',
   },
   {
     id: 'ceftriaxone', name: 'Ceftriaxone', channel: 'systemic', class: 'antibiotic (cephalosporin, injected)',
-    pk: { F: 0.01, ka: 1.5, half: 8, vd: 0.15, fu: 0.1, spread: 0.3 },
+    pk: { F: 0.01, ka: 1.5, half: 8, vd: 0.15, fu: 0.1, csf: 0.5, spread: 0.3 },
     abx: { kmax: 0.35, ec50: 1, hill: 3, window: 4, calibrated: true },
     cautions: ['Into a big muscle; it stings (the book mixes it with lidocaine).', 'Rarely allergic shock.'],
     ref: 'WTND p.359; Goodman & Gilman 13e ch.57; Patel IH, Kaplan SA. Am J Med 1984;77:17',
@@ -547,9 +547,10 @@ export const ACTIVES = [
     // F ~0.95 by mouth and ~0.9 as solution in the anus (peak 10–30 min; item `inj.ka`), t½ ~40 h, Vd ~1.1 L/kg.
     // ~0.2 mg/L stops most fits (G&G ch.17); ec50 an estimate.
     pk: { F: 0.95, ka: 2, half: 40, vd: 1.1, spread: 0.35 },
-    // seizure: epilepsy and fever fits (fits model); fits: eclampsia and tetanus spasms (spasm model), where it holds
-    // off fits less well than magnesium (calibrated: Duley L et al. Cochrane 2010;CD000127).
-    effects: [{ on: 'seizure', emax: 0.95, ec50: 0.15, hill: 1.5 }, { on: 'fits', emax: 0.6, ec50: 0.15, hill: 1.5, calibrated: true }],
+    // seizure: epilepsy and fever fits (fits model); fits: eclampsia and newborn tetanus (spasm model), where it holds
+    // off fits less well than magnesium (calibrated: Duley L et al. Cochrane 2010;CD000127); spasm: the spasms of
+    // tetanus in older children and adults (tetanus model; estimate).
+    effects: [{ on: 'seizure', emax: 0.95, ec50: 0.15, hill: 1.5 }, { on: 'fits', emax: 0.6, ec50: 0.15, hill: 1.5, calibrated: true }, { on: 'spasm', emax: 0.7, ec50: 0.4, hill: 1.5 }],
     toxic: [
       { at: 0.6, sign: 'benzo_drowsy', text: 'very sleepy and unsteady (diazepam)', harm: 0 },
       { at: 3, sign: 'benzo_resp', text: 'cannot be woken, slow shallow breathing (diazepam poisoning)', harm: 0.15 },
@@ -728,6 +729,115 @@ export const ACTIVES = [
     ],
     cautions: ['Once a day, by weight. Too much makes people deaf and harms the kidneys (WTND p.358).'],
     ref: 'WTND pp.275–276, 358; Goodman & Gilman 13e ch.58; Moore RD et al. J Infect Dis 1984;149:23',
+  },
+
+  // ——— infections (WTND chapters 13–18, 21 and pp.399–403)
+  // `pk.csf` on the antibiotics above: CSF level over FREE plasma level with inflamed meninges (Nau R et al. Clin Microbiol
+  // Rev 2010;23:858); disease.js uses it for meningitis, 0.1 where not given.
+  // TB and leprosy drugs: `abx.kmax` is the early bactericidal activity on dividing bacilli (log10/h; Jindani A et al.
+  // Am Rev Respir Dis 1980;121:939: isoniazid ~0.5 log10/day, rifampicin and ethambutol ~0.2–0.3, pyrazinamide ~0) and
+  // `abx.dormant` the share of it that reaches the slow, semi-dormant bacilli that decide relapse (rifampicin and
+  // pyrazinamide sterilise; Mitchison DA. Am J Respir Crit Care Med 2004;170:1056). Fitted (calibrated) to the trial
+  // results in test/infections.test.mjs.
+  {
+    id: 'isoniazid', name: 'Isoniazid (INH)', channel: 'systemic', class: 'anti-TB',
+    // t½ 1–4 h by acetylator type (the wide spread); 300 mg gives ~3–5 mg/L
+    pk: { F: 0.9, ka: 2, half: 3, vd: 0.6, fu: 0.9, csf: 0.9, spread: 0.45 },
+    abx: { kmax: 0.03, ec50: 1, hill: 1.5, window: 8, dormant: 0.013, calibrated: true },
+    // liver injury in ~1% of courses, more with age and alcohol; rarely fatal (Saukkonen JJ et al. Am J Respir Crit Care
+    // Med 2006;174:935). Onset weeks into the course: early, on the game calendar. Odds an estimate.
+    idio: [{ per: 0.006, days: [3, 12], hours: 240, sign: 'tb_hepatitis', text: 'yellow eyes, dark urine, no appetite, vomiting (liver reaction to TB medicine)', harm: 0.006 }],
+    cautions: ['Never alone for TB: the germ learns to resist it.', 'Stop if the eyes turn yellow.', 'Nerve pains in thin people: give pyridoxine.'],
+    ref: 'WTND p.360; Goodman & Gilman 13e ch.60; Jindani A et al. Am Rev Respir Dis 1980;121:939; Saukkonen JJ et al. Am J Respir Crit Care Med 2006;174:935',
+  },
+  {
+    id: 'rifampicin', name: 'Rifampicin', channel: 'systemic', class: 'anti-TB · anti-leprosy',
+    // 600 mg gives ~8–12 mg/L, ~80% bound; induces its own clearance over ~2 weeks
+    pk: { F: 0.9, ka: 1.2, half: 3, vd: 0.9, fu: 0.2, csf: 1, spread: 0.35, induce: { max: 1.4, days: 10 } },
+    abx: { kmax: 0.035, ec50: 1, hill: 1.5, window: 8, dormant: 0.073, calibrated: true },
+    toxic: [{ at: 1, sign: 'orange_urine', text: 'urine, tears and sweat turn red-orange (rifampicin, harmless)', harm: 0 }],
+    idio: [{ per: 0.003, days: [3, 12], hours: 240, sign: 'tb_hepatitis', text: 'yellow eyes, dark urine, no appetite, vomiting (liver reaction to TB medicine)', harm: 0.006 }],
+    cautions: ['Never alone: the germ learns to resist it.', 'Colours urine and tears orange.', 'Weakens birth-control pills.'],
+    ref: 'WTND pp.360–363; Goodman & Gilman 13e ch.60; Peloquin CA. Drugs 2002;62:2169',
+  },
+  {
+    id: 'pyrazinamide', name: 'Pyrazinamide', channel: 'systemic', class: 'anti-TB',
+    // 25 mg/kg gives ~35–50 mg/L; acts in acid, on the slow bacilli
+    pk: { F: 0.9, ka: 1.5, half: 9.5, vd: 0.7, fu: 0.9, csf: 1, spread: 0.3 },
+    abx: { kmax: 0.012, ec50: 1, hill: 1.5, window: 8, dormant: 0.175, calibrated: true },
+    toxic: [{ at: 60, sign: 'pza_joints', text: 'aching, swollen joints (pyrazinamide)', harm: 0 }],
+    idio: [{ per: 0.004, days: [3, 12], hours: 240, sign: 'tb_hepatitis', text: 'yellow eyes, dark urine, no appetite, vomiting (liver reaction to TB medicine)', harm: 0.006 }],
+    ref: 'WTND p.361; Goodman & Gilman 13e ch.60; Zhang Y, Mitchison D. Int J Tuberc Lung Dis 2003;7:6',
+  },
+  {
+    id: 'ethambutol', name: 'Ethambutol', channel: 'systemic', class: 'anti-TB',
+    pk: { F: 0.8, ka: 1, half: 3.5, vd: 1.6, fu: 0.8, csf: 0.3, spread: 0.3 },
+    abx: { kmax: 0.025, ec50: 1, hill: 1.5, window: 8, dormant: 0, calibrated: true },
+    // optic neuritis with high doses (>25 mg/kg/day) for weeks; mostly recovers on stopping
+    toxic: [{ at: 10, sign: 'optic_neuritis', text: 'colours fade and sight blurs (ethambutol on the eyes)', harm: 0 }],
+    ref: 'WTND p.361; Goodman & Gilman 13e ch.60',
+  },
+  {
+    id: 'streptomycin', name: 'Streptomycin', channel: 'systemic', class: 'anti-TB (injected)',
+    // by mouth it is not absorbed; injected 15 mg/kg gives ~25–45 mg/L
+    pk: { F: 0.01, ka: 2, half: 2.5, vd: 0.25, fu: 0.66, csf: 0.3, spread: 0.3 },
+    abx: { kmax: 0.025, ec50: 1, hill: 1.5, window: 8, dormant: 0, calibrated: true },
+    toxic: [{ at: 55, sign: 'ototoxic', text: 'ringing ears, dizzy, hearing fading (streptomycin)', harm: 0 }],
+    cautions: ['Too much for too long makes people deaf.', 'Not in pregnancy (the baby\'s hearing).'],
+    ref: 'WTND p.361; Goodman & Gilman 13e ch.58',
+  },
+  {
+    id: 'dapsone', name: 'Dapsone', channel: 'systemic', class: 'anti-leprosy',
+    pk: { F: 0.9, ka: 1, half: 30, vd: 1, fu: 0.25, spread: 0.3 },
+    abx: { kmax: 0.0016, ec50: 1, hill: 1.5, window: 8, dormant: 0.1, calibrated: true },
+    // breaks red cells (worse with G6PD deficiency) and turns haemoglobin to methaemoglobin at high levels
+    toxic: [{ at: 6, sign: 'methaemoglobin', text: 'blue-grey lips, breathless, tired (too much dapsone)', harm: 0.02 }],
+    // dapsone hypersensitivity syndrome: ~1.4% of people, ~10% of them die (Lorenz M et al. Lepr Rev 2012;83:305)
+    idio: [{ per: 0.014, days: [2, 6], hours: 168, sign: 'dapsone_syndrome', text: 'fever, a spreading rash, yellow eyes and swollen glands (reaction to dapsone)', harm: 0.012 }],
+    cautions: ['Keep it away from children: a few tablets poison.', 'Stop if a rash with fever comes.'],
+    ref: 'WTND p.362; Goodman & Gilman 13e ch.60; Lorenz M et al. Lepr Rev 2012;83:305',
+  },
+  {
+    id: 'tetanus_ig', name: 'Tetanus immune globulin (human)', channel: 'systemic', class: 'antitoxin',
+    // Doses and levels in IU (IU/L). Into the muscle, peak in 2–3 days, t½ ~3–4 weeks; 0.01 IU/ml (10 IU/L) protects.
+    // It mops up toxin still free in the blood; toxin already bound to nerves is out of its reach (disease.js).
+    pk: { F: 0, ka: 0.03, half: 550, vd: 0.1, spread: 0.3 },
+    effects: [{ on: 'antitoxin', emax: 1, ec50: 10, hill: 1 }],
+    ref: 'WTND pp.184, 388; WHO The immunological basis for immunization: tetanus, 2018; Yen LM, Thwaites CL. Lancet 2019;393:1657',
+  },
+  {
+    id: 'tetanus_antitoxin', name: 'Tetanus antitoxin (horse serum)', channel: 'systemic', class: 'antitoxin',
+    // A foreign protein: cleared within days, and many people react to it. `reacts`: share of courses that react
+    // (hives; an injection then brings allergic shock now and then, disease.js); serum sickness a week later in ~1 in 10.
+    // Rates are estimates (WHO The immunological basis for immunization: tetanus, 2018).
+    pk: { F: 0, ka: 0.05, half: 100, vd: 0.1, spread: 0.4 },
+    effects: [{ on: 'antitoxin', emax: 1, ec50: 10, hill: 1 }],
+    reacts: 0.1,
+    idio: [{ per: 0.1, days: [7, 12], hours: 96, sign: 'serum_sickness', text: 'fever, an itchy rash and aching swollen joints a week after the horse serum (serum sickness)', harm: 0 }],
+    cautions: ['WTND p.70: allergic shock is common with horse serum. Have adrenaline ready; ask about allergies and earlier antitoxin.'],
+    ref: 'WTND pp.70, 184, 388; WHO The immunological basis for immunization: tetanus, 2018',
+  },
+  {
+    id: 'tetracycline_eye', name: 'Tetracycline 1% eye ointment', channel: 'topical', class: 'antibiotic (eye)',
+    // Inside the lid the tear film holds ~100 mg/L for about an hour after each application (estimate); judged by the
+    // strain's tetracycline-class MIC.
+    abxAs: 'doxycycline',
+    abx: { kmax: 0.15, ec50: 1, hill: 2, window: 8, calibrated: true },
+    topical: { on: 'eye', conc: 100, perApply: 1 },
+    cautions: ['It must go inside the lower lid; outside the eye it does nothing.'],
+    ref: 'WTND pp.219–220, 378; Sheikh A et al. Cochrane 2012;CD001211',
+  },
+  {
+    id: 'whitfield', name: 'Benzoic and salicylic acid (Whitfield\'s ointment)', channel: 'topical', class: 'antifungal',
+    // twice a day for 3–4 weeks clears most ringworm of the body (kill per application an estimate)
+    topical: { on: 'tinea', kill: 0.2, perApply: 1, irritate: 0.05 },
+    ref: 'WTND pp.205, 371; Crawford F, Hollis S. Cochrane 2007;CD001434',
+  },
+  {
+    id: 'gentian_violet', name: 'Gentian violet 0.5%', channel: 'topical', class: 'antiseptic · antifungal',
+    topical: { on: 'wound', infect: 0.3, perApply: 1, also: [{ on: 'tinea', kill: 0.05 }] },
+    note: 'Stains everything purple. For impetigo, small sores and thrush.',
+    ref: 'WTND pp.202, 370; Maley AM, Arbiser JL. Exp Dermatol 2013;22:775',
   },
 ];
 

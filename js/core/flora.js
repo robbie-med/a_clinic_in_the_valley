@@ -50,12 +50,14 @@ export function floraNear(G, hamletId, r = 18) {
 
 /** Duke folk use → the game's conditions. A use with no condition stays a complaint in words. */
 const USE_CONDS = {
-  malaria: ['malaria'], watery_diarrhea: ['watery_diarrhea'], dysentery: ['dysentery', 'amoebiasis'],
-  cough: ['cough_child'], common_cold: ['common_cold'], pneumonia: ['pneumonia'], wound: ['wound_minor'],
-  wound_infected: ['wound_infected'], burn: ['burn_minor'], worms: ['ascaris', 'pinworm', 'hookworm'],
-  itch: ['scabies'], scabies: ['scabies'], pain: ['back_pain'], back_pain: ['back_pain'],
-  heart_failure: ['heart_failure'], sore_throat: ['strep_throat'], earache: ['ear_infection'],
-  nausea: ['nausea_pregnancy'], anaemia: ['hookworm'],
+  fever: ['malaria', 'typhoid', 'measles', 'chickenpox', 'puerperal_sepsis'],
+  malaria: ['malaria'], watery_diarrhea: ['watery_diarrhea', 'cholera', 'giardia'], dysentery: ['dysentery', 'amoebiasis'],
+  cough: ['cough_child', 'asthma', 'tb'], common_cold: ['common_cold'], pneumonia: ['pneumonia'], wound: ['wound_minor', 'snakebite'],
+  wound_infected: ['wound_infected', 'impetigo', 'cellulitis'], burn: ['burn_minor'], worms: ['ascaris', 'pinworm', 'hookworm'],
+  itch: ['scabies', 'tinea'], scabies: ['scabies'], pain: ['back_pain', 'sprain', 'fracture'], back_pain: ['back_pain', 'arthritis'],
+  heart_failure: ['heart_failure'], swelling: ['heart_failure'], sore_throat: ['strep_throat'], earache: ['ear_infection'],
+  nausea: ['nausea_pregnancy'], stomach_ache: ['ulcer'], cramp: ['ulcer'], loose_stool: ['watery_diarrhea'],
+  jaundice: ['hepatitis', 'newborn_jaundice'], anaemia: ['hookworm', 'anaemia'], antiseptic: ['wound_minor'],
 };
 
 /**

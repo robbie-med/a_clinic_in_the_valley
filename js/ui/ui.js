@@ -427,7 +427,11 @@ export function makeUI(G) {
     burrows: 'hands', skin_sores: 'hands', rash: 'hands', measles_rash: 'hands', ear_pus: 'head', neck_glands: 'head', tonsils: 'face', koplik: 'face', red_eyes: 'face',
     suprapubic: 'belly', rose_spots: 'belly', bloating: 'belly', loin_pain: 'back', edema: 'legs', back_exam: 'back', pus: 'wound', redness: 'wound', red_streaks: 'wound', glands: 'wound', wound_size: 'wound', burn_area: 'wound', blisters: 'wound', burn_deep: 'wound', joints: 'hands', mastoid: 'head',
     wheeze: 'chest', weak_side: 'arm', face_droop: 'face', speech: 'face', urine_sugar: 'belly', goitre: 'head', ptosis: 'face', breath_smell: 'face', hair: 'hands', skin_patches: 'hands', foot_numb: 'legs',
-    fang_marks: 'legs', sting_mark: 'hands', local_swelling: 'legs', bleeding: 'legs', sting_systemic: 'legs', deformity: 'hands', swollen_joint: 'legs' }[k]);
+    fang_marks: 'legs', sting_mark: 'hands', local_swelling: 'legs', bleeding: 'legs', sting_systemic: 'legs', deformity: 'hands', swollen_joint: 'legs',
+    // ——— infections (WTND chapters 13–18, 21)
+    stiff_neck: 'head', spasms: 'head', parotid: 'head', lockjaw: 'face', thrush: 'face', jaundice: 'face', follicles: 'face', eye_scratch: 'face', knee_jerk: 'legs',
+    skin_patch: 'hands', patch_feeling: 'hands', thick_nerves: 'hands', claw: 'hands', nodules: 'hands', petechiae: 'hands', syph_rash: 'hands', crusts: 'hands', red_patch: 'hands', rings: 'hands', pox: 'hands',
+    liver_tender: 'belly', pelvic_pain: 'belly', discharge: 'belly', genital_sore: 'belly', bubo: 'belly' }[k]);
   function finish() {
     const enc = S.enc;
     const p = G.meta.clinic.patients[enc.pid];
