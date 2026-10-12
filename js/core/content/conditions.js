@@ -8,6 +8,11 @@
 //
 // Page refs: Where There Is No Doctor (Hesperian, 2011 printing). Paraphrased, never copied.
 
+import { COMPRESS } from '../time.js';
+
+// Time: illness runs in real hours, but anything taking months or years (a worm's lifespan, a pregnancy, chronic
+// damage) runs COMPRESS (~9) times faster, on the game's 40-day year. Such numbers are written as real time / COMPRESS.
+
 export const CONDITIONS = [
   {
     id: 'watery_diarrhea', name: 'Watery diarrhoea', local: ['the runs', 'loose belly'], model: 'viral',
@@ -102,7 +107,7 @@ export const CONDITIONS = [
   {
     id: 'ascaris', name: 'Roundworm', local: ['worms'], model: 'worms',
     epi: { w: 4, age: [[0, 2, 0.6], [2, 15, 3], [15, 99, 0.6]], season: { cool_dry: 1, hot_dry: 0.9, rains: 1.2, late_rains: 1.1 }, water: 1.4 },
-    params: { worms: [4, 40], life: 365, target: 'worms_ascaris', heavy: 50 },
+    params: { worms: [4, 40], life: 365 / COMPRESS, target: 'worms_ascaris', heavy: 50 },
     complaint: ['{who} passed a long worm {ago}.', 'The belly is big and paining, and {pron} is thin. Worms, I think.'],
     teach: { treat: ['mebendazole', 'albendazole'], helps: ['papain_bitc'], harms: [], refer: 'Swollen hard belly with vomiting and no stool: blocked gut — refer.' },
     learn: 'Long white worms in the stool or vomit; swollen belly; poor growth; sometimes a dry cough when the young worms pass through the lungs. Latrines, washing hands and clean food prevent them. Dried papaya seed powder helps; modern worm medicine works better.',
@@ -254,7 +259,7 @@ export const CONDITIONS = [
     epi: { w: 3, age: [[0, 3, 0.3], [3, 15, 2], [15, 99, 1.3]], season: { cool_dry: 0.9, hot_dry: 0.8, rains: 1.3, late_rains: 1.2 }, water: 1.2 },
     // Necator americanus takes ~0.03 ml of blood per worm per day (Ancylostoma ~0.15). Worm counts are those of
     // people ill enough to walk to a clinic, not of everyone infected.
-    params: { worms: [40, 250], life: 730, target: 'worms_hookworm', heavy: 1e9, bloodLoss: 0.03 },
+    params: { worms: [40, 250], life: 730 / COMPRESS, target: 'worms_hookworm', heavy: 1e9, bloodLoss: 0.03 },
     complaint: ['{who} has been tired and weak {when}, with no strength for work or play.', '{who} gets breathless on the path and has no strength, {when} now.'],
     teach: { treat: ['albendazole', 'mebendazole'], helps: ['iron'], harms: [], refer: 'Very pale, breathless at rest, or swollen: severe anaemia — refer.' },
     learn: 'Hookworms suck blood from the gut wall: many worms, slowly, make thin weak blood. Pale inner eyelids and palms, tiredness, children eating earth, sometimes a swollen face and feet. The young worms come in through bare feet. Albendazole kills them; iron tablets for 3 months rebuild the blood. Shoes and latrines prevent them.',
