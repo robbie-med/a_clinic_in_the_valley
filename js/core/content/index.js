@@ -2,6 +2,8 @@
 // Ids are stable strings (saves use them): fresh_<herb>, dried_<herb>, powder_<herb>,
 // <method>_<herb> for liquid preparations, the specials by their own id, goods by theirs.
 import { HERBS, HERB } from './herbs.js';
+import { FLORA_HERBS, CLIMATE } from './flora_herbs.js';
+import { MATERIA } from './materia.js';
 import { ACTIVE } from './actives.js';
 import { METHODS, EXTRACT, HERB_METHODS, SPECIALS } from './preparations.js';
 import { INGREDIENTS, TOOLS, MATERIALS, PRODUCE } from './goods.js';
@@ -29,7 +31,7 @@ export function nominalActives(herb, method) {
 
 export function buildContent() {
   const items = new Map(), recipes = [], tags = new Map(), objects = new Map(), grounds = new Map();
-  const C = { items, recipes, tags, objects, grounds, herbs: HERBS };
+  const C = { items, recipes, tags, objects, grounds, herbs: HERBS, flora: FLORA_HERBS };
   const add = (it) => {
     if (items.has(it.id)) throw new Error('duplicate item ' + it.id);
     it.tags ||= []; it.stack ??= it.unit ? 5000 : 50; it.price ??= 0.5; it.cat ||= 'misc';
@@ -39,24 +41,26 @@ export function buildContent() {
   };
   const gi = (name, c) => ({ gi: name, c });
 
-  // ——— herbs: fresh, dried, powder, liquids
-  for (const h of HERBS) {
+  // ——— herbs: fresh, dried, powder, liquids. The same loop builds the world's flora (flora_herbs.js),
+  // whose methods come from the part used rather than a hand-written list.
+  for (const h of [...HERBS, ...FLORA_HERBS]) {
+    const hMethods = h.methods || HERB_METHODS[h.id] || [];
     const dryG = h.unit.g * h.dry;
-    const rarity = h.density < 0.01 ? 3 : h.density < 0.02 ? 1.6 : 1;
+    const rarity = h.flora ? 2 : h.density < 0.01 ? 3 : h.density < 0.02 ? 1.6 : 1;
     const base = { herb: h.id, dryG, contains: h.contains, icon: gi(h.icon, h.color) };
     add({ ...base, id: 'fresh_' + h.id, name: `${h.name} ${h.part} (fresh)`, cat: 'herb', form: 'fresh', unitName: h.unit.name, stack: 40, price: 0.3 * rarity, shelfDays: 3,
       tags: ['herb', 'herb_' + h.id, 'fresh'] });
-    if (HERB_METHODS[h.id]?.includes('dry') || h.id === 'neem' || h.id === 'eucalyptus')
+    if (hMethods.includes('dry') || h.id === 'neem' || h.id === 'eucalyptus')
       add({ ...base, id: 'dried_' + h.id, name: `${h.name} ${h.part} (dried)`, cat: 'herb', form: 'dried', unitName: h.unit.name, stack: 60, price: 0.5 * rarity, shelfDays: 240,
         icon: gi(h.icon, shadeHex(h.color, 0.7)), tags: ['herb', 'herb_' + h.id, 'dried'] });
-    for (const m of HERB_METHODS[h.id] || []) {
+    for (const m of hMethods) {
       if (m === 'dry') continue;
       const M = METHODS[m];
       const id = (m === 'powder' ? 'powder_' : m + '_') + h.id;
       const actives = nominalActives(h, m);
       add({ id, name: `${h.name} ${M.name.toLowerCase()}`, cat: 'remedy', herb: h.id, method: m, unit: M.unit, stack: M.unit === 'ml' ? 5000 : 2000,
         price: (0.5 * rarity) / (m === 'powder' ? dryG : dryG * M.mlPerG) * 1.5, shelfDays: M.shelfDays, actives, route: ['oral'],
-        bitter: h.id === 'cinchona' || h.id === 'artemisia' || h.id === 'willow', icon: gi(m === 'powder' ? 'powder-bag' : m === 'tincture' ? 'vial' : 'teapot-leaves', h.color),
+        bitter: h.flora ? !!(h.contains.tannin || h.contains.berberine || h.contains.quinine) : h.id === 'cinchona' || h.id === 'artemisia' || h.id === 'willow', icon: gi(m === 'powder' ? 'powder-bag' : m === 'tincture' ? 'vial' : 'teapot-leaves', h.color),
         tags: ['remedy', 'remedy_' + h.id] });
       const spec = m === 'powder' || m === 'tincture' ? 'dried_' + h.id : '#herb_' + h.id;
       const inputs = [[spec, 1], ...(M.extra || [])];
@@ -104,8 +108,27 @@ export function buildContent() {
     recipes.push({ id: 'make_' + b.id, out: b.id, build: true, in: b.cost, station: b.id === 'workbench' || b.floor || b.wall || b.id === 'hearth' || b.id === 'herb_bed' ? null : 'bench', tool: null, min: 20, yields: 1, hours: 0 });
   }
 
+  // ——— the import trade: dried material and seed of every species in the world table, priced by how
+  // far it has to come (how badly the valley's climate suits it stands in for distance) and arriving in
+  // weeks, not days (economy.js). Seed can be planted; it grows as well as the climate allows.
+  const GROW = { tree: 60, shrub: 30, climber: 20, succulent: 25, epiphyte: 25, geophyte: 20, herb: 10 };
+  for (const h of FLORA_HERBS) {
+    const zone = 1 + Math.round((1 - CLIMATE[h.climate].fit) * 4);
+    for (const id of ['dried_' + h.id, 'powder_' + h.id]) {
+      const it = items.get(id);
+      if (!it) continue;
+      it.import = true; it.zone = zone; it.price = Math.round(it.price * (1 + 0.35 * zone) * 100) / 100;
+    }
+    add({ id: 'seed_' + h.id, name: `${h.name} seed`, cat: 'seed', plant: h.id, growDays: GROW[h.life] || 14, stack: 40,
+      price: Math.round((0.4 + 0.3 * zone) * 100) / 100, import: true, zone, icon: gi('plant-seed', h.color), tags: ['seed'],
+      note: `Sown in a garden bed. ${CLIMATE[h.climate].name.replace(/^./, (c) => c.toUpperCase())} species: here it will grow ${CLIMATE[h.climate].fit >= 0.9 ? 'well' : CLIMATE[h.climate].fit >= 0.6 ? 'fairly well' : CLIMATE[h.climate].fit >= 0.4 ? 'poorly' : 'badly, and weak'}.` });
+  }
+
+  // ——— non-plant materia medica: import only (materia.js)
+  for (const m of MATERIA) add({ ...m, cat: 'materia', route: m.topical ? ['topical'] : ['oral'], import: true, zone: m.distance ?? 3, icon: gi(m.icon, m.color), tags: ['materia'] });
+
   // ——— the wild: medicinal plants, scenery, the village
-  for (const h of HERBS) objects.set('plant_' + h.id, { key: 'plant_' + h.id, name: h.name, kind: 'plant', herb: h.id, tree: !!h.tree, blocks: !!h.tree, sprite: { d: h.sprite, t: h.tint },
+  for (const h of [...HERBS, ...FLORA_HERBS]) objects.set('plant_' + h.id, { key: 'plant_' + h.id, name: h.name, kind: 'plant', herb: h.id, tree: !!h.tree, blocks: !!h.tree, sprite: { d: h.sprite, t: h.tint },
     harvest: 'fresh_' + h.id, regrowDays: h.regrowDays, tool: h.tool, seasons: h.seasons });
   const O = (key, def) => objects.set(key, { key, ...def });
   for (let i = 1; i <= 13; i++) O('tree_' + i, { name: 'Tree', kind: 'tree', blocks: true, sprite: { d: 'dngn/trees/tree' + i }, gives: ['pole', 1], tool: 'knife', regrowDays: 10 });

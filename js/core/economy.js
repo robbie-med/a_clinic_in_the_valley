@@ -98,9 +98,21 @@ export function sell(G, v, id) {
 // ——— the catalogue: order by post from the city wholesaler. Paid when posted; the runner brings it to the
 // clinic shelf in 4–8 days. Sealed stock, but now and then a falsified box gets through the supply chain.
 export const CATALOGUE = { mult: 1.05, postage: 2, days: [4, 8], fakes: 0.03 };
+// The town import house: dried herbs, seed and animal or mineral goods from the far traditions. Zone 1
+// is the next district, zone 5 the other side of the world; the bill and the wait both follow it. DNA
+// studies of the herbal trade keep finding the wrong species in the bag — about a quarter to a third of
+// samples (Newmaster 2013; Ichim 2019) — and for antler and ginseng far more (materia.js `fake`).
+export const IMPORT = { mult: 1.1, postage: 6, baseDays: 14, perZone: 7, adulterate: 0.3,
+  ref: 'Newmaster SG et al. BMC Med 2013;11:222; Ichim MC. Front Pharmacol 2019;10:1227' };
 const round1 = (n) => Math.round(n * 10) / 10;
 export const catalogueItems = (C) => [...C.items.values()].filter((it) => it.cat === 'medicine' || (it.cat === 'tool' && it.price >= 2));
-export const orderTotal = (C, cart) => round1(Object.entries(cart).reduce((a, [id, n]) => a + lotPrice(C.items.get(id), CATALOGUE.mult) * n, 0) + CATALOGUE.postage);
+export const importItems = (C) => [...C.items.values()].filter((it) => it.import);
+const multOf = (it) => (it.import ? IMPORT.mult : CATALOGUE.mult);
+export const orderTotal = (C, cart) => {
+  const lines = Object.entries(cart).filter(([, n]) => n > 0);
+  const postage = lines.some(([id]) => C.items.get(id).import) ? IMPORT.postage : CATALOGUE.postage;
+  return round1(lines.reduce((a, [id, n]) => a + lotPrice(C.items.get(id), multOf(C.items.get(id))) * n, 0) + postage);
+};
 
 /** Post an order. cart: { itemId: lots }. */
 export function placeOrder(G, cart) {
@@ -112,16 +124,20 @@ export function placeOrder(G, cart) {
   meta.orders ||= [];
   meta.orderSeq = (meta.orderSeq || 0) + 1;
   const rng = makeRng(meta.seed, 'post', meta.orderSeq);
-  const [a, b] = CATALOGUE.days;
+  const far = lines.reduce((z, [id]) => Math.max(z, C.items.get(id).import ? C.items.get(id).zone || 1 : 0), 0);
+  const [a, b] = far ? [IMPORT.baseDays + IMPORT.perZone * far, IMPORT.baseDays + IMPORT.perZone * far + 10] : CATALOGUE.days;
   const due = (day(G.W.time) - 1 + a + Math.floor(rng() * (b - a + 1))) * DAY + 11 * 60;
   const goods = lines.map(([id, n]) => {
     const it = C.items.get(id);
-    const q = it.cat === 'medicine' && rng() < CATALOGUE.fakes ? (rng() < 0.5 ? 0 : 0.3 + rng() * 0.4) : undefined;
+    let q;
+    if (it.cat === 'medicine' && rng() < CATALOGUE.fakes) q = rng() < 0.5 ? 0 : 0.3 + rng() * 0.4;
+    else if (it.import && it.cat !== 'seed' && rng() < (it.fake ?? IMPORT.adulterate)) q = 0.05 + rng() * 0.25; // another species in the sack
+    else if (it.cat === 'herb' || it.cat === 'remedy' || it.cat === 'materia') q = 0.6 + rng() * 0.7;           // batches vary
     return [id, n * LOT(it), q];
   });
   meta.orders.push({ n: meta.orderSeq, goods, due, total, posted: G.W.time });
   p.coins = round1(p.coins - total);
-  meta.ledger.push({ t: G.W.time, kind: 'buy', text: `Posted order no. ${meta.orderSeq} to the city wholesaler (due about day ${day(due)})`, amount: -total });
+  meta.ledger.push({ t: G.W.time, kind: 'buy', text: `Posted order no. ${meta.orderSeq} to the ${far ? 'town import house' : 'city wholesaler'} (due about day ${day(due)})`, amount: -total });
   return { ok: true, total, due };
 }
 

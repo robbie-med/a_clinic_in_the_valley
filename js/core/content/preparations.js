@@ -18,14 +18,17 @@ export const METHODS = {
   tincture:       { name: 'Tincture', verb: 'Soak a week in spirit (1 g : 5 ml)', form: 'liquid', unit: 'ml', mlPerG: 5, station: 'jar', min: 5, hours: 168, shelfDays: 720, spirit: 5 },
 };
 
-// method → compound → fraction extracted
+// method → compound → fraction extracted. The flora compound classes (flora_actives.js) are in the
+// same table: water pulls out tannins, berberine, caffeine and the anthraquinones well; alcohol takes
+// the alkaloids and the essential-oil compounds; long boiling destroys thujone and much of the
+// aconitine (which is why aconite root is boiled for hours before use) and drives off the volatiles.
 export const EXTRACT = {
-  powder:         { salicin: 0.9, quinine: 0.85, artemisinin: 0.85, digitoxin: 0.95, tropane: 0.95, gingerol: 1, papain_bitc: 1, guava_flavonoid: 0.8, aloin: 1, cornsilk_k: 0.9 },
-  infusion:       { salicin: 0.5, quinine: 0.15, artemisinin: 0.4, digitoxin: 0.5, tropane: 0.7, gingerol: 0.5, guava_flavonoid: 0.5, cornsilk_k: 0.6, aloin: 0.7 },
-  decoction:      { salicin: 0.7, quinine: 0.3, artemisinin: 0.25, digitoxin: 0.4, tropane: 0.7, gingerol: 0.6, guava_flavonoid: 0.6, cornsilk_k: 0.7, aloin: 0.8 },
-  acid_decoction: { salicin: 0.65, quinine: 0.75, artemisinin: 0.2, digitoxin: 0.35, tropane: 0.8, gingerol: 0.55, guava_flavonoid: 0.55, cornsilk_k: 0.7 },
-  cold_soak:      { salicin: 0.3, quinine: 0.1, artemisinin: 0.1, digitoxin: 0.3, tropane: 0.6, gingerol: 0.3, guava_flavonoid: 0.3, cornsilk_k: 0.4, aloin: 0.8 },
-  tincture:       { salicin: 0.8, quinine: 0.65, artemisinin: 0.7, digitoxin: 0.85, tropane: 0.85, gingerol: 0.8, guava_flavonoid: 0.7, cornsilk_k: 0.5 },
+  powder:         { salicin: 0.9, quinine: 0.85, artemisinin: 0.85, digitoxin: 0.95, tropane: 0.95, gingerol: 1, papain_bitc: 1, guava_flavonoid: 0.8, aloin: 1, cornsilk_k: 0.9, tannin: 1, berberine: 1, emodin: 1, saponin: 1, oxalate: 1, cardenolide: 0.95, aconitine: 0.95, aristolochic: 0.95, pyrrolizidine: 0.95, ephedrine: 0.95, caffeine: 0.95, cyanogenic: 0.9, thujone: 0.6, coumarin: 0.8, glycyrrhizin: 1, thymol: 0.6, eugenol: 0.6, menthol: 0.5, eucalyptol: 0.5 },
+  infusion:       { salicin: 0.5, quinine: 0.15, artemisinin: 0.4, digitoxin: 0.5, tropane: 0.7, gingerol: 0.5, guava_flavonoid: 0.5, cornsilk_k: 0.6, aloin: 0.7, tannin: 0.6, berberine: 0.6, emodin: 0.5, saponin: 0.5, oxalate: 0.7, cardenolide: 0.5, aconitine: 0.6, aristolochic: 0.5, pyrrolizidine: 0.6, ephedrine: 0.8, caffeine: 0.9, cyanogenic: 0.7, thujone: 0.3, coumarin: 0.5, glycyrrhizin: 0.6, thymol: 0.2, eugenol: 0.2, menthol: 0.2 },
+  decoction:      { salicin: 0.7, quinine: 0.3, artemisinin: 0.25, digitoxin: 0.4, tropane: 0.7, gingerol: 0.6, guava_flavonoid: 0.6, cornsilk_k: 0.7, aloin: 0.8, tannin: 0.8, berberine: 0.8, emodin: 0.7, saponin: 0.7, oxalate: 0.85, cardenolide: 0.4, aconitine: 0.35, aristolochic: 0.6, pyrrolizidine: 0.7, ephedrine: 0.85, caffeine: 0.95, cyanogenic: 0.4, thujone: 0.15, coumarin: 0.6, glycyrrhizin: 0.8, thymol: 0.15, eugenol: 0.15, menthol: 0.1 },
+  acid_decoction: { salicin: 0.65, quinine: 0.75, artemisinin: 0.2, digitoxin: 0.35, tropane: 0.8, gingerol: 0.55, guava_flavonoid: 0.55, cornsilk_k: 0.7, tannin: 0.8, berberine: 0.9, emodin: 0.6, saponin: 0.6, oxalate: 0.9, cardenolide: 0.3, aconitine: 0.3, aristolochic: 0.6, pyrrolizidine: 0.8, ephedrine: 0.9, caffeine: 0.95, cyanogenic: 0.3, thujone: 0.15, coumarin: 0.6, glycyrrhizin: 0.7, thymol: 0.15, eugenol: 0.15, menthol: 0.1 },
+  cold_soak:      { salicin: 0.3, quinine: 0.1, artemisinin: 0.1, digitoxin: 0.3, tropane: 0.6, gingerol: 0.3, guava_flavonoid: 0.3, cornsilk_k: 0.4, aloin: 0.8, tannin: 0.4, berberine: 0.3, emodin: 0.3, saponin: 0.3, oxalate: 0.6, cardenolide: 0.3, aconitine: 0.4, aristolochic: 0.3, pyrrolizidine: 0.4, ephedrine: 0.6, caffeine: 0.6, cyanogenic: 0.5, thujone: 0.2, coumarin: 0.3, glycyrrhizin: 0.4, thymol: 0.15, eugenol: 0.15, menthol: 0.15 },
+  tincture:       { salicin: 0.8, quinine: 0.65, artemisinin: 0.7, digitoxin: 0.85, tropane: 0.85, gingerol: 0.8, guava_flavonoid: 0.7, cornsilk_k: 0.5, tannin: 0.5, berberine: 0.85, emodin: 0.8, saponin: 0.6, oxalate: 0.4, cardenolide: 0.85, aconitine: 0.9, aristolochic: 0.85, pyrrolizidine: 0.85, ephedrine: 0.85, caffeine: 0.8, cyanogenic: 0.6, thujone: 0.9, coumarin: 0.9, glycyrrhizin: 0.7, thymol: 0.9, eugenol: 0.9, menthol: 0.9 },
 };
 
 // Which methods make sense for which herb (the rest are pointless or impossible).

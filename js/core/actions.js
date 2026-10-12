@@ -5,6 +5,7 @@ import { addItem, count, remove } from './inventory.js';
 import { DAY, inSeason } from './time.js';
 import { gainXp } from './crafting.js';
 import { HERB } from './content/herbs.js';
+import { climateFit } from './flora.js';
 
 export function newPlayer(x, y) {
   return { x, y, face: 0, inv: { slots: Array(24).fill(null) }, hot: 0, coins: 40, skills: { herbal: 0, diagnosis: 0, build: 0 }, stats: { walked: 0 }, known: {} };
@@ -36,7 +37,8 @@ export function useTile(G, x, y, slot = G.p.hot) {
     if (!inSeason(od.seasons, W.time)) return [['msg', `${herb.name}: nothing to gather in this season.`]];
     if (od.tool && !count(p.inv, od.tool)) return [['msg', `You need a ${C.items.get(od.tool).name.toLowerCase()} to take the ${herb.part}.`]];
     const n = herb.tree ? 2 : 1;
-    const left = addItem(p.inv, C, od.harvest, n, { q: W.plantPotency(x, y), t: W.time });
+    // a species out of its climate grows thin: a temperate herb in this valley is a weak one
+    const left = addItem(p.inv, C, od.harvest, n, { q: W.plantPotency(x, y) * climateFit(od.herb), t: W.time });
     if (left === n) return [['msg', 'Your bag is full.']];
     W.setState(x, y, { regrowAt: W.time + herb.regrowDays * DAY });
     G.meta.time += 4;

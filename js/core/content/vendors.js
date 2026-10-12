@@ -25,7 +25,8 @@ export const VENDORS = [
     id: 'herbalist', name: 'Travelling herb seller', who: 'Herb seller', wander: [4, 7], stay: 2, open: [9 * 60, 16 * 60], look: { base: 'player/base/human3_f', hair: 'player/hair/long_yellow' },
     greet: 'Bark from the high forests, leaves from the far hills. Strong medicine, my sister.',
     sells: [['dried_cinchona', [2, 10], 1.6], ['dried_artemisia', [2, 10], 1.4], ['dried_foxglove', [0, 6], 1.8], ['dried_willow', [2, 8], 1.3], ['powder_papaya', [0, 60], 1.3],
-      ['dried_eucalyptus', [2, 8], 1.2], ['cutting_aloe', [1, 4], 1.2], ['seed_artemisia', [0, 6], 1.5], ['seed_foxglove', [0, 4], 1.8], ['fresh_ginger', [2, 6], 1.2]],
+      ['dried_eucalyptus', [2, 8], 1.2], ['cutting_aloe', [1, 4], 1.2], ['seed_artemisia', [0, 6], 1.5], ['seed_foxglove', [0, 4], 1.8], ['fresh_ginger', [2, 6], 1.2],
+      ['antler_velvet', [0, 50], 2], ['realgar', [0, 20], 2]], // goods from the caravan roads; "staghorn" is faked more than any other
     buys: ['herb'], adulterate: 0.15,
   },
   {

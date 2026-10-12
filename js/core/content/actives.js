@@ -13,6 +13,8 @@
 // used and `spread` says how much it varies between people. Numbers marked `calibrated` are fitted to
 // a clinical effect size rather than measured directly; the note says which trial.
 
+import { FLORA_ACTIVES } from './flora_actives.js';
+
 export const ACTIVES = [
   {
     id: 'salicin', name: 'Salicin (willow salicylates)', channel: 'systemic', class: 'analgesic', allergen: 'aspirin',
@@ -397,6 +399,9 @@ export const ACTIVES = [
     cautions: ['Too much in early pregnancy harms the baby: not the big capsules for pregnant women.'],
     ref: 'WTND pp.226, 311, 391; Huiming Y et al. Cochrane 2005;CD001479',
   },
+
+  // ——— the world's flora: one entry per compound class, plus the non-plant materia medica
+  ...FLORA_ACTIVES,
 ];
 
 export const ACTIVE = new Map(ACTIVES.map((a) => [a.id, a]));

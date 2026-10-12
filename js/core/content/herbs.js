@@ -11,6 +11,8 @@
 // Evidence grades: 'strong' (good trials), 'some' (small or mixed trials), 'traditional' (use and
 // lab work only), 'harmful' (more risk than benefit as usually used).
 
+import { FLORA_HERBS } from './flora_herbs.js';
+
 export const HERBS = [
   {
     id: 'willow', name: 'White willow', latin: 'Salix alba', family: 'Salicaceae', part: 'bark',
@@ -147,4 +149,6 @@ export const HERBS = [
   },
 ];
 
-export const HERB = new Map(HERBS.map((h) => [h.id, h]));
+// The 12 above are hand-written. The world's other medicinal species come from open data
+// (flora.js, built by tools/build_flora.mjs) in the same shape, and share one lookup map.
+export const HERB = new Map([...HERBS, ...FLORA_HERBS].map((h) => [h.id, h]));
