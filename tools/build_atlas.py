@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """Pack the Dungeon Crawl Stone Soup tiles we use into one uniform 32x32 grid sprite sheet.
 
-    python3 tools/build_atlas.py <path-to>/crawl-ref/source/rltiles
+    python3 tools/build_atlas.py <path-to>/crawl-ref/source/rltiles [<art dir>]
+
+The optional art dir holds the other CC0 packs (see EXTRA and CREDITS.md): supp/ (DCSS Supplemental, unzipped),
+herbs/ (Stendhal herb icons), rpg496/ (496 RPG icons) and potions/ (potion sheets compilation, unzipped per set).
 
 Writes assets/tiles.png (64 columns, row-major) and assets/tiles.json ({"cols":64,"pad":1,"names":[...]}),
 Each 32x32 tile sits in a 34x34 cell with its edge pixels extruded by 1 px (margin 1, spacing 2), so
@@ -40,6 +43,15 @@ WALL_RE = re.compile(r'^dngn/wall/(stone_|stone2_|brick_|cobalt_rock|lab-rock|gu
                      r'shoals_wall|desolation|elf-stone|undead_brown|wall_stone_lair|wall_stone_orc)')
 EFFECT_RE = re.compile(r'^effect/(arrow|cloud_fire|cloud_grey_smoke|cloud_black_smoke|cloud_rain|cloud_storm|cloud_poison|'
                        r'cloud_cold|bolt|sling|stone|net|dart|javelin|flame)')
+# Extra CC0 tiles from outside rltiles: atlas name -> path under the art dir. Sources and authors: CREDITS.md.
+_S = 'supp/Dungeon Crawl Stone Soup Supplemental/dungeon/floor/grass/grass_flowers_'
+EXTRA = {
+    **{f'dngn/floor/grass/supp_flowers_{c}_{i}': f'{_S}{c}_{i}.png' for c in ('blue', 'red', 'yellow') for i in (1, 2, 3)},
+    **{f'icon/herb/{n}': f'herbs/{n}.png' for n in ('arandula', 'kekik', 'kokuda', 'mandragora', 'sclaria')},
+    **{f'icon/rpg/{n}': f'rpg496/{f}.png' for n, f in (('leaf', 'I_Leaf'), ('clover', 'I_Clover'), ('nut', 'I_C_Nut'),
+       ('flask', 'I_Bottle03'), ('jar', 'I_Bottle04'), ('bottle', 'I_Bottle02'), ('tube', 'P_White02'))},
+    **{f'icon/potion/{n}': f'potions/potion-dcss/32x32/{n}.png' for n in ('potion_2_brown', 'potion_2_clear')},
+}
 SKIP_RE = re.compile(r'/UNUSED/|/artefact/|/unrand|_art\d*$|demonic|panlord')
 
 
@@ -59,6 +71,8 @@ def collect(root):
 
 def fit(img):
     img = img.convert('RGBA')
+    if img.size == (T + 2, T + 2):  # the RPG icon pack has a 1 px transparent frame
+        img = img.crop((1, 1, T + 1, T + 1))
     w, h = img.size
     if (w, h) != (T, T):
         s = min(T / w, T / h)
@@ -71,16 +85,20 @@ def fit(img):
 
 
 def main():
-    if len(sys.argv) != 2:
+    if len(sys.argv) not in (2, 3):
         sys.exit(__doc__)
     root = sys.argv[1]
-    names = collect(root)
+    art = sys.argv[2] if len(sys.argv) == 3 else None
+    paths = {n: os.path.join(root, n + '.png') for n in collect(root)}
+    if art:
+        paths.update({n: os.path.join(art, p) for n, p in EXTRA.items()})
+    names = sorted(paths)
     if len(names) > MAX:
         sys.exit(f'{len(names)} tiles > {MAX}; tighten INCLUDE_DIRS')
     rows = (len(names) + COLS - 1) // COLS
     sheet = Image.new('RGBA', (COLS * CELL, rows * CELL), (0, 0, 0, 0))
     for i, n in enumerate(names):
-        t = fit(Image.open(os.path.join(root, n + '.png')))
+        t = fit(Image.open(paths[n]))
         x, y = (i % COLS) * CELL, (i // COLS) * CELL
         # extrude: stretch the tile to 34x34 first (fills the border), then paste the crisp tile in the middle
         sheet.paste(t.resize((CELL, CELL), Image.NEAREST), (x, y))

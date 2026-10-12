@@ -18,15 +18,20 @@ export const CLIMATE = {
 // Art is data, not code: each life form has a POOL of sprite keys, and a species picks one from the
 // pool by a hash of its id, then tints it. Adding tiles later (e.g. the CC0 DCSS supplemental plant
 // set) means adding keys to a pool here — no code change anywhere else.
+const T = (...n) => n.map((i) => 'dngn/trees/' + i);
+const P = (...n) => n.map((i) => 'mon/fungi_plants/' + i);
+const FL = (...n) => n.map((i) => 'dngn/decor/flower_patch_' + i);
+// DCSS Supplemental flowering grass (CC0), see tools/build_atlas.py EXTRA
+const GF = ['blue', 'red', 'yellow'].flatMap((c) => [1, 2, 3].map((i) => `dngn/floor/grass/supp_flowers_${c}_${i}`));
 export const LIFE_SPRITES = {
-  tree: ['dngn/trees/tree2', 'dngn/trees/tree6', 'dngn/trees/tree8', 'dngn/trees/tree11'],
-  shrub: ['mon/fungi_plants/bush2', 'mon/fungi_plants/bush3', 'mon/fungi_plants/bush4'],
-  climber: ['mon/fungi_plants/briar_patch'],
-  succulent: ['mon/fungi_plants/oklob_sapling'],
-  epiphyte: ['mon/fungi_plants/plant_09'],
-  geophyte: ['mon/fungi_plants/plant_04', 'mon/fungi_plants/plant_05'],
-  herb: ['mon/fungi_plants/plant_01', 'mon/fungi_plants/plant_03', 'mon/fungi_plants/plant_07', 'mon/fungi_plants/plant_08', 'mon/fungi_plants/plant_10'],
-  grass: ['mon/fungi_plants/plant_01'],
+  tree: [...T('tree2', 'tree6', 'tree8', 'tree11', 'tree1', 'tree3', 'tree4', 'tree5', 'tree9', 'tree10', 'mangrove1', 'mangrove2')],
+  shrub: P('bush2', 'bush3', 'bush4', 'bush', 'scrub_nettle', 'plant_07', 'plant_08', 'plant_06'),
+  climber: P('briar_patch', 'plant_02', 'plant_01', 'plant_04', 'plant_06', 'plant_05'),
+  succulent: [...P('oklob_sapling', 'oklob_plant', 'plant_09', 'plant_04', 'plant_10'), 'mon/humanoids/giants/cactus_giant'],
+  epiphyte: P('plant_09', 'sacred_lotus', 'plant_10', 'plant_08', 'plant_03', 'scrub_nettle'),
+  geophyte: [...P('plant_04', 'plant_05', 'plant_03', 'plant_10', 'plant_07', 'plant_08'), ...FL(0, 1)],
+  herb: [...P('plant_01', 'plant_03', 'plant_07', 'plant_08', 'plant_10', 'plant_02', 'plant_06', 'plant_09'), ...FL(0, 1, 2, 3)],
+  grass: [...P('plant_01', 'plant_05'), ...GF],
 };
 /** How each life form behaves: whether it blocks the way, how fast it comes back, when it is there. */
 export const LIFE_FORM = {
