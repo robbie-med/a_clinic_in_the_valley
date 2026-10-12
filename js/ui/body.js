@@ -7,11 +7,11 @@ export const REGIONS = {
   head: { label: 'Head', exams: ['x_general', 'x_forehead', 'x_fontanel', 'x_ears', 'x_neck'] },
   face: { label: 'Eyes & mouth', exams: ['x_eyes', 'x_throat', 'x_general'] },
   chest: { label: 'Chest', exams: ['x_chest', 'x_listen', 'x_rr'] },
-  belly: { label: 'Belly', exams: ['x_belly', 'x_pinch'] },
-  arm: { label: 'Upper arm', exams: ['x_thermo', 'x_muac', 'x_bp'] },
+  belly: { label: 'Belly', exams: ['x_belly', 'x_pinch', 'x_urine_taste'] },
+  arm: { label: 'Upper arm', exams: ['x_thermo', 'x_muac', 'x_bp', 'x_strength'] },
   wrist: { label: 'Wrist', exams: ['x_pulse'] },
-  hands: { label: 'Hands & skin', exams: ['x_skin', 'x_joints'] },
-  legs: { label: 'Legs & feet', exams: ['x_feet', 'x_joints'] },
+  hands: { label: 'Hands & skin', exams: ['x_skin', 'x_joints', 'x_limb', 'x_bite'] },
+  legs: { label: 'Legs & feet', exams: ['x_feet', 'x_joints', 'x_limb', 'x_bite'] },
   back: { label: 'Back', exams: ['x_back'] },
   wound: { label: 'Wound / burn', exams: ['x_wound'] },
 };
@@ -21,6 +21,7 @@ const PIN = {
   sunken_eyes: 'face', dry_mouth: 'face', tears: 'face', pallor: 'face', rr: 'chest', indrawing: 'chest', grunting: 'chest', crackles: 'chest',
   spleen: 'belly', pot_belly: 'belly', tender: 'belly', skin_pinch: 'belly', muac: 'arm', bp: 'arm', hr: 'wrist', pulse_regular: 'wrist',
   burrows: 'hands', skin_sores: 'hands', edema: 'legs', back_exam: 'back', pus: 'wound', redness: 'wound', red_streaks: 'wound', wound_size: 'wound', burn_area: 'wound', blisters: 'wound',
+  wheeze: 'chest', weak_side: 'arm', goitre: 'head', fang_marks: 'legs', local_swelling: 'legs', deformity: 'hands', swollen_joint: 'legs', hair: 'head', skin_patches: 'legs',
 };
 
 /**

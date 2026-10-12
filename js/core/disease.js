@@ -10,6 +10,7 @@ import { ORG } from './content/organisms.js';
 import { drugState, toxSigns, gutExposure, hill } from './pk.js';
 import { makeRng } from './rng.js';
 import { pregnancyHour, newbornHazard } from './people.js';
+import { YEAR_DAYS } from './time.js';
 
 export const HOUR = 60;
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -224,8 +225,9 @@ const MODELS = {
     step(p, c, dt, x) {
       const P = COND.get(c.id).params;
       c.age += dt;
-      c.s = c.p0 * 0.5 ** (c.age / (P.halfDays * 24)) * (x.instr.has('rest_move') ? 0.85 : 1);
-      return { loss: 0, hazard: 0, done: c.s < 0.08 };
+      c.s = c.p0 * 0.5 ** (c.age / (P.halfDays * 24)) * (x.instr.has(P.instr || 'rest_move') ? P.instrCut ?? 0.85 : 1);
+      // `hazard` (a stroke): deaths cluster in the first days (`early`, hours), then the damage only slowly mends
+      return { loss: 0, hazard: (P.hazard || 0) * c.s ** 2 * (P.early ? Math.exp(-c.age / P.early) : 1), done: c.s < 0.08 };
     },
   },
   heart: {
@@ -269,12 +271,128 @@ const MODELS = {
       return { loss: 0, hazard: c.sev > 0.7 ? P.hazard * (c.sev - 0.6) * 4 : 0, done: !p.pregnant };
     },
   },
+  // ——— chronic illness and emergencies (WTND chapters 10, 11, 13, 22)
+  // chronic: one level (pressure above normal, sugar, a goitre's size, an ulcer, missing haemoglobin, missing
+  // nourishment) that settles toward a target over `tau` days. Medicines (`by`: relief keys, or one per patient with
+  // `need`), an instruction and the body itself (`self`) lower the target; `worse` (a relief key) raises it.
+  // Complications (`risk`) arise at perYear per game year, × `per` for each `step` of level. Slow processes are
+  // compressed into game days in the condition data (time.js COMPRESS).
+  chronic: {
+    init(p, c, rng) {
+      const P = COND.get(c.id).params;
+      c.L = c.L0 = P.hbTo ? p.hb - lerp(P.hbTo[0], P.hbTo[1], rng()) : lerp(P.level[0], P.level[1], rng()); // hbTo: the Hb they walk in with
+      if (Array.isArray(P.self)) c.self = lerp(P.self[0], P.self[1], rng());
+      if (P.need) c.by = rng() < P.need ? P.by[0] : P.by[1];
+      if (P.nut) setNutrition(p, P.nut - c.L);
+    },
+    step(p, c, dt, x) {
+      const P = COND.get(c.id).params, R = x.ds.relief;
+      c.age += dt;
+      let keep = 1 - (c.self ?? P.self ?? 0);
+      for (const k of c.by ? [c.by] : P.by || []) keep *= 1 - (R[k] || 0);
+      if (P.instr && x.instr.has(P.instr)) keep *= 1 - P.instrCut;
+      c.L += (c.L0 * keep * (1 + (R[P.worse] || 0)) - c.L) * Math.min(1, dt / (P.tau * 24));
+      c.s = clamp(c.L / P.full, 0, 1.5);
+      if (P.hb) c.hb = p.hb - c.L;
+      if (P.nut) setNutrition(p, P.nut - c.L);
+      for (const r of P.risk || []) {
+        if (p.conds.some((q) => q.id === r.to) || p.pending?.some((q) => q.id === r.to)) continue;
+        if (x.rng() < (r.perYear * r.per ** (c.L / r.step) * dt) / (YEAR_DAYS * 24)) (p.pending ||= []).push({ id: r.to, t: x.t });
+      }
+      const hazard = P.hb ? (c.hb < 5 ? P.hazard * (5 - c.hb) ** 2 : 0) : (P.hazard || 0) * Math.max(0, c.L - (P.safe || 0)) ** 2;
+      return { loss: 0, hazard, done: P.heal !== undefined && c.L < P.heal };
+    },
+  },
+  // asthma: attacks narrow the airways (att) for hours to days, then ease to the inflamed baseline. A bronchodilator
+  // (relief.airway) opens them while it is in the blood; a steroid (relief.steroid, building over ~6 h) shortens the
+  // attack and makes new ones rarer. Colds bring attacks on (WTND p.167). Death comes only from the narrowest airways.
+  asthma: {
+    init(p, c, rng, since) {
+      const P = COND.get(c.id).params;
+      c.base = lerp(P.base[0], P.base[1], rng());
+      c.peak = lerp(P.attack[0], P.attack[1], rng());
+      c.left = lerp(P.hours[0], P.hours[1], rng()) + since; // the attack they came with is still on
+      c.att = 0; c.st = 0;
+    },
+    step(p, c, dt, x) {
+      const P = COND.get(c.id).params, R = x.ds.relief;
+      c.age += dt;
+      c.st += ((R.steroid || 0) - c.st) * Math.min(1, dt / 6);
+      c.left -= dt * (1 + P.steroidFaster * c.st);
+      const cold = p.conds.some((q) => q.id === 'common_cold' || q.id === 'cough_child') ? 3 : 1;
+      if (c.left <= 0 && x.rng() < (P.perWeek / 168) * dt * (c.base / 0.3) * cold * (1 - P.steroidFewer * c.st)) {
+        c.peak = lerp(P.attack[0], P.attack[1], x.rng()); c.left = lerp(P.hours[0], P.hours[1], x.rng());
+      }
+      c.att += ((c.left > 0 ? c.peak : c.base) - c.att) * Math.min(1, dt / 2);
+      c.s = c.att * (1 - (R.airway || 0)); // how narrow the airways are now
+      return { loss: 0, hazard: P.hazard * Math.max(0, c.s - 0.6) ** 2, done: false };
+    },
+  },
+  // fits: seizures come at `perDay` (a fever fit only while its fever lasts, `days`); `relief.seizure` prevents them,
+  // scaled by how well this brain responds (resp). Now and then one does not stop (status, `status`): it ends by itself
+  // at `stop` an hour, or with a drug in the blood, and kills at `hazard` an hour while it lasts. A fall in a fit can
+  // land in the cooking fire (`injure`). The fit that brought them came `since` hours ago; some still fit on arrival.
+  fits: {
+    init(p, c, rng, since) {
+      const P = COND.get(c.id).params;
+      c.rate = lerp(P.perDay[0], P.perDay[1], rng() ** 2);
+      c.resp = lerp(0.6, 1.6, rng());
+      if (P.days) c.D = lerp(P.days[0], P.days[1], rng()) * 24 + since;
+      c.pre = rng() * since * 0.8; c.hold = since; c.arrive = rng() < (P.arrive || 0);
+      c.n = 0; c.status = 0; c.ago = 1e6;
+    },
+    step(p, c, dt, x) {
+      const P = COND.get(c.id).params;
+      const R = clamp((x.ds.relief.seizure || 0) * c.resp, 0, 0.98);
+      c.age += dt; c.ago += dt;
+      const fade = c.D ? clamp(1 - c.age / c.D, 0, 1) : 1;
+      let hazard = 0;
+      if (c.pre !== undefined && c.age >= c.pre) { delete c.pre; c.n++; c.ago = 0; if (c.arrive) c.status = 1; }
+      else if (c.status) {
+        hazard = P.hazard;
+        if (c.age > c.hold && x.rng() < P.stop + (1 - P.stop) * R) c.status = 0;
+      } else if (x.rng() < (c.rate * fade * (1 - R) * dt) / 24) {
+        c.n++; c.ago = 0;
+        if (x.rng() < P.status) { c.status = 1; c.hold = 0; }
+        if (P.injure && x.rng() < P.injure.per) (p.pending ||= []).push({ id: P.injure.to, t: x.t });
+      }
+      c.s = c.status ? 1 : Math.max(c.D ? fade : 0.15, 0.15 + 0.6 * Math.exp(-c.ago / 12));
+      return { loss: 0, hazard, done: !!c.D && c.age >= c.D && !c.status };
+    },
+  },
+  // venom: a bite, sting or swallowed poison leaves a depot (D) that seeps into the body at `absorb` an hour (slower
+  // with the limb splinted, `slow`); in the body (V) it wears off with half-life `half`. Venom per kg: a child takes
+  // the same bite into a smaller body. Antivenom (`bind`, an active) neutralises venom by its level against the venom
+  // left (ratio50). Some bites carry no venom (`dry`). Harm grows with V / v1.
+  venom: {
+    init(p, c, rng) {
+      const P = COND.get(c.id).params;
+      c.D = rng() < (P.dry || 0) ? 0 : (lerp(P.dose[0], P.dose[1], rng()) * 60) / p.weight;
+      c.D0 = c.D; c.V = 0;
+      if (P.neuro) c.neuro = rng() < P.neuro;
+    },
+    step(p, c, dt, x) {
+      const P = COND.get(c.id).params, av = x.ds.conc[P.bind] || 0;
+      c.age += dt;
+      const abs = c.D * (1 - Math.exp(-P.absorb * dt)) * (P.slow && x.instr.has(P.slow) ? 0.5 : 1);
+      c.D -= abs; c.V = (c.V + abs) * Math.exp((-Math.LN2 / P.half) * dt);
+      if (av > 0 && c.V > 0.001) c.V *= 1 - 0.9 * hill(av / c.V, P.ratio50, 2);
+      c.s = clamp(c.V / P.v1, 0, 1.5);
+      return { loss: 0, hazard: P.hazard * Math.max(0, c.s - 0.3) ** 2, done: c.age > 12 && c.D < 0.02 && c.s < 0.03 };
+    },
+  },
 };
 
 /** How far blood-sucking worms pull haemoglobin down (g/dL): blood lost a day against the body's blood and
  *  iron. Iron in the diet or as tablets lets the marrow keep up with much of it. */
 function wormBloodDrop(p, P, W, iron) {
   return clamp(((W * P.bloodLoss * 30) / p.weight) * (1 - 0.6 * iron), 0, 8);
+}
+
+/** Nourishment changes body weight with it (patient.js: weight scales with 0.82–1 of the median as nutrition 0–1). */
+function setNutrition(p, n) {
+  p.weight = Math.round(p.weight * (lerp(0.82, 1, n) / lerp(0.82, 1, p.nutrition)) * 100) / 100;
+  p.nutrition = n;
 }
 
 function stoolLoss(p, S, s, x) {
@@ -407,11 +525,11 @@ export function simulate(p, toT, C) {
         // allergy: hives within the hour; now and then the throat swells (anaphylaxis): ~1 in 100 allergic exposures
         // by mouth, far more often by injection (estimates; Jerschow E et al. J Allergy Clin Immunol 2014;134:1318).
         // Most stop a medicine they take at home.
-        const al = Object.keys(rx.actives || {}).find((id) => p.allergy && ACTIVE.get(id).allergen === p.allergy);
+        const al = Object.keys(rx.actives || {}).find((id) => reactsTo(p, id, rx.item, rx.start));
         if (al) {
           if (!p.toxSeen.allergy) { p.toxSeen.allergy = td; ev.push({ t: td, kind: 'tox', text: `an itchy raised rash and swollen lips (allergic to ${ACTIVE.get(al).name.toLowerCase()})`, active: al }); }
           p.allergicUntil = td + 48 * HOUR;
-          if (makeRng(p.seed, 'ana', rx.item, rx.start, k)() < (rx.route === 'inj' ? 0.1 : 0.01)) { p.ana = td; ev.push({ t: td, kind: 'tox', text: 'the throat swells, wheezing, faint and cold (anaphylaxis)', active: al }); }
+          if (makeRng(p.seed, 'ana', rx.item, rx.start, k)() < (rx.route === 'inj' ? 0.1 : 0.01)) { p.ana = td; p.anaTo = al; ev.push({ t: td, kind: 'tox', text: 'the throat swells, wheezing, faint and cold (anaphylaxis)', active: al }); }
           if (rx.route !== 'inj' && rng() < 0.6) { rx.stopped = td; ev.push({ t: td, kind: 'stopped', text: `stopped ${rx.name} (the rash)` }); }
         }
         if (rx.fluid) { fluidIn += amt / 1000; naLoad += (amt / 1000) * rx.fluid.na; }
@@ -476,6 +594,9 @@ export function simulate(p, toT, C) {
 
 /** Is some antibiotic in the blood above this strain's MIC? */
 const covers = (ds, mic) => Object.entries(ds.conc).some(([id, C]) => { const a = ACTIVE.get(id), m = a.abxAs || id; return a.abx && m in mic && C * (a.pk.fu ?? 1) > mic[m]; });
+/** Does this dose meet an allergic reaction? A true allergy (p.allergy), or a foreign protein that sets one off in anyone
+ *  (`reacts`, share of courses: horse-serum antivenoms). The clinic (encounter.js) uses the same draw. */
+export const reactsTo = (p, id, item, start) => { const a = ACTIVE.get(id); return (!!p.allergy && a.allergen === p.allergy) || (a.reacts > 0 && makeRng(p.seed, 'reacts', item, start)() < a.reacts); };
 const rescued = (p, ta) => (p.doses.sys.adrenaline || []).some(([td]) => td >= ta - 10 && td <= ta + 30);
 const DEPENDENT = ACTIVES.filter((a) => a.dependence);
 /** Steady use of an opioid builds dependence over ~2 weeks (and tolerance, pk.js); it fades about half as fast once
@@ -487,7 +608,7 @@ function dependence(p, ds, tox) {
     if (!v && C < D.ec) continue;
     v = clamp(v + (C >= D.ec ? 1 : -0.5) / (D.days * 24), 0, 1);
     (p.dep ||= {})[a.id] = v;
-    if (v > 0.5 && C < D.ec * 0.3) tox.push({ active: a.id, sign: D.sign, text: D.text, harm: 0 });
+    if (v > 0.5 && C < D.ec * 0.3) tox.push({ active: a.id, sign: D.sign, text: D.text, harm: D.harm || 0 });
   }
 }
 /** Rare reactions that do not depend on the dose (a blistering rash from a sulfa, Reye syndrome after aspirin in a
@@ -535,7 +656,7 @@ function applyDose(p, rx, amt, td, topical, wormKills) {
 function trimDoses(list, t) { while (list.length > 2 && t - list[0][0] > 40 * 24 * HOUR) list.shift(); }
 
 function causeOfDeath(p, tox, d) {
-  if (p.ana !== undefined && p.t - p.ana < 2 * HOUR) return 'anaphylaxis (allergic to ' + p.allergy + ')';
+  if (p.ana !== undefined && p.t - p.ana < 2 * HOUR) return 'anaphylaxis (allergic to ' + (p.allergy || ACTIVE.get(p.anaTo)?.name.toLowerCase()) + ')';
   if (tox.some((s) => s.harm >= 0.2)) return 'poisoned by ' + ACTIVE.get(tox.find((s) => s.harm >= 0.2).active).name.split(' (')[0].toLowerCase();
   if (d > 0.1) return 'dehydration';
   const worst = [...p.conds].sort((a, b) => (b.sev ?? b.s ?? 0) - (a.sev ?? a.s ?? 0))[0];

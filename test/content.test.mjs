@@ -50,14 +50,14 @@ test('every condition has a known model, epidemiology, a WTND page and teaching'
     assert.ok(MODEL_NAMES.includes(c.model), c.id);
     assert.match(c.ref, /WTND/);
     assert.ok(c.complaint.length && c.learn && c.teach);
-    for (const a of [...c.teach.treat, ...c.teach.helps]) assert.ok(ACTIVE.has(a) || ['clean', 'hot_compress', 'hygiene'].includes(a), `${c.id}: ${a}`);
+    for (const a of [...c.teach.treat, ...c.teach.helps]) assert.ok(ACTIVE.has(a) || ['clean', 'hot_compress', 'hygiene', 'splint', 'feeding', 'diet', 'low_salt'].includes(a), `${c.id}: ${a}`);
   }
 });
 test('every condition can be helped by something obtainable, or is a referral', () => {
   const obtainable = new Set();
   for (const r of C.recipes) obtainable.add(r.out);
   for (const v of VENDORS) for (const [id] of v.sells) obtainable.add(id);
-  const activesAvail = new Set(['clean', 'hot_compress', 'hygiene']);
+  const activesAvail = new Set(['clean', 'hot_compress', 'hygiene', 'splint', 'feeding', 'diet', 'low_salt']);
   for (const id of obtainable) { const it = C.items.get(id); for (const a of Object.keys({ ...(it?.actives || {}), ...(it?.topical || {}) })) activesAvail.add(a); if (it?.fluid) activesAvail.add('oral_fluid'); }
   for (const c of CONDITIONS) {
     const ok = [...c.teach.treat, ...c.teach.helps].some((a) => activesAvail.has(a)) || !!c.teach.refer;

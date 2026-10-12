@@ -18,7 +18,8 @@ export const VENDORS = [
     greet: 'Fresh today! Honey, garlic, ginger, limes — and we buy your eggs and maize.',
     sells: [['honey', [250, 1500], 1.1], ['garlic', [4, 20], 1.1], ['fresh_ginger', [3, 12], 1.1], ['lime', [5, 30], 1.1], ['turmeric', [50, 300], 1.1],
       ['salt', [500, 2000], 1.1], ['sugar', [1000, 4000], 1.1], ['lard', [200, 1000], 1.1], ['eggs', [6, 30], 1.2], ['fresh_cornsilk', [0, 10], 1], ['seed_cornsilk', [5, 20], 1],
-      ['amox_250', [0, 200], 2.5], ['cotrim_480', [0, 200], 2.5], ['cq_150', [0, 300], 2.5], ['para_500', [0, 200], 2.5], ['codeine_30', [0, 100], 2.5]], // loose tablets from the medicine seller's tray
+      ['amox_250', [0, 200], 2.5], ['cotrim_480', [0, 200], 2.5], ['cq_150', [0, 300], 2.5], ['para_500', [0, 200], 2.5], ['codeine_30', [0, 100], 2.5],
+      ['diaz_5', [0, 100], 2.5], ['pred_5', [0, 100], 2.5]], // chronic illness and emergencies: the tray sells these loose too // loose tablets from the medicine seller's tray
     buys: ['produce', 'herb'], fakes: 0.15,
   },
   {
@@ -46,7 +47,11 @@ export const VENDORS = [
       ['al_20_120', [100, 600], 1.15], ['as_50', [0, 200], 1.2], ['qn_300', [100, 300], 1.15], ['cq_150', [100, 300], 1.15],
       ['meb_100', [100, 300], 1.15], ['alb_400', [100, 200], 1.15], ['permethrin_cream', [10, 30], 1.15], ['bb_lotion', [10, 30], 1.15],
       ['ors_packet', [50, 300], 1.15], ['zinc_20', [100, 300], 1.15], ['metro_250', [100, 300], 1.15], ['iron_200', [100, 500], 1.15], ['vita_200k', [100, 200], 1.15],
-      ['benzathine_pen', [0, 20], 1.2], ['benzylpen_1mu', [0, 30], 1.2], ['ceftriaxone_1g', [0, 20], 1.2], ['adrenaline_1mg', [5, 20], 1.2], ['syringe', [1, 4], 1.2]],
+      ['benzathine_pen', [0, 20], 1.2], ['benzylpen_1mu', [0, 30], 1.2], ['ceftriaxone_1g', [0, 20], 1.2], ['adrenaline_1mg', [5, 20], 1.2], ['syringe', [1, 4], 1.2],
+      // ——— chronic illness and emergencies
+      ['salb_4', [100, 300], 1.15], ['salb_syrup', [0, 500], 1.15], ['pred_5', [100, 300], 1.15], ['pheno_30', [100, 500], 1.15], ['diaz_5', [0, 100], 1.2], ['diaz_rectal', [0, 10], 1.2],
+      ['hctz_25', [100, 500], 1.15], ['amlo_5', [100, 500], 1.15], ['folic_5', [100, 300], 1.15], ['antacid_500', [100, 300], 1.15], ['omep_20', [0, 200], 1.2],
+      ['rutf_sachet', [0, 150], 1.1], ['iodized_oil', [0, 100], 1.15], ['snake_av', [0, 4], 1.2], ['scorpion_av', [0, 2], 1.2]],
     buys: [], fakes: 0.01,
   },
 ];

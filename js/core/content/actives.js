@@ -273,6 +273,8 @@ export const ACTIVES = [
     effects: [
       { on: 'pain', emax: 0.6, ec50: 10, hill: 1.5 },
       { on: 'fever', emax: 0.7, ec50: 6, hill: 1.5 },
+      // NSAIDs strip the stomach's protection: ulcers flare and bleed (RR ~4: Lanas A et al. Gut 2005;54:1693). Scale an estimate.
+      { on: 'gi_harm', emax: 1, ec50: 15, hill: 1 },
     ],
     // In a dehydrated child the kidney leans on prostaglandins; blocking them can tip it into failure (Misurac JM et
     // al. J Pediatr 2013;162:1153). Threshold and harm are estimates.
@@ -290,6 +292,7 @@ export const ACTIVES = [
     effects: [
       { on: 'pain', emax: 0.5, ec50: 40, hill: 1.5 },
       { on: 'fever', emax: 0.6, ec50: 30, hill: 1.5 },
+      { on: 'gi_harm', emax: 1, ec50: 40, hill: 1 }, // as ibuprofen (Lanas 2005); scale an estimate
     ],
     toxic: [
       { at: 200, sign: 'tinnitus', text: 'ringing in the ears (salicylate excess)', harm: 0.02 },
@@ -477,11 +480,173 @@ export const ACTIVES = [
     id: 'adrenaline', name: 'Adrenaline (epinephrine)', channel: 'systemic', class: 'for allergic shock',
     // Given into the muscle within ~30 minutes of the reaction it mostly stops anaphylaxis killing (disease.js).
     pk: { F: 0, ka: 3, half: 0.05, vd: 2, spread: 0.3 },
+    // It also opens the airways in a severe asthma attack (WTND p.385), for about an hour. 0.3 mg into the muscle peaks
+    // ~0.5 ng/ml here (Simons 1998); ec50 is calibrated so one dose still works an hour later (the body is sampled
+    // hourly). Too much races the heart (WTND: stop if the pulse rises >30); 10 times the dose shows it.
+    effects: [{ on: 'airway', emax: 0.7, ec50: 0.00005, hill: 1.5, calibrated: true }],
+    toxic: [{ at: 0.0004, sign: 'adrenaline_fast', text: 'pounding racing heart, trembling, pale (too much adrenaline)', harm: 0.02 }],
     cautions: ['Into the muscle of the thigh or upper arm: ½ ml of 1:1000 for an adult, ¼ ml for a child 6–12, less for a baby. Repeat in 10 minutes if needed.'],
     ref: 'WTND pp.70, 385; Simons FE et al. J Allergy Clin Immunol 1998;101:33',
   },
   // ——— the world's flora: one entry per compound class, plus the non-plant materia medica
   ...FLORA_ACTIVES,
+
+  // ——— chronic illness and emergencies (WTND chapters 10, 11, 13, 22; Green Pages pp.380–392)
+  // New effect targets: airway (opens narrowed airways), steroid (calms airway inflammation), seizure (share of fits
+  // prevented), bp (share of the pressure above normal removed), acid, feed, iodine, folate, gi_harm (stomach lining).
+  {
+    id: 'salbutamol', name: 'Salbutamol (albuterol)', channel: 'systemic', class: 'for asthma (opens the airways)',
+    // By mouth: F ~0.5 (first pass), peak ~2 h, t½ ~5 h, Vd ~2.2 L/kg: 4 mg peaks ~13 ng/ml (G&G). The book's syrup and
+    // tablets; the inhaler is not modelled (it needs a lung dose, not a blood level). ec50 an estimate.
+    pk: { F: 0.5, ka: 1.5, half: 5, vd: 2.2, spread: 0.3 },
+    effects: [{ on: 'airway', emax: 0.7, ec50: 0.006, hill: 1.5 }],
+    toxic: [
+      { at: 0.025, sign: 'beta_tremor', text: 'trembling hands, racing heart, nervous (salbutamol)', harm: 0 },
+      // overdose: low potassium and fast irregular heartbeats; rarely fatal (estimate)
+      { at: 0.12, sign: 'beta_toxic', text: 'heart racing and stumbling, weak, vomiting (salbutamol overdose)', harm: 0.05 },
+    ],
+    cautions: ['Trembling, nervousness and a fast heartbeat are common (WTND p.384).', 'Used very often, it works less well.'],
+    ref: 'WTND pp.167, 384; Goodman & Gilman 13e ch.40',
+  },
+  {
+    id: 'prednisolone', name: 'Prednisolone', channel: 'systemic', class: 'corticosteroid (severe asthma)',
+    // F ~0.8, t½ ~3 h, Vd ~0.6 L/kg; its effect on the airways builds over ~6 h and outlasts the blood level (asthma
+    // model). Oral steroids after an attack cut relapse by ~60% (Rowe BH et al. Cochrane 2007;CD000195); ec50 estimate.
+    pk: { F: 0.8, ka: 2, half: 3, vd: 0.6, spread: 0.3 },
+    effects: [
+      { on: 'steroid', emax: 0.9, ec50: 0.08, hill: 1 },
+      { on: 'gi_harm', emax: 0.4, ec50: 0.3, hill: 1 }, // WTND p.129: steroids make ulcers worse; weak alone (estimate)
+    ],
+    toxic: [{ at: 1.5, sign: 'steroid_mood', text: 'cannot sleep, restless and excited (too much prednisolone)', harm: 0 }],
+    // Weeks of daily steroid shut down the body's own (adrenal suppression); stopping suddenly then can bring collapse.
+    // Rare; harm an estimate (Dinsen S et al. Eur J Intern Med 2013;24:714).
+    dependence: { ec: 0.05, days: 21, tolerance: 0, sign: 'adrenal_crisis', text: 'weak, dizzy, vomiting, faint after stopping the prednisolone (adrenal failure)', harm: 0.0005 },
+    cautions: ['Only for severe asthma, 3 to 7 days (WTND p.385).', 'Longer use lowers the defences against infection and must not be stopped suddenly.'],
+    ref: 'WTND pp.167, 385; Goodman & Gilman 13e ch.46; Rowe BH et al. Cochrane 2007;CD000195',
+  },
+  {
+    id: 'phenobarbital', name: 'Phenobarbital', channel: 'systemic', class: 'for epilepsy',
+    // F ~0.95, slow absorption, t½ ~100 h (children less), Vd ~0.6 L/kg: 2 mg/kg/day settles near 20 mg/L over 2–3 weeks.
+    // Therapeutic 15–40 mg/L. calibrated: in rural trials about two in three had their fits at least halved and ~1 in 3
+    // stopped fitting (Feksi AT et al. Lancet 1991;337:406; Wang WZ et al. Lancet Neurol 2006;5:46).
+    pk: { F: 0.95, ka: 1, half: 100, vd: 0.6, spread: 0.3 },
+    effects: [{ on: 'seizure', emax: 0.95, ec50: 9, hill: 2, calibrated: true }],
+    toxic: [
+      { at: 40, sign: 'barb_drowsy', text: 'sleepy, unsteady, slurred speech (phenobarbital)', harm: 0 },
+      { at: 70, sign: 'barb_resp', text: 'deeply asleep, slow shallow breathing (phenobarbital poisoning)', harm: 0.3 },
+    ],
+    dependence: { ec: 10, days: 30, tolerance: 0.2, sign: 'barb_withdrawal', text: 'shaking, anxious and sleepless after stopping phenobarbital (withdrawal)', harm: 0.0005 },
+    // Taken through the first trimester ~6.5% of babies are malformed vs ~2–3% (Tomson T et al. Lancet Neurol
+    // 2018;17:530); per is an estimate that adds ~3% over the first trimester at a usual level.
+    foetal: [{ weeks: [3, 13], at: 10, harm: 'malformation', per: 1.2e-5, ref: 'Tomson T et al. Lancet Neurol 2018;17:530' }],
+    cautions: ['Too much slows or stops breathing; it works slowly and lasts long (WTND p.389).', 'Often for life; stopping suddenly can bring fits back.'],
+    ref: 'WTND pp.178, 389; Goodman & Gilman 13e ch.17; Feksi AT et al. Lancet 1991;337:406',
+  },
+  {
+    id: 'diazepam', name: 'Diazepam', channel: 'systemic', class: 'to stop a long fit · muscle relaxant',
+    // F ~0.95 by mouth and ~0.9 as solution in the anus (peak 10–30 min; item `inj.ka`), t½ ~40 h, Vd ~1.1 L/kg.
+    // ~0.2 mg/L stops most fits (G&G ch.17); ec50 an estimate.
+    pk: { F: 0.95, ka: 2, half: 40, vd: 1.1, spread: 0.35 },
+    effects: [{ on: 'seizure', emax: 0.95, ec50: 0.15, hill: 1.5 }],
+    toxic: [
+      { at: 0.6, sign: 'benzo_drowsy', text: 'very sleepy and unsteady (diazepam)', harm: 0 },
+      { at: 3, sign: 'benzo_resp', text: 'cannot be woken, slow shallow breathing (diazepam poisoning)', harm: 0.15 },
+    ],
+    // Daily use for a few weeks: tolerance (fits come back through it) and dependence; stopping brings withdrawal,
+    // now and then fits (Ashton CH. Benzodiazepines: how they work and how to withdraw, 2002; G&G ch.17). Estimates.
+    dependence: { ec: 0.15, days: 21, tolerance: 1, sign: 'benzo_withdrawal', text: 'anxious, shaking and sleepless after stopping diazepam (withdrawal)', harm: 0.0005 },
+    cautions: ['Too much slows or stops breathing (WTND p.390).', 'Habit-forming: not for daily use. Keep it locked away.'],
+    ref: 'WTND pp.178, 389–390; Goodman & Gilman 13e ch.17',
+  },
+  {
+    id: 'hydrochlorothiazide', name: 'Hydrochlorothiazide', channel: 'systemic', class: 'for high blood pressure (diuretic)',
+    // F ~0.7, t½ ~10 h; 12.5–25 mg lowers systolic pressure ~8–10 mmHg with a flat dose-response (Law MR et al. BMJ
+    // 2003;326:1427). bp is the share of the pressure above normal it removes; ec50 an estimate.
+    pk: { F: 0.7, ka: 1, half: 10, vd: 3, spread: 0.3 },
+    effects: [
+      { on: 'bp', emax: 0.35, ec50: 0.03, hill: 1 },
+      { on: 'fluid_out', emax: 0.5, ec50: 0.03, hill: 1 },
+    ],
+    toxic: [
+      { at: 0.05, dry: 0.05, sign: 'kidney_injury', text: 'passing almost no urine, even after drinking (kidney injury)', harm: 0.05 },
+      { at: 0.25, sign: 'low_potassium', text: 'weak, cramping muscles (too little potassium)', harm: 0.01 },
+    ],
+    cautions: ['Stop it while there is diarrhoea or vomiting: it dries the body further.', 'Too much drains potassium.'],
+    ref: 'WTND p.125; WHO HEARTS technical package 2018; Law MR et al. BMJ 2003;326:1427',
+  },
+  {
+    id: 'amlodipine', name: 'Amlodipine', channel: 'systemic', class: 'for high blood pressure (calcium channel blocker)',
+    // F ~0.7, peak 6–12 h, t½ ~40 h, Vd ~21 L/kg: 5 mg a day settles near 6–7 ng/ml (Abernethy DR. Am J Cardiol
+    // 1989;64:101). 5 mg lowers systolic ~10–12 mmHg (Law 2003); ec50 an estimate.
+    pk: { F: 0.7, ka: 0.15, half: 40, vd: 21, spread: 0.3 },
+    effects: [{ on: 'bp', emax: 0.5, ec50: 0.004, hill: 1 }],
+    toxic: [
+      { at: 0.012, sign: 'ankle_swelling', text: 'swollen ankles (amlodipine)', harm: 0 },
+      { at: 0.06, sign: 'ccb_shock', text: 'faint, cold, very low pressure (amlodipine poisoning)', harm: 0.3 },
+    ],
+    cautions: ['Swollen ankles are common at higher doses.'],
+    ref: 'WTND p.125; WHO HEARTS technical package 2018; Abernethy DR. Am J Cardiol 1989;64:101',
+  },
+  {
+    id: 'folic_acid', name: 'Folic acid', channel: 'gut', class: 'vitamin (for anaemia)',
+    gut: { duration: 24, effects: [{ on: 'folate', per: 1, perMg: 1 }] },
+    note: 'Builds blood only where folate is what is missing; most anaemia here is from too little iron.',
+    ref: 'WTND pp.124, 392; WHO Guideline: daily iron and folic acid supplementation in pregnant women 2012',
+  },
+  {
+    id: 'antacid', name: 'Aluminium/magnesium hydroxide', channel: 'gut', class: 'antacid',
+    // Neutralises acid for 2–3 hours after a dose; eases the pain, helps an ulcer heal a little (estimate).
+    gut: { duration: 3, effects: [{ on: 'acid', per: 0.5, perMg: 1 / 400 }] },
+    cautions: ['Baking soda calms quickly but brings more acid after: not for ulcers (WTND p.129).'],
+    ref: 'WTND pp.128–129, 380',
+  },
+  {
+    id: 'omeprazole', name: 'Omeprazole', channel: 'gut', class: 'stops stomach acid',
+    // Its blood t½ is ~1 h, but it blocks the acid pump for a day, so it is modelled by its day-long effect on acid
+    // (estimate). 20 mg a day heals ~80–90% of ulcers in 4 weeks (G&G ch.49).
+    gut: { duration: 24, effects: [{ on: 'acid', per: 0.9, perMg: 1 / 8 }] },
+    ref: 'WTND pp.129, 381; Goodman & Gilman 13e ch.49',
+  },
+  {
+    id: 'rutf', name: 'Ready-to-use therapeutic food (peanut paste)', channel: 'gut', class: 'food for severe malnutrition',
+    // A 92 g sachet is 500 kcal; a thin child needs 150–200 kcal/kg a day (2–3 sachets). Treated at home with it, ~80–90%
+    // of severely malnourished children recovered vs ~60–80% on the usual diet (Ciliberto MA et al. Am J Clin Nutr
+    // 2005;81:864). mg here are mg of paste; a sachet covers about 8 hours.
+    gut: { duration: 8, effects: [{ on: 'feed', per: 0.9, perMg: 1 / 30000 }] },
+    ref: 'WTND pp.110–113; WHO Guideline: updates on the management of severe acute malnutrition in infants and children 2013; Ciliberto MA et al. Am J Clin Nutr 2005;81:864',
+  },
+  {
+    id: 'iodine', name: 'Iodine (iodized oil)', channel: 'gut', class: 'for goitre',
+    // One capsule (~200 mg iodine) stocks the thyroid for about a year: 960 h is one game year (time.js YEAR_DAYS × 24),
+    // the slow-process compression. Goitres shrink ~30–50% within a year in the young, little when old and hard
+    // (Zimmermann MB et al. Lancet 2008;372:1251); per an estimate.
+    gut: { duration: 960, effects: [{ on: 'iodine', per: 0.45, perMg: 1 / 50 }] },
+    // A sudden iodine load can push an old goitre into overactivity (iodine-induced hyperthyroidism); rare, estimate.
+    idio: [{ per: 0.002, days: [5, 30], hours: 480, sign: 'iodine_hyper', text: 'shaky, sweating, heart racing, losing weight (overactive thyroid from the iodine)', harm: 0.0005 }],
+    ref: 'WTND p.130; Zimmermann MB et al. Lancet 2008;372:1251',
+  },
+  {
+    id: 'snake_antivenom', name: 'Snake antivenom (horse serum)', channel: 'systemic', class: 'antivenom',
+    // Equine F(ab')2: t½ ~80 h, Vd ~0.2 L/kg; dosed in vials (1 'mg' = 1 vial). It neutralises venom in the blood in
+    // proportion to how much of it there is against the venom (disease.js venom model; the ratio is an estimate).
+    pk: { F: 0.01, ka: 20, half: 80, vd: 0.2, spread: 0.3 },
+    // Horse serum sets off an early reaction in many who get it, allergic or not: ~10–50%, a few with shock (de Silva HA
+    // et al. PLoS Med 2011;8:e1000435). Serum sickness follows in some a week later.
+    reacts: 0.3,
+    idio: [{ per: 0.1, days: [5, 14], hours: 96, sign: 'serum_sickness', text: 'fever, itchy rash and aching joints a week after the antivenom (serum sickness)', harm: 0 }],
+    cautions: ['Into the vein, slowly. Have adrenaline drawn up first (WTND pp.70, 387).', 'The bigger the snake or the smaller the person, the more vials.'],
+    ref: 'WTND pp.105, 387; WHO Guidelines for the prevention and clinical management of snakebite in Africa 2010; de Silva HA et al. PLoS Med 2011;8:e1000435',
+  },
+  {
+    id: 'scorpion_antivenom', name: 'Scorpion antivenom (horse serum)', channel: 'systemic', class: 'antivenom',
+    // Purified F(ab')2 (as Alacramyn); in a trial it ended the poisoning of stung children within hours (Boyer LV et al.
+    // N Engl J Med 2009;360:2090), though for some scorpions trials found no benefit.
+    pk: { F: 0.01, ka: 20, half: 60, vd: 0.2, spread: 0.3 },
+    reacts: 0.1,
+    idio: [{ per: 0.05, days: [5, 14], hours: 96, sign: 'serum_sickness', text: 'fever, itchy rash and aching joints a week after the antivenom (serum sickness)', harm: 0 }],
+    cautions: ['Only for small children, within 2 hours of the sting (WTND pp.106, 387).'],
+    ref: 'WTND pp.106, 387; Boyer LV et al. N Engl J Med 2009;360:2090',
+  },
 ];
 
 export const ACTIVE = new Map(ACTIVES.map((a) => [a.id, a]));
