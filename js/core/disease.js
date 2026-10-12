@@ -341,7 +341,11 @@ const MODELS = {
    *  (`perFit`) and, in pregnancy, the baby (`foetal`). Anticonvulsants (relief.fits: magnesium sulfate, diazepam) and
    *  the hospital's care (×0.2) stop fits. */
   fits: {
-    init(p, c, rng) { const P = COND.get(c.id).params; c.sev = c.sev0 = lerp(P.sev[0], P.sev[1], rng()); c.n = 0; c.age = 0; },
+    init(p, c, rng, since) {
+      const P = COND.get(c.id).params;
+      c.sev = c.sev0 = lerp(P.sev[0], P.sev[1], rng()); c.n = 0; c.age = 0;
+      if (!P.course) c.last = p.t - since * HOUR; // eclampsia shows itself with a fit
+    },
     step(p, c, dt, x) {
       const P = COND.get(c.id).params;
       c.age += dt;

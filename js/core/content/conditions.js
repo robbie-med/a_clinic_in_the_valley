@@ -334,7 +334,7 @@ export const CONDITIONS = [
     epi: { w: 1.5, onlyPregnant: true, early: true },
     // An incomplete miscarriage bleeds until the womb is empty. Rates are estimates: most lose under a litre and live;
     // a few bleed to danger. Misoprostol or oxytocin clamp the womb and help it empty.
-    params: { since: [6, 30], rate: [60, 0.5], half: 6, drug: 0.8, shock: 0.33, hazard: 0.15, lose: true, urgent: true },
+    params: { since: [1, 8], rate: [60, 0.5], half: 6, drug: 0.8, shock: 0.33, hazard: 0.15, lose: true, urgent: true },
     complaint: ['I missed my monthly bleeding twice, and now I bleed heavily with clots and cramps, {when}.'],
     teach: { treat: ['misoprostol', 'oxytocin', 'ergometrine'], helps: ['ibuprofen', 'paracetamol'], harms: [], refer: 'Heavy bleeding for days, or fever and a bad smell: hospital, to clean out the womb.' },
     learn: 'Heavy bleeding with clots and cramps after missing one or more periods: a miscarriage, most often in the first 3 months. Rest, ibuprofen for the pain. If the bleeding is heavy or goes on, a medicine to clamp the womb, and medical help to empty it. Fever or a bad-smelling discharge afterwards means infection: treat as childbirth fever.',
@@ -400,7 +400,7 @@ export const CONDITIONS = [
     epi: { w: 3, age: [[0, 0.06, 20]], season: { cool_dry: 1.6, hot_dry: 0.7, rains: 1, late_rains: 1.1 } },
     // A small or early baby loses heat; below 35 °C it stops feeding and may die. Skin-to-skin ("kangaroo") care at
     // home cut deaths in small babies by ~30% (Mazumder S et al. Lancet 2019;393:1876). Hazard an estimate.
-    params: { since: [6, 36], days: [14, 4], peak: 1, hazard: 0.00008, cold: 2.5, cut: [{ instr: 'kangaroo', by: 0.6 }] },
+    params: { since: [6, 36], days: [14, 4], peak: 1, hazard: 0.00008, cold: 3, cut: [{ instr: 'kangaroo', by: 0.6 }] },
     complaint: ['My baby was born small and is cold, and sucks weakly.', 'The baby feels cold and will hardly feed, {when}.'],
     teach: { treat: [], helps: [], harms: [], refer: 'Very small (under 2 kg), will not feed at all, or cold and floppy despite warming: hospital.' },
     learn: 'A baby born small or early cannot keep himself warm. Below 35 °C is dangerous, and low temperature can also mean infection. Keep him naked against his mother\'s skin, between her breasts, inside her clothes, day and night, with his head covered; breastfeed at least every 2 hours. This "kangarooing" keeps him warm and saves many small babies.',

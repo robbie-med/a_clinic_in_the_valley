@@ -104,8 +104,8 @@ export function signs(p, t, tools = new Set()) {
   set('yellow_vision', p.lastTox?.includes('digitalis_gi') ? 'Says things look yellow-green.' : '—', !!p.lastTox?.includes('digitalis_gi'));
 
   // ——— fever
-  set('feels_hot', V.temp > 38.8 ? 'Hot to the touch.' : V.temp > 37.8 ? 'Warm.' : 'Not hot.', V.temp > 37.8);
-  set('temp', `${V.temp.toFixed(1)} °C`, V.temp >= 37.6, V.temp);
+  set('feels_hot', V.temp > 38.8 ? 'Hot to the touch.' : V.temp > 37.8 ? 'Warm.' : V.temp < 35.5 ? 'Cold to the touch.' : 'Not hot.', V.temp > 37.8 || V.temp < 35.5);
+  set('temp', `${V.temp.toFixed(1)} °C${V.temp < 35.5 ? ' — too cold' : ''}`, V.temp >= 37.6 || V.temp < 35.5, V.temp);
   const febrile = any((c) => (COND.get(c.id).params.fever && c.s > 0.1) || (c.id === 'malaria' && c.s > 0.1));
   set('fever_hx', febrile ? 'Yes, fever.' : 'No fever.', febrile);
   if (mal && mal.s > 0.15) {
@@ -225,7 +225,7 @@ export function signs(p, t, tools = new Set()) {
     set('postpartum', since == null ? 'No birth lately.' : since < 1 ? `Gave birth ${Math.max(1, Math.round(since * 24))} hours ago.` : `Gave birth ${Math.round(since)} days ago.`, false);
     set('labour_hx', ol ? `Labour pains for ${Math.round(ol.age)} hours; the waters broke long ago, and the baby does not come down.` : p.pregnant >= 37 ? 'No labour pains yet.' : '—', !!ol);
     const bleed = [pph, mc, ect].filter(Boolean).reduce((a, c) => Math.max(a, c.rup || !c.id.startsWith('ect') ? c.rate : 0), 0);
-    set('bleeding_pv', bleed > 150 ? 'Blood pours from the birth opening, soaking cloth after cloth, with clots.' : bleed > 30 ? 'Steady bleeding from the vagina, with clots.' : ect ? 'A little dark bleeding, on and off.' : 'No heavy bleeding.', bleed > 30 || !!ect);
+    set('bleeding_pv', bleed > 150 ? 'Blood pours from the birth opening, soaking cloth after cloth, with clots.' : bleed > 30 ? 'Steady bleeding from the vagina, with clots.' : bleed > 10 ? 'Bleeding with clots, less than before.' : ect ? 'A little dark bleeding, on and off.' : 'No heavy bleeding.', bleed > 10 || !!ect);
     set('pelvic_pain', ect ? (ect.rup ? 'Sudden terrible pain in the belly; feels faint.' : 'A sharp pain low in the belly, on one side.') : mc ? 'Painful cramps with the bleeding.' : (ps?.s || 0) > 0.2 ? 'Pain low in the belly.' : '—', !!(ect || mc || (ps?.s || 0) > 0.2));
     set('discharge', (ps?.s || 0) > 0.2 ? 'A foul-smelling discharge from the birth opening.' : '—', (ps?.s || 0) > 0.2);
     set('womb', ol ? 'The womb is hard and tight; the baby\'s head has not come down into the hips.'
