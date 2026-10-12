@@ -52,7 +52,7 @@ export function makeUI(G) {
   const info = h('div', { class: 'hud-info' });
   const waitBtn = h('button', { class: 'waitbtn hidden', onclick: () => G.scene.nextPatient() });
   const side = h('div', { class: 'sidebtns' },
-    ...[['bag', 'knapsack', 'Bag', 'I'], ['make', 'pestle-mortar', 'Make', 'C'], ['build', 'hammer-nails', 'Build', 'B'], ['handbook', 'open-book', 'Book', 'H'], ['ledger', 'notebook', 'Ledger', 'L'], ['map', 'treasure-map', 'Map', 'M'], ['menu', 'cog', 'Menu', 'Esc']]
+    ...[['bag', 'knapsack', 'Bag', 'I'], ['make', 'pestle-mortar', 'Make', 'C'], ['build', 'hammer-nails', 'Build', 'B'], ['handbook', 'open-book', 'Book', 'H'], ['ledger', 'notebook', 'Ledger', 'L'], ['map', 'treasure-map', 'Map', 'M'], ['wait', 'sun', 'Wait', 'T'], ['menu', 'cog', 'Menu', 'Esc']]
       .map(([p, ic, label, key]) => h('button', { class: 'hudbtn', title: `${label} (${key})`, onclick: () => ui.toggle(p) }, icon({ gi: ic, c: '#e8dcc0' }, 26), h('span', {}, label))));
   const hot = h('div', { class: 'hotbar' });
   const heldName = h('div', { class: 'heldname' });
@@ -604,6 +604,16 @@ export function makeUI(G) {
     ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(G.p.x * 3, G.p.y * 3, 4, 0, 7); ctx.fill();
     panel.append(head('The valley'), h('div', { class: 'pbody mapwrap' }, cv, h('p', { class: 'hint maplegend' }, 'White: you. Red: the clinic. Coloured dots: medicinal plants you know.')));
   };
+  // ———————————————————————————————————— let time pass
+  PANELS.wait = () => {
+    const m = minuteOfDay(G.W.time);
+    const go = (mins) => { ui.close(); G.scene.passTime(mins); };
+    const rows = [['1 hour', HOUR], ['3 hours', 3 * HOUR], ['Until morning', (m > 6 * 60 ? DAY : 0) + 6.5 * 60 - m], ['1 day', DAY], ['3 days', 3 * DAY], ['7 days', 7 * DAY]];
+    panel.append(head('Let time pass'), h('div', { class: 'pbody single' },
+      h('p', {}, `Day ${day(G.W.time)} · ${clock(G.W.time)}`),
+      h('div', { class: 'acts' }, rows.map(([l, mins]) => h('button', { onclick: () => go(mins) }, l))),
+      h('p', { class: 'hint' }, 'Everyone at home lives through it: medicines are taken (or not), illnesses run their course, babies come. Patients waiting at the clinic may give up and go home.')));
+  };
   // ———————————————————————————————————— menu
   PANELS.menu = () => {
     const m = minuteOfDay(G.W.time);
@@ -618,7 +628,7 @@ export function makeUI(G) {
       h('div', { class: 'help' }, h('h3', {}, 'How to play'),
         h('p', {}, 'Patients walk in from the hamlets and wait on the benches. Walk up and tap them (or press N / the "Next patient" button). Ask, examine the body, decide what it is, then treat: what you give, how much, how often and for how long all matter — the body does the rest, at home, after they leave.'),
         h('p', {}, 'Gather herbs in the valley (the Book says where and when). Dry them on the rack, then make teas, decoctions, powders and tinctures. Buy salt, sugar, honey and tools from the traders. Build up the clinic. Your name in the valley rises when people recover and falls when they die.'),
-        h('p', {}, 'Keys: WASD move · click/tap to walk and use · Space/E use · N next patient · I bag · C make · B build · H handbook · L ledger · M map · Esc menu.'))));
+        h('p', {}, 'Keys: WASD move · click/tap to walk and use · Space/E use · N next patient · I bag · C make · B build · H handbook · L ledger · M map · T wait · Esc menu.'))));
   };
   return ui;
 }

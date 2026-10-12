@@ -1,7 +1,7 @@
 // scene.js — the valley in Phaser: one tilemap (ground + objects), you and the villagers as layered
 // Dungeon Crawl paperdolls, the clock, walking (keys, joystick, tap-to-walk with a path), and the
 // rhythm of the day: patients walking in from the hamlets, traders setting up, night falling.
-import { REAL_SEC_PER_MIN, DAY, HOUR, daylight, minuteOfDay, day, season, SEASON_NAMES } from '../core/time.js';
+import { REAL_SEC_PER_MIN, DAY, HOUR, daylight, minuteOfDay, day, season, SEASON_NAMES, clock } from '../core/time.js';
 import { useTile } from '../core/actions.js';
 import { dueArrivals, tickHome, hamletOf, OPEN, CLOSE } from '../core/clinic.js';
 import { presence, VENDORS } from '../core/economy.js';
@@ -179,7 +179,7 @@ export class ClinicScene extends Phaser.Scene {
     if (ui.typing()) return;
     const k = e.key.toLowerCase();
     if (k === 'escape') { if (this.G.placing) { this.G.placing = null; this.ghost.setVisible(false); return; } ui.back(); return; }
-    const panels = { i: 'bag', c: 'make', b: 'build', h: 'handbook', l: 'ledger', m: 'map' };
+    const panels = { i: 'bag', c: 'make', b: 'build', h: 'handbook', l: 'ledger', m: 'map', t: 'wait' };
     if (panels[k]) { ui.toggle(panels[k]); return; }
     if (ui.modal()) return;
     if (k >= '1' && k <= '8') { this.G.p.hot = +k - 1; ui.refresh(); return; }
@@ -383,14 +383,18 @@ export class ClinicScene extends Phaser.Scene {
 
   /** Sleep until morning: the night passes, everyone at home lives through it. */
   sleep() {
+    const t = this.G.W.time, m = minuteOfDay(t);
+    this.passTime(t - m + (m > 6 * 60 ? DAY : 0) + 6.5 * 60 - t);
+  }
+  /** Let `mins` game minutes pass at once, in 2-hour steps: everyone at home lives through them. */
+  passTime(mins) {
     const { G } = this;
-    const t = G.W.time, m = minuteOfDay(t);
-    const target = t - m + (m > 6 * 60 ? DAY : 0) + 6.5 * 60;
+    const target = G.meta.time + mins;
     G.sleeping = true;
     while (G.meta.time < target) { G.meta.time = Math.min(target, G.meta.time + 2 * HOUR); for (const n of tickHome(G)) G.ui.news(n); }
     for (const e of G.W.catchUp()) G.ui.toast(e.text);
     G.sleeping = false;
-    G.ui.banner(`Day ${day(G.W.time)}`, SEASON_NAMES[season(G.W.time)]);
+    G.ui.banner(`Day ${day(G.W.time)} · ${clock(G.W.time)}`, SEASON_NAMES[season(G.W.time)]);
     G.save();
   }
 }

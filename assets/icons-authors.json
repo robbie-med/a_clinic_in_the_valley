@@ -1,9 +1,4 @@
 {
- "badges": [
-  "cog",
-  "moon",
-  "sun"
- ],
  "caro-asercion": [
   "bowl-of-rice",
   "mason-jar"
@@ -67,6 +62,7 @@
   "bubbling-bowl",
   "campfire",
   "chicken-leg",
+  "cog",
   "curled-leaf",
   "curling-vines",
   "erlenmeyer",
@@ -75,10 +71,12 @@
   "flowers",
   "ground-sprout",
   "hammer-nails",
+  "hand",
   "hospital-cross",
   "hypersonic-melon",
   "knapsack",
   "magnifying-glass",
+  "moon",
   "open-book",
   "pill",
   "salt-shaker",
@@ -88,7 +86,9 @@
   "sprint",
   "sprout",
   "stone-block",
+  "sun",
   "swap-bag",
+  "syringe",
   "test-tubes",
   "three-leaves",
   "treasure-map",
@@ -100,10 +100,8 @@
  ],
  "sbed": [
   "cancel",
-  "hand",
   "health-normal",
   "medical-pack",
-  "syringe",
   "vial",
   "water-drop"
  ],

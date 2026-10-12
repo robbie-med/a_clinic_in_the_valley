@@ -17,9 +17,10 @@ def main():
         sys.exit(__doc__)
     root = sys.argv[1]
     index = {}
-    for author in os.listdir(root):
+    # 'badges' holds 256x256 copies under the same names; we draw at 512, so skip it
+    for author in sorted(os.listdir(root)):
         d = os.path.join(root, author)
-        if os.path.isdir(d):
+        if os.path.isdir(d) and author != 'badges':
             for f in os.listdir(d):
                 if f.endswith('.svg'):
                     index.setdefault(f[:-4], (author, os.path.join(d, f)))
