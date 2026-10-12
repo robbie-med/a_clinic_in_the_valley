@@ -3,13 +3,16 @@
 // later upgrade: full pregnancy/foetus/newborn physiology (placenta and foetal growth, preterm labour, labour
 // itself, breast milk carrying drugs, a newborn's slow drug clearance in pk.js, bilirubin, partners).
 //
-// Two clocks. Illness runs in real hours (disease.js: a week of pregnancy takes 7 game days). The calendar runs
-// a 40-day year (time.js), and people outside the clinic's records live on it: they age a year every 40 days
-// and a pregnancy there lasts ~29 days. While the clinic holds someone's record (`held`), the record owns the
-// body and runs on the real clock; the daily tick leaves that person alone.
+// One clock. Slow processes (months, years) run on the game calendar, COMPRESS (365/40) times faster than real
+// time: a pregnancy lasts ~31 game days whether the clinic holds the woman's record (disease.js steps her hour by
+// hour) or not (tickPeople, once a day), and people age a year every 40 days. Hour- and day-scale physiology stays
+// real: labour, bleeding, fits, infections, a drug's half-life. So a 7-day drug course spans ~9 gestational weeks,
+// and harm to the foetus accrues per gestational hour. While the clinic holds someone's record (`held`), the
+// record owns the body; the daily tick leaves that person alone.
 import { ACTIVE } from './content/actives.js';
 import { makeRng, hashf } from './rng.js';
-import { DAY, HOUR, YEAR_DAYS, day } from './time.js';
+import { DAY, HOUR, YEAR_DAYS, COMPRESS, day } from './time.js';
+import { COND } from './content/conditions.js';
 import { vitals } from './signs.js';
 import { PYRAMID, personName } from './patient.js';
 
@@ -20,7 +23,7 @@ const rate = (table, x) => (table.find(([b]) => x < b) || [0, 0])[1];
 // ————————————————————————————————————————————— the foetus
 // p.foetus = { alive, harm: { kind: cumulative hazard } }; its gestational age is p.pregnant (weeks).
 // Drugs write harm through `foetal` data on actives, illness through ILLNESS below, in the same shape:
-//   { weeks: [from, to), at, harm, per, ref } — while exposure x ≥ at, harm += per · x / at each hour.
+//   { weeks: [from, to), at, harm, per, ref } — while exposure x ≥ at, harm += per · x / at each gestational hour.
 // x is the plasma level (mg/L) for systemic actives, mg/kg taken within the active's gut duration for gut ones.
 // At birth a harm H becomes a mark with chance 1 − e^−H; `loss` is rolled every hour (the foetus dies).
 
@@ -46,21 +49,27 @@ const ILLNESS = [
   { weeks: [3, 13], at: 1, harm: 'malformation', per: 1e-4, when: (p, t) => p.conds.length && vitals(p, t).temp >= 38.5, ref: 'Dreier JW et al. Pediatrics 2014;133:e674' },
 ];
 
-/** One hour of pregnancy: the foetus grows a week per 168 h and takes in what the mother's blood carries.
+// Daily iron in pregnancy: Hb at term ~0.9 g/dL higher than without, over ~20 weeks (Peña-Rosas JP et al. Cochrane
+// 2015;CD004736), so ~0.05 g/dL a gestational week at full effect.
+const IRON_WEEK = 0.05;
+/** One game hour of pregnancy: the foetus grows COMPRESS/168 of a week and takes in what the mother's blood carries.
  *  Returns events (labour, when it comes). Randomness is hashed per hour, so it never shifts the patient's
  *  other rolls. */
 export function pregnancyHour(p, ds, t) {
   const f = (p.foetus ||= { alive: true, harm: {} });
-  const w = (p.pregnant += 1 / 168);
+  const w = (p.pregnant += COMPRESS / 168);
   const loss0 = f.harm.loss || 0;
-  const add = (e, x) => { if (w >= e.weeks[0] && w < e.weeks[1] && x >= e.at) f.harm[e.harm] = (f.harm[e.harm] || 0) + (e.per * x) / e.at; };
+  const add = (e, x) => { if (w >= e.weeks[0] && w < e.weeks[1] && x >= e.at) f.harm[e.harm] = (f.harm[e.harm] || 0) + (COMPRESS * e.per * x) / e.at; };
   for (const [id, C] of Object.entries(ds.conc)) for (const e of ACTIVE.get(id).foetal || []) add(e, C);
   const gut = {};
   for (const [td, id, mg] of p.doses?.gut || []) { const a = ACTIVE.get(id); if (a?.foetal && td <= t && t - td < a.gut.duration * HOUR) gut[id] = (gut[id] || 0) + mg / p.weight; }
   for (const [id, x] of Object.entries(gut)) for (const e of ACTIVE.get(id).foetal) add(e, x);
   for (const e of ILLNESS) if (w >= e.weeks[0] && w < e.weeks[1] && e.when(p, t)) add(e, 1);
-  if (hashf(p.seed, Math.floor(t / HOUR), 0, 4021) < baseLoss(w) + (f.harm.loss || 0) - loss0) f.alive = false;
-  return !f.alive || w >= 40 ? onLabour(p, t) : [];
+  if (ds.relief.iron) p.hb = Math.min(12.5, p.hb + (ds.relief.iron * IRON_WEEK * COMPRESS) / 168);
+  if (hashf(p.seed, Math.floor(t / HOUR), 0, 4021) < baseLoss(w) * COMPRESS + (f.harm.loss || 0) - loss0) f.alive = false;
+  // obstructed labour (anything with blocksBirth) holds the birth back until it resolves or the hospital operates
+  if (!f.alive || w >= 40 || p.induce) return p.conds.some((c) => COND.get(c.id).params.blocksBirth) ? [] : onLabour(p, t);
+  return [];
 }
 
 // Median birth weight (kg) by gestational week (INTERGROWTH-21st: Villar J et al. Lancet 2014;384:857; East
@@ -90,11 +99,54 @@ export function birthOutcome(f, w, rng) {
   return { kind: 'birth', baby: { sex: rng() < 0.51 ? 'm' : 'f', bw, weeks: Math.floor(w), marks, nn } };
 }
 
-/** Labour. Trivial for now: the baby (or the loss) comes and the pregnancy ends. Returns events.
- *  later upgrade: the childbirth chapter (obstructed labour, bleeding, eclampsia, the birth attendant). */
+// ——— childbirth and the newborn (WTND chapter 19, pp.256–282)
+/** Complications of labour, rolled once each for a woman the clinic holds (own stream). `at`: 'labour' (as it
+ *  begins: obstructed labour holds the birth back), 'birth' (a baby born live or dead) or 'loss' (a miscarriage);
+ *  `delay` [h] until it shows. They are conditions (conditions.js), so her death, if it comes, comes through them.
+ *  later upgrade: the birth attendant, retained placenta, tears, twins, breech. */
+export const LABOUR = [
+  // obstructed labour ~4.6% of births (Dolea C, AbouZahr C. Global burden of obstructed labour in the year 2000. WHO 2003)
+  { id: 'obstructed_labour', at: 'labour', p: 0.046, ref: 'Dolea C, AbouZahr C. WHO 2003; WTND p.267' },
+  // the womb fails to clamp down; 2 in 3 of these lose ≥500 ml (disease.js bleeding), ~12% of births without a uterotonic
+  // (placebo arm: 12%, Derman RJ et al. Lancet 2006;368:1248; Africa 10.5%, Carroli G et al. Best Pract Res Clin
+  // Obstet Gynaecol 2008;22:999)
+  { id: 'pph', at: 'birth', p: 0.18, ref: 'Derman RJ et al. Lancet 2006;368:1248; Carroli G et al. Best Pract Res Clin Obstet Gynaecol 2008;22:999' },
+  // childbirth fever ~4.4% of births in poor countries (Dolea C, Stein C. Global burden of maternal sepsis in the year 2000. WHO 2003)
+  { id: 'puerperal_sepsis', at: 'birth', p: 0.044, delay: [24, 96], ref: 'Dolea C, Stein C. WHO 2003; WTND p.276' },
+  // heavy bleeding that goes on after a miscarriage (incomplete): an estimate, ~1 in 10
+  { id: 'miscarriage', at: 'loss', p: 0.1, ref: 'WTND p.281 (estimate)' },
+];
+// Maternal deaths among the valley's women the clinic does not hold: ~600 per 100 000 births, between Uganda's
+// ~340 with today's partial care (WHO Trends in maternal mortality 2000–2017) and ~1000+ with none (Ronsmans C,
+// Graham WJ. Lancet 2006;368:1189). The complications above, untreated, add up to about that (test/birth.test.mjs).
+const MATERNAL = 0.006;
+// Newborn tetanus: ~1 in 100 babies of unprotected mothers born at home with unclean cord care died of it (Roper MH et
+// al. Lancet 2007;370:1947); two doses of tetanus toxoid in pregnancy prevent ~94% (Blencowe H et al. Int J Epidemiol
+// 2010;39:i102), clean birth and cord care ~40% (Blencowe H et al. BMC Public Health 2011;11 Suppl 3:S11). About 3 in
+// 4 of the valley's mothers are protected already (Uganda DHS 2016, rounded).
+const NT = 0.01, TT_COVER = 0.75;
+// ponytail: the baseline status is hashed on the person's id alone (the same in every valley); fine for a status flag.
+export const ttProtected = (vacc, id) => (vacc?.tetanus || 0) >= 2 || makeRng('tt', id)() < TT_COVER;
+export const ntRisk = (prot, clean) => NT * (prot ? 0.06 : 1) * (clean ? 0.6 : 1);
+
+/** Labour: the complications that may come, then the baby (or the loss). Returns events. If obstructed labour is
+ *  rolled it returns nothing yet: the birth waits for it (pregnancyHour). */
 export function onLabour(p, t) {
-  const out = birthOutcome(p.foetus || { alive: true, harm: {} }, p.pregnant, makeRng(p.seed, 'birth', Math.floor(t)));
-  p.pregnant = 0; p.delivered = t; delete p.foetus;
+  const f = p.foetus || { alive: true, harm: {} };
+  const roll = (at) => {
+    let n = 0;
+    for (const L of LABOUR) {
+      if (L.at !== at || p.conds.some((c) => c.id === L.id) || makeRng(p.seed, 'labour', L.id, Math.floor(t / DAY))() >= L.p) continue;
+      const h = L.delay ? lerp(L.delay[0], L.delay[1], makeRng(p.seed, 'labour-delay', L.id)()) : 0;
+      (p.pending ||= []).push({ id: L.id, t: t + h * HOUR }); n++;
+    }
+    return n;
+  };
+  if (!p.labour) { p.labour = t; if (f.alive && p.pregnant >= 28 && roll('labour')) return []; }
+  const out = birthOutcome(f, p.pregnant, makeRng(p.seed, 'birth', Math.floor(t)));
+  roll(out.kind === 'miscarriage' ? 'loss' : 'birth');
+  if (out.baby) out.baby.nn += ntRisk(ttProtected(p.vacc, p.who ?? p.seed), !!p.rx?.some((r) => r.instr === 'clean_birth'));
+  p.pregnant = 0; p.delivered = t; delete p.foetus; delete p.labour; delete p.induce;
   const text = out.kind === 'birth' ? `gave birth to a ${out.baby.sex === 'm' ? 'boy' : 'girl'}` : out.kind === 'stillbirth' ? 'the baby was born dead' : 'lost the pregnancy';
   return [{ t, kind: out.kind, text, baby: out.baby }];
 }
@@ -124,7 +176,7 @@ const ASFR = [[15, 0], [20, 0.14], [25, 0.28], [30, 0.27], [35, 0.23], [40, 0.17
 // A woman can conceive only when neither pregnant (0.73 y) nor in postpartum amenorrhoea (~1 y while breastfeeding,
 // Uganda DHS 2016): the chance per available year that gives these birth rates.
 const conceive = (asfr) => (asfr > 0 ? 1 / (1 / asfr - 1.75) : 0);
-const GEST = (38 / 52) * YEAR_DAYS; // calendar days from conception (week 2) to term (week 40)
+const GEST = (38 * 7) / COMPRESS; // game days from conception (week 2) to term (week 40), as pregnancyHour runs
 export const weeksOf = (q, d) => 2 + ((d - q.conc) * 38) / GEST;
 /** The week a pregnancy will be lost at (baseline hazard, inverted), or 0 if it reaches term. */
 function lossWeek(u) {
@@ -153,6 +205,9 @@ function seeded(seed, R, d0) {
   }
   return out;
 }
+// Family planning (WTND pp.283–294, 395): a DMPA injection protects ~3 months (encounter.js sets fpUntil); typical
+// use lets ~6 in 100 women a year conceive, against ~85 with no method (Trussell J. Contraception 2011;83:397).
+const FP_FAIL = 0.06 / 0.85;
 const pick = (bands, r) => { let t = r; for (let i = 0; i < bands.length; i++) { t -= bands[i][2]; if (t < 0) return i; } return bands.length - 1; };
 
 // Saved: clinic.pop = { day0, day, seq, diff, stats }. The seeded people are regenerated on load; diff holds
@@ -201,10 +256,13 @@ export function tickPeople(G) {
         const w = weeksOf(q, d);
         if (q.lossW && w >= q.lossW) { endPregnancy(q); q.pp = d + 3; touch(P, q); }
         else if (w >= 40) {
-          const b = addBaby(P, L, q, birthOutcome({ alive: true, harm: {} }, 40, rng).baby, d, rng);
-          endPregnancy(q); q.pp = d + (b ? YEAR_DAYS : 3); touch(P, q);
+          const baby = birthOutcome({ alive: true, harm: {} }, 40, rng).baby;
+          baby.nn += ntRisk(ttProtected(q.vacc, q.id), false);
+          const b = addBaby(P, L, q, baby, d, rng);
+          endPregnancy(q); q.pp = d + (b ? YEAR_DAYS : 3); q.lastBirth = d; touch(P, q);
+          if (makeRng(G.meta.seed, 'maternal', q.id, d)() < MATERNAL) die(P, L, q);
         }
-      } else if (q.sex === 'f' && d >= (q.pp || 0) && rng() < conceive(rate(ASFR, age)) / YEAR_DAYS) {
+      } else if (q.sex === 'f' && d >= (q.pp || 0) && rng() < (conceive(rate(ASFR, age)) / YEAR_DAYS) * (q.fpUntil > d ? FP_FAIL : 1)) {
         q.conc = d; q.lossW = lossWeek(rng()); touch(P, q);
       }
     }
@@ -219,7 +277,8 @@ export function drawResident(G, hamletId, key) {
 /** The person as makePatient wants them at time t. */
 export function personNow(G, q, t) {
   const d = t / DAY + 1;
-  return { id: q.id, sex: q.sex, age: (d - q.born) / YEAR_DAYS, pregnant: q.conc != null ? weeksOf(q, d) : 0, name: personName(makeRng(G.meta.seed, 'name', q.id), q.sex), bw: q.bw, mother: q.mother, bf: q.bf, marks: q.marks };
+  return { id: q.id, sex: q.sex, age: (d - q.born) / YEAR_DAYS, pregnant: q.conc != null ? weeksOf(q, d) : 0, name: personName(makeRng(G.meta.seed, 'name', q.id), q.sex), bw: q.bw, mother: q.mother, bf: q.bf, marks: q.marks,
+    pp: q.lastBirth != null ? Math.max(0, (d - q.lastBirth) * COMPRESS) : null, vacc: q.vacc, fpUntil: q.fpUntil };
 }
 /** The clinic now holds this person's body (their patient record runs it, hour by hour). */
 export function hold(G, p) {
@@ -237,6 +296,8 @@ export function patientEvents(G, p, ev) {
     if (e.kind === 'died') return die(P, L, q);
     if (e.kind === 'birth') q.pp = d + (addBaby(P, L, q, e.baby, d, makeRng(p.seed, 'nn', Math.floor(e.t))) ? YEAR_DAYS : 3);
     if (e.kind === 'stillbirth' || e.kind === 'miscarriage') q.pp = d + 3;
+    if (e.kind === 'birth' || e.kind === 'stillbirth') q.lastBirth = d;
   }
+  if (p.vacc || p.fpUntil) { q.vacc = p.vacc; q.fpUntil = p.fpUntil; touch(P, q); }
   if (q.held && p.recovered && !p.pregnant) { q.held = null; endPregnancy(q); touch(P, q); }
 }

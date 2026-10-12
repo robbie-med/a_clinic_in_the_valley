@@ -22,7 +22,7 @@ test('a 200 000 IU vitamin A capsule in week 5 raises the odds of malformation; 
     for (let i = 0; i < 20; i++) {
       const p = mother('va' + i, weeks);
       if (dose) p.rx = [{ name: 'vit A', item: 'x', start: 0, amount: 1, perDay: 1, days: 1, left: 1, counselled: true, actives: { vitamin_a: 60 }, q: 1 }];
-      simulate(p, 3 * 7 * DAY);
+      simulate(p, 3 * DAY); // ~4 gestational weeks on the compressed calendar (time.js COMPRESS)
       if (p.foetus) { r += markRisk(p.foetus, 'malformation'); n++; }
     }
     return r / n;
@@ -31,10 +31,11 @@ test('a 200 000 IU vitamin A capsule in week 5 raises the odds of malformation; 
   assert.ok(early > base * 1.15, `week 5: ${early} vs ${base}`);
   assert.equal(late, base, 'after the embryo is formed it does no such harm');
 });
-test('doxycycline after 16 weeks marks the teeth; at 10 weeks it does not', () => {
+test('doxycycline after 16 weeks marks the teeth; started at 4 weeks it does not', () => {
+  // a 7-day course spans ~9 gestational weeks on the compressed calendar, so the early course starts at week 4
   const teeth = (weeks) => { const p = mother('dx' + weeks, weeks); p.rx = rx('doxycycline', 100, 2, 7); simulate(p, 10 * DAY); return p.foetus?.harm.teeth || 0; };
   assert.ok(teeth(20) > 0.005, 'week 20: ' + teeth(20));
-  assert.equal(teeth(10), 0);
+  assert.equal(teeth(4), 0);
 });
 test('a term pregnancy with nothing taken mostly ends in a live birth of normal weight', () => {
   let live = 0, normal = 0, n = 60;

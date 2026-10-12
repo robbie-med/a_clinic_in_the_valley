@@ -55,4 +55,25 @@ export const MEDICINES = [
     note: 'Once a day. Adults 1–2 g; children 50–80 mg/kg.' },
   { id: 'adrenaline_1mg', name: 'Adrenaline 1 mg/ml (1:1000) ampoule', actives: { adrenaline: 1 }, inj: { ka: 3 }, route: ['inj'], unit: 'ampoule', price: 0.25, pack: 10, stack: 50, icon: 'vial', color: '#f0d0d0', ref: 'WTND p.70',
     note: 'For allergic shock. Keep it with you whenever you inject penicillin.' },
+
+  // ——— childbirth and the newborn (WTND chapter 19; Green Pages pp.352, 358, 389–391, 395). Prices roughly from the
+  // MSH guide as above. `vaccine` and `fp` items set a status when injected (encounter.js injectNow), nothing more.
+  { id: 'oxytocin_10iu', name: 'Oxytocin 10 IU ampoule', actives: { oxytocin: 0.0168 }, inj: { ka: 1.5 }, route: ['inj'], unit: 'ampoule', price: 0.3, pack: 10, stack: 50, icon: 'vial', color: '#e0f0e0', ref: 'WTND p.390',
+    note: 'Heavy bleeding after the birth: 10 units into the muscle; another 10 in 15 minutes if it goes on. Never before the baby is born.' },
+  tab('miso_200', 'Misoprostol 200 mcg tablets', { misoprostol: 0.2 }, 0.2, '#f0f0f0', { ref: 'WTND p.391', note: 'Bleeding after birth or miscarriage: 600 mcg (3 tablets) by mouth or under the tongue. To prevent it, 3 tablets as soon as the baby is born. Never during pregnancy.' }),
+  { id: 'ergometrine_02', name: 'Ergometrine 0.2 mg ampoule', actives: { ergometrine: 0.2 }, inj: { ka: 4 }, route: ['inj'], unit: 'ampoule', price: 0.2, pack: 10, stack: 50, icon: 'vial', color: '#f0e0f0', ref: 'WTND p.390',
+    note: 'Only once the placenta is out: 0.2 mg into the muscle, every 2–4 hours while she bleeds heavily. Not with high blood pressure.' },
+  { id: 'mgso4_5g', name: 'Magnesium sulfate 50% ampoule (5 g in 10 ml)', actives: { magnesium: 493 }, inj: { ka: 1 }, route: ['inj'], unit: 'ampoule', price: 0.5, pack: 10, stack: 50, icon: 'vial', color: '#e0e8f8', ref: 'WTND p.390',
+    note: 'Eclampsia: 5 g into each buttock (2 ampoules); again after 4 hours if needed. Check the knee jerks and breathing first.' },
+  { id: 'diazepam_10inj', name: 'Diazepam 10 mg in 2 ml ampoule', actives: { diazepam: 10 }, inj: { ka: 3 }, route: ['inj'], unit: 'ampoule', price: 0.2, pack: 10, stack: 50, icon: 'vial', color: '#f8f0d0', ref: 'WTND pp.389–390',
+    note: 'The book gives the solution up the anus with a syringe and no needle (counted here as given by your hand). Eclampsia: 20 mg, then 10 mg after each fit.' },
+  tab('diazepam_5', 'Diazepam 5 mg tablets', { diazepam: 5 }, 0.01, '#f8f8d0', { ref: 'WTND p.390', note: 'Habit-forming: keep locked away. Tetanus: 5 mg for an adult, 1–2 mg for a small child, repeat as needed.' }),
+  { id: 'ampicillin_500', name: 'Ampicillin 500 mg vial', actives: { ampicillin: 500 }, inj: { ka: 3 }, route: ['inj'], unit: 'vial', price: 0.3, pack: 50, stack: 200, icon: 'vial', color: '#f8f8f8', ref: 'WTND p.352',
+    note: 'Newborn infection: 50 mg/kg twice a day in the first week, 3 times a day after. Childbirth fever: 2 g, then 1 g 4 times a day.' },
+  { id: 'gentamicin_80', name: 'Gentamicin 80 mg in 2 ml ampoule', actives: { gentamicin: 80 }, inj: { ka: 3 }, route: ['inj'], unit: 'ampoule', price: 0.1, pack: 50, stack: 200, icon: 'vial', color: '#e0f0f0', ref: 'WTND pp.275–276, 358',
+    note: 'Newborn: 5 mg/kg once a day. Childbirth fever: 80 mg, then 60 mg 3 times a day. Too much deafens and harms the kidneys.' },
+  { id: 'tt_vaccine', name: 'Tetanus toxoid vaccine (one dose)', vaccine: 'tetanus', inj: { ka: 1 }, route: ['inj'], unit: 'dose', price: 0.1, pack: 20, stack: 100, icon: 'vial', color: '#d0e0f0', ref: 'WTND pp.184, 250',
+    note: 'In pregnancy: at the 6th, 7th and 8th month if never vaccinated before; one booster in the 7th month if she was. Two doses protect the baby from tetanus.' },
+  { id: 'dmpa_150', name: 'DMPA contraceptive injection (150 mg)', fp: { days: 91 }, inj: { ka: 1 }, route: ['inj'], unit: 'dose', price: 0.9, pack: 10, stack: 50, icon: 'vial', color: '#e8d8f0', ref: 'WTND pp.293, 395',
+    note: 'Into the muscle every 3 months. Prevents pregnancy; no protection from infections.' },
 ];

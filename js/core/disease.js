@@ -3,12 +3,15 @@
 // moves on, water is lost and replaced, and death is rolled against the hour's hazard.
 //
 // Models (conditions.js `model`): viral, bacterial, malaria, wound, burn, scabies, worms, pain, heart,
-// pregnancy, preeclampsia. State lives on the condition record so it saves as plain JSON.
+// pregnancy, preeclampsia, labour, bleeding, fits. State lives on the condition record so it saves as plain JSON.
+// Time: hour- and day-scale physiology runs in real hours; anything taking months (a pregnancy, pre-eclampsia
+// worsening over its weeks) runs COMPRESS times faster (time.js).
 import { COND } from './content/conditions.js';
 import { ACTIVE, ACTIVES } from './content/actives.js';
 import { ORG } from './content/organisms.js';
 import { drugState, toxSigns, gutExposure, hill } from './pk.js';
 import { makeRng } from './rng.js';
+import { COMPRESS } from './time.js';
 import { pregnancyHour, newbornHazard } from './people.js';
 
 export const HOUR = 60;
@@ -43,7 +46,7 @@ const MODELS = {
       c.age += dt;
       const pk = P.peak * 24;
       const s = c.age < pk ? c.age / pk : clamp(1 - (c.age - pk) / (c.D - pk), 0, 1);
-      c.s = clamp(s, 0, 1) * c.sev;
+      c.s = clamp(s, 0, 1) * c.sev * cutOf(P, x);
       let loss = 0;
       if (P.stool) loss += stoolLoss(p, P.stool, c.s, x);
       if (P.vomit && c.age < 48) loss += (5 / 1000 / 24) * p.weight * c.s * P.vomit;
@@ -263,13 +266,103 @@ const MODELS = {
     step(p, c, dt, x) {
       const P = COND.get(c.id).params;
       c.age += dt;
-      if (x.hosp) { c.delivered = true; return { loss: 0, hazard: 0, done: true }; }
-      c.sev = clamp(c.sev + dt * P.rise / 24 * (0.6 + x.rng()), 0, 1.2);
+      if (x.hosp) { c.delivered = true; p.induce ||= x.t; return { loss: 0, hazard: 0, done: true }; } // the hospital delivers her
+      c.sev = clamp(c.sev + dt * P.rise * COMPRESS / 24 * (0.6 + x.rng()), 0, 1.2); // worsens over weeks of pregnancy
       c.s = c.sev;
+      // once severe, fits may begin (eclampsia); magnesium sulfate more than halves that (RR 0.42, Magpie Trial
+      // Collaborative Group. Lancet 2002;359:1877)
+      if (P.fits && !c.fitted && c.sev > P.fits.at && x.rng() < P.fits.perH * dt * (1 - 0.6 * (x.ds.relief.fits || 0))) { c.fitted = true; (p.pending ||= []).push({ id: 'eclampsia', t: x.t }); }
       return { loss: 0, hazard: c.sev > 0.7 ? P.hazard * (c.sev - 0.6) * 4 : 0, done: !p.pregnant };
     },
   },
+
+  // ——— childbirth and the newborn (WTND chapter 19)
+  /** Obstructed labour: the baby does not come down. Each hour the baby may die; after a day the womb may tear. It
+   *  ends when the head finally comes (resolve, often dead) or the hospital operates; either way she may then get
+   *  childbirth fever (`after`). While it lasts it holds the birth back (`blocksBirth`, people.js). */
+  labour: {
+    init(p, c) { c.age = 0; p.labour ??= p.t; },
+    step(p, c, dt, x) {
+      const P = COND.get(c.id).params;
+      c.age += dt;
+      const end = (cs) => {
+        p.induce ||= x.t;
+        if (x.rng() < P.after.odds * (cs ? 0.5 : 1)) (p.pending ||= []).push({ id: P.after.id, t: x.t + 48 * HOUR });
+        return { loss: 0, hazard: 0, done: true };
+      };
+      if (x.hosp) return end(true); // caesarean
+      c.s = clamp(c.age / 36, 0.2, 1);
+      if (p.foetus?.alive && x.rng() < P.foetal * c.s * dt) p.foetus.alive = false;
+      if (x.rng() < P.resolve * dt) return end(false);
+      return { loss: (P.loss * p.weight) / 1000, hazard: c.age > 24 ? P.hazard * c.s : 0, done: false };
+    },
+  },
+  /** Bleeding (after birth, a miscarriage, a burst tubal pregnancy): c.rate ml/h, slowing as the womb clamps down
+   *  (half-life `half` h). Uterotonics (relief.uterus: oxytocin, misoprostol, ergometrine) cut the flow and speed the
+   *  clamping. Blood lost as a share of ~80 ml/kg decides shock, Hb and death; anaemic women die of less (WTND
+   *  p.249). `rupture`: nothing bleeds until the tube bursts (per hour), unless it settles first (`resolve`).
+   *  The hospital transfuses and empties the womb or removes the tube. What is lost stays lost (p.hb). */
+  bleeding: {
+    init(p, c, rng) {
+      const P = COND.get(c.id).params;
+      c.rate = P.rate[0] * Math.exp(gauss(rng) * P.rate[1]);
+      c.lost = 0; c.hb = p.hb; c.shock = 0; c.age = 0;
+      c.atonic = rng() < (P.atony ?? 1); // a tear or a retained placenta bleeds whatever the womb does
+      if (P.lose && p.pregnant) p.foetus = { alive: false, harm: p.foetus?.harm || {} };
+    },
+    step(p, c, dt, x) {
+      const P = COND.get(c.id).params;
+      c.age += dt;
+      const end = (hazard = 0) => {
+        p.hb = Math.min(p.hb, c.hb);
+        if (P.endsPregnancy && p.pregnant) { p.pregnant = 0; delete p.foetus; }
+        return { loss: 0, hazard, done: true };
+      };
+      if (x.hosp) { c.hb = Math.max(c.hb, 9); return end(); }
+      if (P.rupture && !c.rup) {
+        c.s = 0.3;
+        if (x.rng() < P.resolve * dt) return end();
+        if (x.rng() >= P.rupture * dt) return { loss: 0, hazard: 0, done: false };
+        c.rup = x.t;
+      }
+      const ut = c.atonic ? (x.ds.relief.uterus || 0) * P.drug : 0;
+      c.lost += c.rate * (1 - ut) * dt;
+      c.rate *= Math.exp(-dt * (Math.LN2 / P.half + 2 * ut));
+      const f = c.lost / (p.weight * 80);
+      c.hb = p.hb * (1 - f);
+      c.shock = clamp((f - 0.15) / 0.25, 0, 1);
+      c.s = clamp(Math.max(c.rate / 300, c.shock), 0, 1);
+      const hazard = f > P.shock ? P.hazard * ((f - P.shock) / 0.1) ** 2 * (11 / p.hb) : 0;
+      return c.rate < 10 ? end(hazard) : { loss: 0, hazard, done: false };
+    },
+  },
+  /** Fits: eclampsia (worsens while pregnant, `rise` per gestational day; fits bring on labour, `labour` per hour; it
+   *  settles after the birth, half-life `half` h) or tetanus spasms (`course`: [peak, end] days). Each fit risks death
+   *  (`perFit`) and, in pregnancy, the baby (`foetal`). Anticonvulsants (relief.fits: magnesium sulfate, diazepam) and
+   *  the hospital's care (×0.2) stop fits. */
+  fits: {
+    init(p, c, rng) { const P = COND.get(c.id).params; c.sev = c.sev0 = lerp(P.sev[0], P.sev[1], rng()); c.n = 0; c.age = 0; },
+    step(p, c, dt, x) {
+      const P = COND.get(c.id).params;
+      c.age += dt;
+      if (P.course) { const pk = P.course[0] * 24, D = P.course[1] * 24; c.sev = c.sev0 * (c.age < pk ? 0.5 + (0.5 * c.age) / pk : clamp(1 - (c.age - pk) / (D - pk), 0, 1)); }
+      else if (p.pregnant) { c.sev = Math.min(1.2, c.sev + (dt * P.rise * COMPRESS) / 24); if (x.hosp || x.rng() < P.labour * dt) p.induce ||= x.t; }
+      else c.sev *= 0.5 ** (dt / P.half);
+      const rate = P.fits * c.sev * (1 - (x.ds.relief.fits || 0)) * (x.hosp ? P.hosp ?? 0.2 : 1) * dt;
+      const k = Math.floor(rate) + (x.rng() < rate % 1 ? 1 : 0);
+      c.n += k; if (k) { c.last = x.t; p.fits = (p.fits || 0) + k; }
+      c.s = clamp(c.sev, 0, 1);
+      if (k && p.foetus?.alive && x.rng() < 1 - (1 - P.foetal) ** k) p.foetus.alive = false;
+      return { loss: 0, hazard: 1 - (1 - P.perFit) ** k, done: P.course ? c.age >= P.course[1] * 24 : !p.pregnant && c.sev < 0.05 };
+    },
+  },
 };
+/** Share of a condition's course left by what was done: `cut` [{ instr | relief, by }] (kangaroo care, sunlight). */
+const cutOf = (P, x) => (P.cut || []).reduce((k, e) => k * (1 - e.by * (e.instr ? +x.instr.has(e.instr) : x.ds.relief[e.relief] || 0)), 1);
+/** At the birth, a medicine she was given to take then (encounter.js `atBirth`) becomes a dose she takes now. */
+function takeAtBirth(p, t) {
+  for (const r of [...(p.rx || [])]) if (r.atBirth && !r.stopped) { r.stopped = t; p.rx.push({ ...r.atBirth, start: t, perDay: 1, days: 1, route: 'oral', counselled: true }); }
+}
 
 /** How far blood-sucking worms pull haemoglobin down (g/dL): blood lost a day against the body's blood and
  *  iron. Iron in the diet or as tablets lets the marrow keep up with much of it. */
@@ -423,7 +516,11 @@ export function simulate(p, toT, C) {
     }
     const ds = drugState(p, t1);
     for (const q of p.pending || []) if (q.roll && q.mic && covers(ds, q.mic)) q.abxH++;
-    if (p.pregnant) ev.push(...pregnancyHour(p, ds, t1)); // the foetus (people.js)
+    if (p.pregnant) {
+      const pe = pregnancyHour(p, ds, t1); // the foetus (people.js)
+      ev.push(...pe);
+      if (pe.some((e) => e.kind === 'birth' || e.kind === 'stillbirth')) takeAtBirth(p, t1);
+    }
     const x = { ds, rng, t: t1, hosp: p.hospital && t1 >= p.hospital.from && t1 < p.hospital.until, instr, topical, wormKills };
     // anaphylaxis kills within the first hour or two; adrenaline within ~30 minutes mostly prevents that
     // (untreated odds are an estimate; Turner PJ et al. J Allergy Clin Immunol Pract 2017;5:1169)
@@ -433,6 +530,7 @@ export function simulate(p, toT, C) {
       const def = COND.get(c.id);
       const r = MODELS[def.model].step(p, c, 1, x);
       loss += r.loss; hazard += r.hazard;
+      if (r.hazard > (p.killer?.h || 0) || p.killer?.t !== t1) p.killer = { id: c.id, h: r.hazard, t: t1 };
       if (r.done) {
         // a sequel is decided once its window closes; antibiotic hours keep counting until then (the 10-day course)
         if (def.params.sequel) (p.pending ||= []).push({ roll: c.id, t: Math.max(t1, c.t0 + def.params.sequel.within * HOUR), abxH: c.abxH || 0, org: c.org, mic: c.mic });
@@ -538,6 +636,7 @@ function causeOfDeath(p, tox, d) {
   if (p.ana !== undefined && p.t - p.ana < 2 * HOUR) return 'anaphylaxis (allergic to ' + p.allergy + ')';
   if (tox.some((s) => s.harm >= 0.2)) return 'poisoned by ' + ACTIVE.get(tox.find((s) => s.harm >= 0.2).active).name.split(' (')[0].toLowerCase();
   if (d > 0.1) return 'dehydration';
+  if (p.killer?.t === p.t + HOUR && p.killer.h > 0 && COND.has(p.killer.id)) return COND.get(p.killer.id).name.toLowerCase();
   const worst = [...p.conds].sort((a, b) => (b.sev ?? b.s ?? 0) - (a.sev ?? a.s ?? 0))[0];
   return worst ? COND.get(worst.id).name.toLowerCase() : 'unknown';
 }

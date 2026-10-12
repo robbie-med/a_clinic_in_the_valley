@@ -132,6 +132,9 @@ export function tickHome(G) {
       } else if (e.kind === 'tox' && !p.toxReturn) {
         p.toxReturn = true;
         scheduleReturn(G, p, e.t + 6 * HOUR, `complains: ${e.text}`);
+      } else if (e.kind === 'onset' && COND.get(e.id).params.urgent) {
+        // an emergency at home (bleeding after the birth, fits, a stuck labour): the family carries her in
+        scheduleReturn(G, p, e.t + HOUR, `brought in: ${COND.get(e.id).name.toLowerCase()}`);
       } else if (e.kind === 'birth' || e.kind === 'stillbirth' || e.kind === 'miscarriage') {
         news.push({ kind: 'birth', pid: p.id, text: `${p.name} of ${hamletOf(G, p.hamlet).name}: ${e.text}.` });
       }

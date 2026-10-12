@@ -94,3 +94,7 @@ export function bodySVG(p, found, woundSite) {
 function shade(hex) { const n = parseInt(hex.slice(1), 16); const c = (s) => Math.round(((n >> s) & 255) * 0.85).toString(16).padStart(2, '0'); return '#' + c(16) + c(8) + c(0); }
 
 export const pinRegion = (finding) => PIN[finding];
+
+// ——— childbirth and the newborn: where the new examinations live on the figure
+REGIONS.belly.exams.push('x_womb', 'x_baby');
+REGIONS.chest.exams.push('x_breast');

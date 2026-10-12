@@ -478,6 +478,98 @@ export const ACTIVES = [
     cautions: ['Into the muscle of the thigh or upper arm: ½ ml of 1:1000 for an adult, ¼ ml for a child 6–12, less for a baby. Repeat in 10 minutes if needed.'],
     ref: 'WTND pp.70, 385; Simons FE et al. J Allergy Clin Immunol 1998;101:33',
   },
+
+  // ——— childbirth and the newborn (WTND chapter 19; Green Pages pp.352, 358, 389–392). `uterus`: how hard the womb
+  // is clamped (disease.js bleeding); `fits`: fits held off (disease.js fits). Before the birth a uterotonic squeezes
+  // the baby: foetal `loss` (the book's warning, p.266); rates are estimates.
+  {
+    id: 'oxytocin', name: 'Oxytocin', channel: 'systemic', class: 'uterotonic (injected)',
+    // Plasma t½ ~3–5 min; into the muscle it acts in 3–7 min for 30–60 min, so absorption from the muscle (the item's
+    // inj.ka) sets the duration. Dosed in mg: 10 IU ≈ 0.0168 mg. ec50 an estimate: 10 IU IM clamps the womb ~1 h.
+    // Prevents about half of PPH (RR 0.53: Westhoff G et al. Cochrane 2013;CD001808).
+    pk: { F: 0, ka: 1.5, half: 0.07, vd: 0.3, spread: 0.3 },
+    effects: [{ on: 'uterus', emax: 1, ec50: 0.00004, hill: 2 }],
+    foetal: [{ weeks: [20, 43], at: 0.00004, harm: 'loss', per: 0.02, ref: 'WTND pp.266, 390 (estimate)' }],
+    cautions: ['Only after the baby is born. Used to hurry labour it can tear the womb and kill the baby (WTND p.266).'],
+    ref: 'WTND pp.266, 390; Goodman & Gilman 13e ch.44; Westhoff G et al. Cochrane 2013;CD001808',
+  },
+  {
+    id: 'misoprostol', name: 'Misoprostol', channel: 'systemic', class: 'uterotonic (tablets)',
+    // Misoprostol acid after 600 µg by mouth peaks at ~1.5 ng/ml in ~30 min, t½ 20–40 min; the womb stays contracted
+    // ~2 h (Tang OS et al. Hum Reprod 2002;17:332). Vd chosen to give that peak. A little weaker than oxytocin (more
+    // PPH ≥1000 ml, RR 1.33: Tunçalp Ö et al. Cochrane 2012;CD000494). Calibrated: 600 µg at birth halves PPH ≥500 ml
+    // (12.0% → 6.4%: Derman RJ et al. Lancet 2006;368:1248).
+    pk: { F: 0.9, ka: 3, half: 0.5, vd: 3, spread: 0.3 },
+    effects: [{ on: 'uterus', emax: 0.85, ec50: 0.0003, hill: 2, calibrated: true }],
+    // shivering in about half after 600 µg, sometimes fever (Derman RJ et al. 2006)
+    toxic: [{ at: 0.0012, sign: 'shivering', text: 'shivering and a fever (misoprostol)', harm: 0 }],
+    // it empties a pregnant womb at any stage (WHO Medical management of abortion 2018); the rate is an estimate
+    foetal: [{ weeks: [4, 43], at: 0.0003, harm: 'loss', per: 0.02, ref: 'WHO Medical management of abortion 2018 (estimate)' }],
+    cautions: ['Never during pregnancy: it brings on miscarriage.', 'Shivering and fever after it are common and pass.'],
+    ref: 'WTND pp.266, 391; Tang OS et al. Hum Reprod 2002;17:332; Derman RJ et al. Lancet 2006;368:1248',
+  },
+  {
+    id: 'ergometrine', name: 'Ergometrine (ergonovine)', channel: 'systemic', class: 'uterotonic (injected)',
+    // Acts 2–7 min after IM injection and keeps the womb clamped ~3 h; t½ ~2 h (de Groot AN et al. Drugs 1998;56:523).
+    // Vd and ec50 estimates giving ~3 h of effect from 0.2 mg. Nausea, vomiting and a rise in blood pressure are common
+    // (Liabsuetrakul T et al. Cochrane 2018;CD005456).
+    pk: { F: 0.6, ka: 2, half: 2, vd: 0.5, spread: 0.3 },
+    effects: [{ on: 'uterus', emax: 0.9, ec50: 0.0015, hill: 2 }],
+    toxic: [{ at: 0.004, sign: 'ergot', text: 'headache, vomiting, the blood pressure up (ergometrine)', harm: 0 }],
+    foetal: [{ weeks: [20, 43], at: 0.0015, harm: 'loss', per: 0.02, ref: 'WTND pp.266, 390 (estimate)' }],
+    cautions: ['Only after the placenta is out: before, it can trap it inside.', 'Not with high blood pressure or pre-eclampsia.'],
+    ref: 'WTND pp.266, 390; de Groot AN et al. Drugs 1998;56:523; Liabsuetrakul T et al. Cochrane 2018;CD005456',
+  },
+  {
+    id: 'magnesium', name: 'Magnesium (as sulfate, injected)', channel: 'systemic', class: 'for eclampsia',
+    // Dosed as elemental Mg: 5 g magnesium sulfate (heptahydrate) = 493 mg. Vd ~0.4 L/kg, t½ ~4–5 h with working
+    // kidneys; IM peaks in 1–2 h. Levels are what the injection adds to the body's own ~20 mg/L: the working range of
+    // 4–7 mEq/L total is ~30–60 added; the knee jerks go near 10 mEq/L (~100 added) and breathing stops near 15 (~160)
+    // (Lu JF, Nightingale CH. Clin Pharmacokinet 2000;38:305). By mouth (Epsom salts) it is barely absorbed.
+    pk: { F: 0, ka: 1, half: 4.5, vd: 0.4, spread: 0.3 },
+    // calibrated: recurrent fits ~13% on magnesium vs ~28% on diazepam (Eclampsia Trial Collaborative Group. Lancet 1995;345:1455)
+    effects: [{ on: 'fits', emax: 0.92, ec50: 10, hill: 2, calibrated: true }],
+    toxic: [
+      { at: 100, sign: 'mg_reflex', text: 'knee jerks gone, drowsy and flushed (too much magnesium)', harm: 0 },
+      { at: 160, sign: 'mg_breath', text: 'breathing slow and failing (magnesium poisoning)', harm: 0.5 },
+    ],
+    cautions: ['Too much stops the breathing: check the knee jerks and breathing before each dose (WTND p.390).', 'Not with kidney failure: it builds up.'],
+    ref: 'WTND p.390; Lu JF, Nightingale CH. Clin Pharmacokinet 2000;38:305; Eclampsia Trial Collaborative Group. Lancet 1995;345:1455',
+  },
+  {
+    id: 'diazepam', name: 'Diazepam', channel: 'systemic', class: 'anticonvulsant · sedative',
+    // F ~1 by mouth or up the anus (the solution peaks in 10–20 min), t½ 20–100 h (~43 h), Vd ~1.1 L/kg; 10 mg in an
+    // adult peaks ~0.3 mg/L (Goodman & Gilman 13e ch.19). Holds off fits less well than magnesium (calibrated, as above).
+    pk: { F: 1, ka: 2, half: 43, vd: 1.1, spread: 0.35 },
+    effects: [{ on: 'fits', emax: 0.6, ec50: 0.15, hill: 1.5, calibrated: true }],
+    // too much: breathing slows (estimate); tolerance after a week of steady use (as with codeine below, estimates)
+    toxic: [{ at: 2.5, sign: 'sedated', text: 'deeply asleep, breathing slow and shallow (too much diazepam)', harm: 0.3 }],
+    dependence: { ec: 0.1, days: 7, tolerance: 1, sign: 'benzo_withdrawal', text: 'restless, shaking, cannot sleep (stopping diazepam)' },
+    cautions: ['Too much stops the breathing. Habit-forming. In pregnancy only to stop fits (WTND p.390).'],
+    ref: 'WTND pp.184, 389–390; Goodman & Gilman 13e ch.19; Duley L et al. Cochrane 2010;CD000127',
+  },
+  {
+    id: 'ampicillin', name: 'Ampicillin (injected)', channel: 'systemic', class: 'antibiotic (penicillin, injected)', allergen: 'penicillin',
+    abxAs: 'amoxicillin', // the same spectrum: judged by the strain's amoxicillin MIC
+    pk: { F: 0.4, ka: 1.5, half: 1, vd: 0.3, fu: 0.8, spread: 0.3 },
+    abx: { kmax: 0.35, ec50: 1, hill: 3, window: 4, calibrated: true },
+    cautions: ['Penicillin allergy: have adrenaline ready.'],
+    ref: 'WTND pp.275–276, 352; Goodman & Gilman 13e ch.57',
+  },
+  {
+    id: 'gentamicin', name: 'Gentamicin', channel: 'systemic', class: 'antibiotic (aminoglycoside, injected)',
+    // Not absorbed by mouth. t½ ~2–3 h in adults, longer in newborns (pk.js); Vd ~0.3 L/kg; 5 mg/kg peaks ~10–15 mg/L.
+    // Kills by concentration, like ciprofloxacin (Goodman & Gilman 13e ch.58). MICs: organisms.js.
+    pk: { F: 0, ka: 3, half: 2.5, vd: 0.3, fu: 0.9, spread: 0.3 },
+    abx: { kmax: 0.5, ec50: 2, hill: 1.2, window: 8, calibrated: true },
+    // levels held high harm the inner ear and the kidney (Moore RD et al. J Infect Dis 1984;149:23); thresholds estimates
+    toxic: [
+      { at: 20, sign: 'gent_ear', text: 'ringing ears, dizzy, the hearing going (gentamicin)', harm: 0 },
+      { at: 30, sign: 'kidney_injury', text: 'hardly any urine (gentamicin on the kidneys)', harm: 0.05 },
+    ],
+    cautions: ['Once a day, by weight. Too much makes people deaf and harms the kidneys (WTND p.358).'],
+    ref: 'WTND pp.275–276, 358; Goodman & Gilman 13e ch.58; Moore RD et al. J Infect Dis 1984;149:23',
+  },
 ];
 
 export const ACTIVE = new Map(ACTIVES.map((a) => [a.id, a]));

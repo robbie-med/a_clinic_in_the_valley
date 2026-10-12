@@ -70,3 +70,22 @@ export const POINTS = {
   pica: { hookworm: 4 }, fatigue: { hookworm: 2 },
   measles_rash: { measles: 6 }, rash_hx: { measles: 3 }, koplik: { measles: 7 }, red_eyes: { measles: 3 },
 };
+
+// ——— childbirth and the newborn (WTND chapter 19, pp.249–278)
+const woman = (p) => p.sex === 'f' && p.age >= 13 && p.age < 50, baby = (p) => p.age < 0.25;
+QUESTIONS.push(
+  { id: 'q_birth', label: 'Labour, a birth, bleeding? When, how long, how much? Any fits?', min: 2, reveals: ['postpartum', 'labour_hx', 'bleeding_pv', 'pelvic_pain', 'discharge', 'fits_hx'], only: woman },
+  { id: 'q_tt', label: 'Have you had tetanus injections, in this pregnancy or before?', min: 1, reveals: ['tt_hx'], only: woman },
+  { id: 'q_baby', label: 'Does the baby suck well? Any fits or stiffness? Turning yellow?', min: 1, reveals: ['suck', 'fits_hx', 'jaundice'], only: baby },
+);
+EXAMS.push(
+  { id: 'x_womb', label: 'Feel the womb through the belly', min: 2, reveals: ['womb'], only: woman },
+  { id: 'x_baby', label: 'Look at the baby: cord stump, skin colour, jaw', min: 1, reveals: ['cord', 'jaundice', 'lockjaw'], only: baby },
+  { id: 'x_breast', label: 'Examine the breasts', min: 1, reveals: ['breast'], only: woman },
+);
+Object.assign(POINTS, {
+  labour_hx: { obstructed_labour: 8 }, bleeding_pv: { pph: 5, miscarriage: 4, ectopic: 2 }, pelvic_pain: { ectopic: 4, miscarriage: 2, puerperal_sepsis: 1 },
+  womb: { pph: 3, obstructed_labour: 2, ectopic: 4, puerperal_sepsis: 2 }, discharge: { puerperal_sepsis: 7 }, postpartum: { puerperal_sepsis: 2, pph: 2, mastitis: 1 },
+  fits_hx: { eclampsia: 7, newborn_tetanus: 4 }, lockjaw: { newborn_tetanus: 8 }, suck: { newborn_sepsis: 3, newborn_tetanus: 2, cold_baby: 2 },
+  cord: { cord_infection: 8, newborn_sepsis: 1 }, jaundice: { newborn_jaundice: 6, newborn_sepsis: 1 }, breast: { mastitis: 9 },
+});

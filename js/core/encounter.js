@@ -7,7 +7,7 @@ import { ACTIVE } from './content/actives.js';
 import { ORGANISMS } from './content/organisms.js';
 import { signs } from './signs.js';
 import { count, remove, countSpec } from './inventory.js';
-import { HOUR, DAY } from './time.js';
+import { HOUR, DAY, COMPRESS, day } from './time.js';
 import { payment, collect, scheduleReturn, who, selectPressure } from './clinic.js';
 import { gainXp } from './crafting.js';
 import { stackPotency } from './crafting.js';
@@ -22,6 +22,12 @@ export const INSTRUCTIONS = [
   { id: 'rest_move', label: 'Keep moving gently; lift with the legs', min: 1 },
   { id: 'hot_compress', label: 'Hot compresses 20 minutes, 4 times a day; raise the limb', min: 2 },
   { id: 'dressing', label: 'Keep it covered with a clean cloth, change daily', min: 1, needs: [['cloth', 2]] },
+  // ——— childbirth and the newborn (WTND pp.254, 262–263, 266, 274, 405). `atBirth`: medicine she takes home and
+  // takes herself as soon as the baby is born (disease.js), as community misoprostol programmes do.
+  { id: 'clean_birth', label: 'For the birth: washed hands, a new razor blade, tie and cut the cord short, keep it dry and open', min: 3 },
+  { id: 'miso_at_birth', label: 'Take the 3 misoprostol tablets as soon as the baby is born (never before)', min: 2, needs: [['miso_200', 3]], atBirth: { item: 'miso_200', amount: 3 } },
+  { id: 'sunlight', label: 'Feed the baby often; lay him undressed in bright light by a window (not in the sun)', min: 2 },
+  { id: 'kangaroo', label: 'Carry the baby skin to skin inside your clothes, day and night; breastfeed every 2 hours', min: 3 },
 ];
 export const PROCEDURES = [
   { id: 'clean', label: 'Clean the wound with soap and boiled water, remove dirt', min: 12, needs: [['soap', 1], ['cloth', 1]], station: 'hearth',
@@ -174,6 +180,9 @@ export function injectNow(G, enc, itemId, amount) {
   const boiled = G.stations.has('hearth');
   if (makeRng(p.seed, 'abscess', now)() < (boiled ? 0.001 : 0.02)) (p.pending ||= []).push({ id: 'wound_infected', t: now + 48 * HOUR });
   if (!boiled) p.flags.dirtyNeedle = now; // for blood-borne infections later (hepatitis B)
+  // status only: tetanus toxoid doses counted (people.js ttProtected); DMPA protects ~3 months, in game days (people.js)
+  if (it.vaccine) (p.vacc ||= {})[it.vaccine] = (p.vacc[it.vaccine] || 0) + 1;
+  if (it.fp) p.fpUntil = day(now) + it.fp.days / COMPRESS;
   let text = `Injected ${it.name.toLowerCase()}.`;
   const al = Object.keys(it.actives || {}).find((id) => p.allergy && ACTIVE.get(id).allergen === p.allergy);
   // same draw as disease.js, so what you see now is what the body does
@@ -220,8 +229,12 @@ export function finishEncounter(G, enc) {
   for (const id of enc.instr) {
     if (id === 'finish') continue;
     const ins = INSTRUCTIONS.find((x) => x.id === id);
-    if (ins.needs) for (const [nid, n] of ins.needs) if (stockOf(G, nid) >= n) dispense(G, nid, n);
-    p.rx.push({ instr: id, name: ins.label, start: now, until: now + 21 * DAY });
+    const line = { instr: id, name: ins.label, start: now, until: now + 21 * DAY };
+    if (ins.needs) for (const [nid, n] of ins.needs) if (stockOf(G, nid) >= n) {
+      const { q } = dispense(G, nid, n);
+      if (ins.atBirth?.item === nid) { const it = C.items.get(nid); line.atBirth = { item: nid, name: it.name, amount: ins.atBirth.amount, left: ins.atBirth.amount, actives: it.actives, q }; charges += n * it.price; }
+    }
+    p.rx.push(line);
   }
   G.meta.time += [...enc.instr].reduce((a, id) => a + INSTRUCTIONS.find((x) => x.id === id).min, 0);
   // referral: whether they go depends on money, how sick they feel, and whether they trust you
@@ -230,6 +243,8 @@ export function finishEncounter(G, enc) {
     const sev = Math.min(1, p.conds.reduce((a, c) => a + (c.sev ?? c.s ?? 0), 0));
     const go = rng() < 0.2 + p.wealth * 0.4 + sev * 0.25 + p.trust * 0.15;
     if (go) { p.hospital = { from: now + (12 + rng() * 30) * HOUR, until: now + (5 + rng() * 3) * DAY }; G.meta.clinic.stats.referred++; }
+    // near her time, she waits at the hospital until the baby comes (WTND p.252) and a few days after
+    if (go && p.pregnant >= 34) p.hospital.until = Math.max(p.hospital.until, now + (((40 - p.pregnant) * 7) / COMPRESS + 3) * DAY);
     enc.referWent = go;
   }
   const pay = payment(G, p, charges);
@@ -266,6 +281,6 @@ export function judge(G, p, enc) {
   // an antibiotic for an illness no bacterium causes helps no one and breeds resistance for everyone
   const needless = main.params.org ? [] : antibiotics;
   // a dangerous bacterial illness (dysentery, pneumonia, typhoid) sent home without an antibiotic needed the health centre
-  const needsRefer = (main.model === 'bacterial' && main.params.hazard >= 0.001 && !antibiotics.length) || main.id === 'pre_eclampsia';
+  const needsRefer = (main.model === 'bacterial' && main.params.hazard >= 0.001 && !antibiotics.length) || main.id === 'pre_eclampsia' || !!T.mustRefer;
   return { dxRight, truth: main.name, helped, harmed, needless, referredRight: needsRefer ? enc.refer : null };
 }

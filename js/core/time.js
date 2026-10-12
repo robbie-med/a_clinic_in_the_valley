@@ -6,6 +6,7 @@ import { hashf } from './rng.js';
 export const DAY = 24 * 60;
 export const HOUR = 60;
 export const YEAR_DAYS = 40;
+export const COMPRESS = 365 / YEAR_DAYS; // real days per game day for slow processes (months, years)
 export const SEASONS = ['cool_dry', 'hot_dry', 'rains', 'late_rains'];
 export const SEASON_NAMES = { cool_dry: 'Cool dry season', hot_dry: 'Hot dry season', rains: 'The rains', late_rains: 'Late rains' };
 export const REAL_SEC_PER_MIN = 0.45;      // a game day ≈ 11 real minutes
