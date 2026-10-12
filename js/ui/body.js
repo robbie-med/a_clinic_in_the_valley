@@ -4,8 +4,8 @@
 
 /** Regions: id → { label, exams, at:[x,y] for pins }. Coordinates in the 200×420 viewBox. */
 export const REGIONS = {
-  head: { label: 'Head', exams: ['x_general', 'x_forehead', 'x_fontanel'] },
-  face: { label: 'Eyes & mouth', exams: ['x_eyes', 'x_general'] },
+  head: { label: 'Head', exams: ['x_general', 'x_forehead', 'x_fontanel', 'x_ears', 'x_neck'] },
+  face: { label: 'Eyes & mouth', exams: ['x_eyes', 'x_throat', 'x_general'] },
   chest: { label: 'Chest', exams: ['x_chest', 'x_listen', 'x_rr'] },
   belly: { label: 'Belly', exams: ['x_belly', 'x_pinch'] },
   arm: { label: 'Upper arm', exams: ['x_thermo', 'x_muac', 'x_bp'] },

@@ -36,9 +36,9 @@ export function vitals(p, t) {
   if (p.lastTox?.includes('anticholinergic_severe')) fever += 1.5;
   const temp = Math.round((36.8 + fever + (rng() - 0.5) * 0.3) * 10) / 10;
   const d = p.hyd / p.weight;
-  const hf = cond('heart_failure'), pn = cond('pneumonia'), mal = cond('malaria'), pe = cond('pre_eclampsia');
-  const hb = mal ? mal.hb : p.hb;
-  let hr = normalHR(p.age) + fever * 10 + Math.max(0, d - 0.04) * 700 + Math.max(0, 8 - hb) * 6 + (hf ? hf.V * 6 - 18 * ds.heart : 0);
+  const hf = cond('heart_failure'), pn = cond('pneumonia'), mal = cond('malaria'), pe = cond('pre_eclampsia'), ty = cond('typhoid');
+  const hb = Math.min(p.hb, ...p.conds.filter((c) => c.hb !== undefined).map((c) => c.hb));
+  let hr = normalHR(p.age) + fever * 10 + Math.max(0, d - 0.04) * 700 + Math.max(0, 8 - hb) * 6 + (hf ? hf.V * 6 - 18 * ds.heart : 0) - (ty?.s || 0) * 18; // typhoid: a pulse slow for the fever
   if (p.lastTox?.some((s) => s.startsWith('anticholinergic'))) hr += 35;
   if (p.lastTox?.includes('digitalis_arrhythmia')) hr = Math.min(hr, 48);
   let rr = normalRR(p.age) + fever * 2 + (pn ? pn.s * (p.age < 5 ? 34 : 16) : 0) + (d > 0.08 ? 10 : 0) + (mal ? mal.sev * 8 : 0) + (hf && hf.V > 3.5 ? (hf.V - 3.5) * 5 : 0);
@@ -70,7 +70,8 @@ export function signs(p, t, tools = new Set()) {
   }
   stools += (V.ds.worse.stool || 0) * 6;
   stools = Math.round(stools);
-  if (stools >= 3) set('stools', `${stools} loose stools a day${blood ? ', small, with blood and slime' : ', watery'}.`, true, stools);
+  const gi = (cond('giardia')?.s || 0) > 0.2;
+  if (stools >= 3) set('stools', `${stools} loose stools a day${blood ? ', small, with blood and slime' : gi ? ', yellow, frothy and foul' : ', watery'}.`, true, stools);
   else set('stools', 'Stools are normal.', false);
   if (blood) set('blood_stool', 'Yes — blood and mucus in the stool.', true);
   const wd = cond('watery_diarrhea');
@@ -87,7 +88,8 @@ export function signs(p, t, tools = new Set()) {
 
   // ——— general
   const mal = cond('malaria'), pn = cond('pneumonia');
-  const sick = (mal?.sev || 0) > 0.9 || (pn?.s || 0) > 0.85 || d > 0.09 || any((c) => c.I > 6.5) || p.lastTox?.includes('anticholinergic_severe');
+  const ty = cond('typhoid');
+  const sick = (ty?.s || 0) > 0.85 || (mal?.sev || 0) > 0.9 || (pn?.s || 0) > 0.85 || d > 0.09 || any((c) => c.I > 6.5) || p.lastTox?.includes('anticholinergic_severe');
   set('alert', sick ? (p.lastTox?.includes('anticholinergic_severe') ? 'Confused, picking at the air, agitated.' : 'Very weak and drowsy, hard to wake.') : 'Awake and alert.', sick);
   set('pallor', V.hb < 6 ? 'Palms and inner eyelids very pale (white).' : V.hb < 8.5 ? 'Palms and eyelids pale.' : 'Good colour.', V.hb < 8.5);
   set('thin', p.nutrition < 0.7 ? 'Very thin, ribs and shoulder bones show.' : p.nutrition < 0.8 ? 'Thin.' : 'Well nourished.', p.nutrition < 0.8);
@@ -106,16 +108,25 @@ export function signs(p, t, tools = new Set()) {
     const I = (mal.I || 0) + (mal.acq || 0);
     set('fever_pattern', I > 0.25 || rng() < 0.5 ? 'The fever comes back every second day.' : 'Fever most of the time, worse at night.', true);
   }
-  const headache = (mal?.s || 0) > 0.3 || (cond('pre_eclampsia')?.sev || 0) > 0.4 || (cond('common_cold')?.s || 0) > 0.6;
+  set('fever_rising', ty && ty.s > 0.2 ? 'The fever has climbed a little higher every day.' : '—', !!(ty && ty.s > 0.2));
+  const headache = (ty?.s || 0) > 0.3 || (mal?.s || 0) > 0.3 || (cond('pre_eclampsia')?.sev || 0) > 0.4 || (cond('common_cold')?.s || 0) > 0.6;
   set('headache', headache ? 'Yes, the head is paining.' : 'No headache.', headache);
 
   // ——— breathing
-  const cold = cond('common_cold'), cc = cond('cough_child'), hf = cond('heart_failure');
-  const cough = Math.max((cold?.s || 0) * COND.get('common_cold').params.cough, cc?.s || 0, pn?.s || 0, hf && hf.V > 4 ? 0.5 : 0) * (1 - (V.ds.relief.cough || 0));
+  const cold = cond('common_cold'), cc = cond('cough_child'), hf = cond('heart_failure'), ms = cond('measles'), st = cond('strep_throat'), ear = cond('ear_infection');
+  const cough = Math.max((cold?.s || 0) * COND.get('common_cold').params.cough, (ms?.s || 0) * 0.8, cc?.s || 0, pn?.s || 0, hf && hf.V > 4 ? 0.5 : 0) * (1 - (V.ds.relief.cough || 0));
   set('cough', cough > 0.15 ? (pn?.s > 0.2 ? 'Cough, with yellow or rusty phlegm.' : 'A dry cough.') : 'No cough.', cough > 0.15);
   set('night_cough', (cc?.s || 0) > 0.3 && (V.ds.relief.cough || 0) < 0.5 ? 'Coughs most at night, keeps the house awake.' : 'Not worse at night.', (cc?.s || 0) > 0.3);
-  set('runny', (cold?.s || 0) > 0.2 ? 'Runny, blocked nose.' : 'No runny nose.', (cold?.s || 0) > 0.2);
-  set('throat', (cold?.s || 0) > 0.4 ? 'Sore throat.' : 'Throat fine.', (cold?.s || 0) > 0.4);
+  const runny = (cold?.s || 0) > 0.2 || (ms?.s || 0) > 0.3;
+  set('runny', runny ? 'Runny, blocked nose.' : 'No runny nose.', runny);
+  set('throat', (st?.s || 0) > 0.15 ? 'A very sore throat; it hurts to swallow.' : (cold?.s || 0) > 0.4 ? 'Sore throat.' : 'Throat fine.', (st?.s || 0) > 0.15 || (cold?.s || 0) > 0.4);
+  set('tonsils', (st?.s || 0) > 0.2 ? 'Tonsils swollen and red, with white spots of pus.' : (cold?.s || 0) > 0.4 ? 'The throat is a little red; no pus.' : 'Throat looks normal.', (st?.s || 0) > 0.2);
+  set('neck_glands', (st?.s || 0) > 0.25 || (ear?.s || 0) > 0.5 ? 'Tender swollen lumps under the jaw.' : 'No swollen glands in the neck.', (st?.s || 0) > 0.25 || (ear?.s || 0) > 0.5);
+  set('ear_pain', (ear?.s || 0) > 0.05 ? (p.age < 4 ? 'Cries, pulls and rubs at one ear, worse lying down.' : 'A deep throbbing pain in one ear.') : 'No ear pain.', (ear?.s || 0) > 0.05);
+  const burst = (ear?.s || 0) > 0.35 && makeRng(p.seed, 'eardrum')() < 0.35;
+  set('ear_pus', burst ? 'Yellow pus in the ear canal: the eardrum has burst.' : 'No pus in the ears.', burst);
+  const eyes = (ms?.s || 0) > 0.3;
+  set('red_eyes', eyes ? 'Eyes red and watering; the light hurts them.' : '—', eyes);
   set('rr', `${V.rr} breaths a minute${V.rr >= fastRR(p.age) ? ' — FAST for this age' : ''}.`, V.rr >= fastRR(p.age), V.rr);
   set('hr', `${V.hr} beats a minute${V.irregular ? ', irregular' : ''}.`, V.hr > normalHR(p.age) + 25 || V.hr < 55 || V.irregular, V.hr);
   set('pulse_regular', V.irregular ? 'Irregular, skipping beats.' : 'Regular.', V.irregular);
@@ -130,7 +141,24 @@ export function signs(p, t, tools = new Set()) {
   // ——— belly, worms, skin
   const asc = cond('ascaris'), pin = cond('pinworm'), sc = cond('scabies');
   set('spleen', mal && (mal.age > 72 || (mal.I || 0) > 0.3) && mal.para > 800 && p.age > 1 ? 'Spleen enlarged — felt below the left ribs.' : 'No spleen felt.', !!(mal && (mal.age > 72 || (mal.I || 0) > 0.3) && mal.para > 800 && p.age > 1));
-  set('tender', (cond('dysentery')?.s || 0) > 0.3 ? 'Belly tender all over, cramping.' : 'Belly soft.', (cond('dysentery')?.s || 0) > 0.3);
+  const tender = ['dysentery', 'amoebiasis', 'typhoid'].some((id) => (cond(id)?.s || 0) > 0.3);
+  set('tender', tender ? 'Belly tender all over, cramping.' : 'Belly soft.', tender);
+  const ut = cond('uti');
+  set('suprapubic', (ut?.s || 0) > 0.25 ? 'Tender low in the belly, just above the bone.' : '—', (ut?.s || 0) > 0.25);
+  const rs = (ty?.s || 0) > 0.5 && rng() < 0.3;
+  set('rose_spots', rs ? 'A few faint rose-pink spots on the belly that fade when pressed.' : '—', rs);
+  const gb = cond('giardia');
+  set('bloating', (gb?.s || 0) > 0.25 ? 'The belly swells with gas.' : 'No bloating.', (gb?.s || 0) > 0.25);
+  set('burps', (gb?.s || 0) > 0.3 ? 'Burps that smell of rotten eggs.' : 'No.', (gb?.s || 0) > 0.3);
+  const am = cond('amoebiasis');
+  set('stool_on_off', am && am.age > 120 ? 'The loose stools come and go, on and off for weeks.' : '—', !!(am && am.age > 120));
+  set('stool_frothy', gi ? 'Yes — frothy, greasy, they float and stink.' : '—', gi);
+  set('constipation', (ty?.s || 0) > 0.3 && p.age >= 12 ? 'Hard stools, few, for days.' : '—', (ty?.s || 0) > 0.3 && p.age >= 12);
+  // urine
+  set('dysuria', (ut?.s || 0) > 0.15 ? (p.age < 5 ? 'Cries when passing urine.' : 'Yes — it burns like fire when passing urine.') : 'No burning.', (ut?.s || 0) > 0.15);
+  set('frequency', (ut?.s || 0) > 0.2 ? 'Passes urine very often, a little each time.' : 'No.', (ut?.s || 0) > 0.2);
+  set('cloudy_urine', (ut?.s || 0) > 0.35 ? 'The urine is cloudy and smells strong.' : 'Urine looks clear.', (ut?.s || 0) > 0.35);
+  set('loin_pain', (ut?.s || 0) > 0.75 ? 'Pain when the back over the kidney is tapped.' : 'No pain over the kidneys.', (ut?.s || 0) > 0.75);
   set('pot_belly', (asc?.W || 0) > 18 && p.age < 12 ? 'Swollen pot belly.' : 'Belly normal size.', (asc?.W || 0) > 18 && p.age < 12);
   const sawWorm = ((asc?.W || 0) > 4 && rng() < 0.6) || ((pin?.W || 0) > 10 && rng() < 0.45);
   set('worms_seen', sawWorm ? ((asc?.W || 0) > 4 ? 'Yes, a long white worm came out in the stool.' : 'Tiny white threads in the stool.') : 'No worms seen.', sawWorm);
@@ -140,6 +168,10 @@ export function signs(p, t, tools = new Set()) {
   const burrows = (sc?.M || 0) > 3 && rng() < (tools.has('magnifier') ? 0.85 : 0.5);
   set('burrows', burrows ? 'Small bumps and fine wavy lines between the fingers and on the wrists.' : (sc?.s || 0) > 0.2 ? 'Scratch marks, but no clear burrows seen.' : 'Skin clear.', burrows);
   set('skin_sores', (sc?.I || 0) > 1 ? 'Scratched bumps with pus and crusts.' : '—', (sc?.I || 0) > 1);
+  const mrash = !!ms && ms.age > 72 && ms.age < ms.D - 24;
+  set('measles_rash', mrash ? 'A blotchy red rash, from the face and behind the ears down over the body.' : '—', mrash);
+  set('koplik', ms && ms.age > 36 && ms.age < 100 ? 'Tiny white spots like grains of salt inside the cheeks.' : 'Inside of the mouth normal.', !!(ms && ms.age > 36 && ms.age < 100));
+  set('rash_hx', mrash ? 'Yes — it began on the face and went down the body.' : (p.allergicUntil || 0) > t ? 'Yes — itchy lumps all over since the medicine.' : 'No rash.', mrash || (p.allergicUntil || 0) > t);
 
   // ——— wounds and burns
   const w = p.conds.find((c) => c.id.startsWith('wound')), b = cond('burn_minor');
@@ -162,10 +194,10 @@ export function signs(p, t, tools = new Set()) {
   const bp = cond('back_pain');
   const relief = V.ds.relief.pain || 0;
   set('pain_site', bp ? `Low back, ${bp.s * (1 - relief) > 0.4 ? 'bad' : 'aching'}, worse bending and lifting.` : wd || cond('dysentery') ? 'Cramps in the belly.' : w || b ? 'The wound/burn pains.' : 'No particular pain.', !!bp);
-  set('cramp', (cond('dysentery')?.s || 0) > 0.2 || (wd?.s || 0) > 0.4 ? `Cramping belly pains${(V.ds.relief.cramp || 0) > 0.4 ? ' (eased by the remedy)' : ''}.` : 'No cramps.', (cond('dysentery')?.s || 0) > 0.2 || (wd?.s || 0) > 0.4);
+  set('cramp', (cond('amoebiasis')?.s || 0) > 0.2 || (cond('dysentery')?.s || 0) > 0.2 || (wd?.s || 0) > 0.4 ? `Cramping belly pains${(V.ds.relief.cramp || 0) > 0.4 ? ' (eased by the remedy)' : ''}.` : 'No cramps.', (cond('dysentery')?.s || 0) > 0.2 || (wd?.s || 0) > 0.4);
   set('back_exam', bp ? 'Tender muscles beside the lower spine; legs strong, feeling normal.' : 'Back normal.', !!bp);
   const pe = cond('pre_eclampsia');
-  const ed = (hf?.V || 0) > 2 || (pe?.sev || 0) > 0.2 || (p.pregnant > 30);
+  const ed = (hf?.V || 0) > 2 || (pe?.sev || 0) > 0.2 || (p.pregnant > 30) || V.hb < 5;
   set('edema', ed ? ((hf?.V || 0) > 4 ? 'Pitting swelling up to the shins.' : (pe?.sev || 0) > 0.2 ? 'Feet, hands and face swollen; finger press leaves a dent.' : 'Mild ankle swelling.') : 'No swelling.', (hf?.V || 0) > 2 || (pe?.sev || 0) > 0.2);
   if (p.sex === 'f' && p.age >= 13) set('pregnancy', p.pregnant ? `Yes — monthly bleeding stopped about ${Math.round(p.pregnant / 4.3)} months ago.` : 'Not pregnant.', !!p.pregnant, p.pregnant);
   const np = cond('nausea_pregnancy');
@@ -175,13 +207,23 @@ export function signs(p, t, tools = new Set()) {
   set('bp', `${V.bpS}/${V.bpD} mmHg`, V.bpS >= 140 || V.bpD >= 90, V.bpS);
 
   // ——— medicines and their effects
+  // allergy: most who are truly allergic remember a reaction; a few who are not believe they are
+  const said = makeRng(p.seed, 'allergy-said')();
+  const thinks = p.allergy ? said < 0.7 : said < 0.05;
+  set('allergy_hx', thinks ? (p.allergy === 'aspirin' ? 'Yes — aspirin once made it hard to breathe.' : 'Yes — penicillin gave a rash and swelling once.') : 'No allergies that I know of.', thinks);
+  const hives = (p.allergicUntil || 0) > t;
+  set('rash', hives ? 'Raised, itchy pale welts over the body (hives); the lips are a little swollen.' : 'No rash.', hives);
   const taking = (p.rx || []).filter((r) => !r.instr && !r.stopped && r.left > 0).map((r) => r.name);
   set('meds_taken', taking.length ? 'Taking: ' + taking.join(', ') + '.' : 'Nothing yet.', false);
   const tox = [];
-  for (const s of p.lastTox || []) tox.push({ tinnitus: 'ears ringing', cinchonism: 'ears ringing, dizzy, sick', quinine_toxic: 'cannot see well', digitalis_gi: 'nausea, sees yellow', digitalis_arrhythmia: 'heart stumbling', anticholinergic: 'mouth dry as dust, heart racing', anticholinergic_severe: 'seeing things that are not there' }[s] || s);
+  if (hives) tox.push('an itchy rash all over');
+  for (const s of p.lastTox || []) tox.push({ tinnitus: 'ears ringing', cinchonism: 'ears ringing, dizzy, sick', quinine_toxic: 'cannot see well', digitalis_gi: 'nausea, sees yellow', digitalis_arrhythmia: 'heart stumbling', anticholinergic: 'mouth dry as dust, heart racing', anticholinergic_severe: 'seeing things that are not there', marrow: 'tired, bruises easily', grey_baby: 'the baby is grey and floppy' }[s] || s);
   set('tox_symptoms', tox.length ? 'Complains of: ' + tox.join('; ') + '.' : 'No new complaints from the medicine.', tox.length > 0);
   const poorly = p.conds.some((c) => (c.s || 0) > 0.35);
   set('appetite', poorly ? 'Eating little.' : 'Eating well.', poorly);
+  const hw = cond('hookworm');
+  set('pica', p.age < 13 && (hw?.s || 0) > 0.3 ? 'Yes — eats earth and clay when no one is looking.' : 'No.', p.age < 13 && (hw?.s || 0) > 0.3);
+  set('fatigue', V.hb < 9 ? 'Tired all the time; breathless going up the hill.' : 'Not especially tired.', V.hb < 9);
   set('weight_loss', p.nutrition < 0.75 || (asc?.W || 0) > 30 ? 'Has become thinner.' : 'No.', p.nutrition < 0.75);
   set('weight', `${p.weight.toFixed(1)} kg`, false, p.weight);
   if (p.age >= 0.5 && p.age < 5) {

@@ -61,6 +61,8 @@ export const SPECIALS = [
     note: 'WTND: 4 crushed cloves in a glass of water, juice or milk, a glass a day for 3 weeks (pinworm).' },
   { id: 'ors_sugar', name: 'Rehydration drink (sugar–salt)', unit: 'ml', from: [['salt', 3], ['sugar', 40]], station: 'hearth', tool: 'cooking_pot', min: 10, n: 1000, fluid: true, shelfDays: 1, icon: 'water-flask', color: '#c8e8f8',
     note: '1 litre boiled water, ½ level teaspoon salt, 8 level teaspoons sugar. Taste: less salty than tears (WTND p.152).' },
+  { id: 'ors_who', name: 'Rehydration drink (WHO sachet)', unit: 'ml', from: [['ors_packet', 1]], station: 'hearth', tool: 'cooking_pot', min: 8, n: 1000, fluid: { na: 75 }, shelfDays: 1, icon: 'water-flask', color: '#a8d8f8',
+    note: 'One sachet stirred into a litre of boiled, cooled water. 75 mmol/L sodium. Throw away what is left after a day.' },
   { id: 'ors_cereal', name: 'Rehydration drink (rice)', unit: 'ml', from: [['salt', 3], ['rice_flour', 50]], station: 'hearth', tool: 'cooking_pot', min: 15, n: 1000, fluid: true, shelfDays: 0.33, icon: 'bowl-of-rice', color: '#f0f0e0',
     note: 'Powdered rice and salt boiled 5–7 minutes to a thin gruel. Spoils within hours in the heat.' },
 ];

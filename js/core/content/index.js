@@ -6,6 +6,7 @@ import { ACTIVE } from './actives.js';
 import { METHODS, EXTRACT, HERB_METHODS, SPECIALS } from './preparations.js';
 import { INGREDIENTS, TOOLS, MATERIALS, PRODUCE } from './goods.js';
 import { PLACEABLES } from './build.js';
+import { MEDICINES } from './medicines.js';
 
 const mid = ([a, b]) => (a + b) / 2;
 
@@ -68,7 +69,7 @@ export function buildContent() {
   for (const s of SPECIALS) {
     const it = { id: s.id, name: s.name, cat: 'remedy', unit: s.unit, stack: s.unit === 'app' ? 40 : 5000, shelfDays: s.shelfDays, note: s.note, icon: gi(s.icon, s.color), tags: ['remedy'] };
     if (s.topical) { it.topical = s.topical; it.route = ['topical']; }
-    if (s.fluid) { it.fluid = { na: 47 }; it.route = ['oral']; }
+    if (s.fluid) { it.fluid = { na: s.fluid.na ?? 47 }; it.route = ['oral']; }
     if (s.oralFrom) {
       const g = INGREDIENTS.find((x) => x.id === s.oralFrom);
       const act = {};
@@ -84,6 +85,7 @@ export function buildContent() {
     const it = add({ ...g, cat: 'ingredient', icon: gi(g.icon, g.color), tags: ['ingredient'] });
     if (g.id === 'honey') { it.actives = { honey: 1000 }; it.topical = { honey: 1 }; it.route = ['oral', 'topical']; it.appG = 15; }
   }
+  for (const m of MEDICINES) add({ ...m, cat: 'medicine', route: m.route ?? (m.topical ? ['topical'] : ['oral']), icon: gi(m.icon, m.color), tags: ['medicine'] });
   for (const t of TOOLS) add({ ...t, cat: 'tool', stack: 1, tool: t.id, icon: gi(t.icon, t.color), tags: ['tool'] });
   for (const m of MATERIALS) add({ ...m, cat: 'material', icon: gi(m.icon, m.color), tags: ['material'] });
   for (const p of PRODUCE) add({ ...p, cat: 'produce', icon: gi(p.icon, p.color), tags: ['produce'] });

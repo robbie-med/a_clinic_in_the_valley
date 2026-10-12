@@ -145,7 +145,7 @@ export class ClinicScene extends Phaser.Scene {
       const id = 'v:' + v.id;
       const has = this.walkers.get(id);
       if (key && !has) {
-        const spot = v.id === 'duka' ? R.duka.inside : v.id === 'market' ? R.stalls[0] : v.id === 'herbalist' ? R.stalls[1] : R.stalls[2];
+        const spot = v.id === 'duka' ? R.duka.inside : v.id === 'market' ? R.stalls[0] : v.id === 'herbalist' ? R.stalls[1] : v.id === 'stores' ? R.stalls[3] : R.stalls[2];
         const doll = this.makeDoll(v.look.base, v.look.hair, v.id === 'duka' ? 'player/body/shirt_white1' : 'player/body/robe_green', 1).setDepth(18);
         const w = { kind: 'vendor', id, vendor: v, key, x: spot.x + 0.5, y: spot.y + 0.5, doll, path: null };
         this.walkers.set(id, w);

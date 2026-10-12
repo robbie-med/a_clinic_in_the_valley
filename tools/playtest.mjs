@@ -4,16 +4,15 @@
 // go to outDir. Fails on any page error.
 //   node tools/playtest.mjs [outDir] [--mobile]
 import { chromium } from 'playwright';
-import { spawn } from 'node:child_process';
+import { serve } from './serve.mjs';
 import { mkdirSync } from 'node:fs';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { fileURLToPath } from 'node:url';
 
 const out = process.argv[2] && !process.argv[2].startsWith('--') ? process.argv[2] : 'playtest-out';
 const mobile = process.argv.includes('--mobile');
 mkdirSync(out, { recursive: true });
 const PORT = 3411;
-const server = spawn('python3', ['-m', 'http.server', String(PORT), '--bind', '127.0.0.1'], { cwd: fileURLToPath(new URL('..', import.meta.url)), stdio: 'ignore' });
+const server = await serve(PORT);
 const errors = [];
 let browser;
 const shot = (page, name) => page.screenshot({ path: `${out}/${name}.png` });
@@ -145,7 +144,7 @@ try {
   errors.push('test: ' + e.message);
 } finally {
   await browser?.close();
-  server.kill();
+  server.close();
 }
 if (errors.length) { console.log('ERRORS:\n' + [...new Set(errors)].join('\n')); process.exit(1); }
 console.log('OK');

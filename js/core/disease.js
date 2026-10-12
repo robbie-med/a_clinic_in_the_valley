@@ -6,7 +6,8 @@
 // pregnancy, preeclampsia. State lives on the condition record so it saves as plain JSON.
 import { COND } from './content/conditions.js';
 import { ACTIVE } from './content/actives.js';
-import { drugState, toxSigns, gutExposure } from './pk.js';
+import { ORG } from './content/organisms.js';
+import { drugState, toxSigns, gutExposure, hill } from './pk.js';
 import { makeRng } from './rng.js';
 
 export const HOUR = 60;
@@ -45,7 +46,11 @@ const MODELS = {
       let loss = 0;
       if (P.stool) loss += stoolLoss(p, P.stool, c.s, x);
       if (P.vomit && c.age < 48) loss += (5 / 1000 / 24) * p.weight * c.s * P.vomit;
-      return { loss, hazard: 0, done: c.age >= c.D };
+      // measles kills the young and the thin; vitamin A cuts deaths ~60% under 2 (Huiming Y et al. Cochrane 2005;CD001479).
+      // The 0.8 is calibrated: given on arrival, partway into the illness, it must land near that 60%.
+      const vuln = (p.age < 2 ? 2.5 : p.age < 5 ? 1.5 : 0.6) / hostDefence(p) ** 2;
+      const hazard = (P.hazard || 0) * c.s ** 2 * vuln * (1 - 0.8 * (x.ds.relief.vita || 0));
+      return { loss, hazard, done: c.age >= c.D };
     },
   },
   bacterial: {
@@ -60,7 +65,8 @@ const MODELS = {
       c.age += dt;
       const imm = P.imm * hostDefence(p) * Math.min(1, (c.age / P.onset) ** 2);
       const hosp = x.hosp ? 0.25 : 0; // antibiotic at the health centre: ~0.25 log10/h kill
-      c.L = Math.min(P.Lmax, c.L + dt * (P.r * (1 - c.L / P.Lmax) - imm - hosp));
+      const ab = abx(c, x, dt, c.L);
+      c.L = Math.min(P.Lmax, c.L + dt * (P.r * (1 - c.L / P.Lmax) * (1 - ab.inhib) - imm - hosp - ab.kill));
       c.s = clamp((c.L - P.Lsym) / (P.Lmax - P.Lsym), 0, 1) * c.sev;
       let loss = 0;
       if (P.stool) loss += stoolLoss(p, P.stool, c.s * 1.4, x);
@@ -120,7 +126,8 @@ const MODELS = {
       c.dirt = clamp(c.dirt - dt * 0.0015 + (dressed ? 0 : dt * 0.001), 0, 1);
       const growth = 0.035 * (c.vir || 1) * (0.3 + c.dirt) * (1 - c.I / 9);
       const imm = 0.022 * hostDefence(p) * (c.I > 0.2 ? 1 : 0);
-      c.I = clamp(c.I + dt * (growth - imm - hosp) - (top.wound?.infect || 0) - (x.instr.has('hot_compress') ? dt * 0.012 : 0), 0, 9);
+      const ab = abx(c, x, dt, c.I + 1);
+      c.I = clamp(c.I + dt * (growth * (1 - ab.inhib) - imm - hosp - ab.kill) - (top.wound?.infect || 0) - (x.instr.has('hot_compress') ? dt * 0.012 : 0), 0, 9);
       const rate = (1 / (P.days * 24 + c.size * 12)) * (1 + (top.wound?.healBonus || 0)) * (c.I > 3 ? 0.15 : c.I > 2 ? 0.6 : 1);
       c.heal = clamp(c.heal + dt * rate, 0, 1);
       c.s = clamp(c.I / 7, 0, 1);
@@ -139,7 +146,8 @@ const MODELS = {
       c.age += dt;
       const top = x.topical;
       c.dirt = clamp(c.dirt - dt * 0.003 + (x.instr.has('dressing') ? 0 : dt * 0.001), 0, 1);
-      c.I = clamp(c.I + dt * (0.03 * (0.3 + c.dirt) * (1 - c.I / 9) - 0.02 * hostDefence(p) - (x.hosp ? 0.3 : 0)) - (top.burn?.infect || 0) - (top.wound?.infect || 0), 0, 9);
+      const ab = abx(c, x, dt, c.I + 1);
+      c.I = clamp(c.I + dt * (0.03 * (0.3 + c.dirt) * (1 - c.I / 9) * (1 - ab.inhib) - 0.02 * hostDefence(p) - (x.hosp ? 0.3 : 0) - ab.kill) - (top.burn?.infect || 0) - (top.wound?.infect || 0), 0, 9);
       const rate = (1 / ((P.days + (c.deep ? 20 : 0)) * 24)) * (1 + (top.burn?.healBonus || 0) + (top.wound?.healBonus || 0)) * (c.I > 3 ? 0.2 : 1);
       c.heal = clamp(c.heal + dt * rate, 0, 1);
       c.s = clamp(c.tbsa / 10 + c.I / 9, 0, 1);
@@ -177,6 +185,7 @@ const MODELS = {
       const P = COND.get(c.id).params;
       c.W = Math.round(lerp(P.worms[0], P.worms[1], rng() ** 1.5));
       c.age = since;
+      if (P.bloodLoss) c.hb = Math.max(3, p.hb - wormBloodDrop(p, P, c.W, 0)); // months of it already
     },
     step(p, c, dt, x) {
       const P = COND.get(c.id).params;
@@ -190,6 +199,14 @@ const MODELS = {
         c.W += Math.floor(add) + (x.rng() < add % 1 ? 1 : 0);
       }
       c.s = clamp(c.W / (P.heavy < 1e8 ? 30 : 60), 0, 1);
+      if (P.bloodLoss) {
+        // blood creeps toward what the worms allow; the marrow rebuilds ~0.04 g/dL a day, 3× that with iron
+        const iron = x.ds.relief.iron || 0;
+        const target = p.hb - wormBloodDrop(p, P, c.W, iron), step = ((0.04 + 0.08 * iron) * dt) / 24;
+        c.hb += clamp(target - c.hb, -step, step);
+        c.s = Math.max(c.s, clamp((p.hb - c.hb) / 5, 0, 1));
+        return { loss: 0, hazard: c.hb < 5 ? 0.0006 * (5 - c.hb) ** 2 : 0, done: c.W === 0 && c.hb > p.hb - 0.5 };
+      }
       return { loss: 0, hazard: P.heavy < 1e8 && c.W > P.heavy && p.age < 10 ? 0.0004 : 0, done: c.W === 0 };
     },
   },
@@ -249,11 +266,52 @@ const MODELS = {
   },
 };
 
+/** How far blood-sucking worms pull haemoglobin down (g/dL): blood lost a day against the body's blood and
+ *  iron. Iron in the diet or as tablets lets the marrow keep up with much of it. */
+function wormBloodDrop(p, P, W, iron) {
+  return clamp(((W * P.bloodLoss * 30) / p.weight) * (1 - 0.6 * iron), 0, 8);
+}
+
 function stoolLoss(p, S, s, x) {
   const mlKg = S.mlKg[ageBand(p.age)];
   const relief = x.ds.relief.stool || 0, worse = x.ds.worse.stool || 0;
   return (mlKg * p.weight / 1000 / 24) * s * (1 - relief) * (1 + worse);
 }
+/**
+ * What antibiotics are doing to this infection's strain this hour: { kill (log10/h), inhib (share of growth
+ * stopped) }. Free drug over the strain's MIC drives both. While free drug sits inside the selection window
+ * (above the MIC, below window × MIC) a large population (pop, log10) can throw up a resistant mutant that
+ * takes over: the strain's MIC for that drug jumps by the organism's fold (Drlica K. J Antimicrob
+ * Chemother 2003;52:11, the mutant selection window). The per-hour odds are an estimate.
+ */
+function abx(c, x, dt, pop) {
+  const out = { kill: 0, inhib: 0 };
+  if (!c.mic) return out;
+  for (const [id, C] of Object.entries(x.ds.conc)) {
+    const a = ACTIVE.get(id);
+    if (!a.abx || !(id in c.mic) || C <= 0) continue;
+    const r = (C * (a.pk.fu ?? 1)) / c.mic[id];
+    const f = hill(r, a.abx.ec50, a.abx.hill);
+    out.kill = Math.max(out.kill, a.abx.kmax * f);
+    out.inhib = Math.max(out.inhib, f);
+    if (r > 1 && r < a.abx.window && pop > 5 && !c.res?.[id] && x.rng() < 0.0004 * dt * (pop - 5)) {
+      c.mic[id] *= ORG.get(c.org).fold[id] || 16;
+      (c.res ||= {})[id] = x.t;
+    }
+  }
+  return out;
+}
+/** The strain an infection is caught from: each drug's MIC, resistant with the valley's odds. */
+export function pickStrain(c, orgId, rng, resist) {
+  const o = ORG.get(orgId);
+  const R = resist?.[orgId] || o.resist0;
+  c.org = orgId; c.mic = {};
+  for (const [d, m] of Object.entries(o.mic)) {
+    const res = rng() < (R[d] ?? 0);
+    c.mic[d] = m * (res ? o.fold[d] : 1) * (o.scatter === false ? 1 : 2 ** Math.round((rng() - 0.5) * 2)); // ± one doubling dilution
+  }
+}
+
 function binom(n, keep, rng) {
   if (n <= 0) return 0;
   if (n > 60) return Math.max(0, Math.round(n * keep + Math.sqrt(n * keep * (1 - keep)) * gauss(rng)));
@@ -264,10 +322,11 @@ function binom(n, keep, rng) {
 const gauss = (rng) => Math.sqrt(-2 * Math.log(Math.max(1e-9, rng()))) * Math.cos(2 * Math.PI * rng());
 
 // ————————————————————————————————————————————— conditions on a patient
-export function addCondition(p, id, rng, sinceH = 24) {
+export function addCondition(p, id, rng, sinceH = 24, resist = null) {
   const def = COND.get(id);
   const c = { id, t0: p.t - sinceH * HOUR, sinceH };
   MODELS[def.model].init(p, c, rng, sinceH);
+  if (def.params.org) pickStrain(c, def.params.org, makeRng(p.seed, 'strain', id), resist);
   // walk the illness forward silently so the state matches "ill for sinceH hours"
   const x = { ds: { relief: {}, worse: {}, prr: {}, heart: 0, conc: {} }, rng, t: p.t, hosp: false, instr: new Set(), topical: {}, wormKills: {} };
   c.age = 0;
@@ -301,7 +360,7 @@ export function simulate(p, toT, C) {
     const topical = {};
     const wormKills = {};
     const instr = new Set((p.rx || []).filter((r) => r.instr && !r.stopped && (r.until ?? Infinity) > t0 && rng() < (p.adh ?? 0.8) + 0.15).map((r) => r.instr));
-    let fluidIn = 0, naLoad = 0;
+    let fluidIn = 0, naLoad = 0, allergic = 0;
     for (const rx of p.rx || []) {
       for (const [td, k] of dosesDue(rx, t0, t1)) {
         if (rx.left <= 0) { if (!rx.ranOut) { rx.ranOut = true; ev.push({ t: td, kind: 'ranout', text: `ran out of ${rx.name}` }); } continue; }
@@ -309,6 +368,14 @@ export function simulate(p, toT, C) {
         const amt = Math.min(rx.amount, rx.left);
         rx.left -= amt; rx.taken = (rx.taken || 0) + 1;
         applyDose(p, rx, amt, td, topical, wormKills);
+        // allergy: hives within the hour; now and then the throat swells (anaphylaxis). Most stop the medicine.
+        const al = Object.keys(rx.actives || {}).find((id) => p.allergy && ACTIVE.get(id).allergen === p.allergy);
+        if (al) {
+          allergic += 1;
+          if (!p.toxSeen.allergy) { p.toxSeen.allergy = td; ev.push({ t: td, kind: 'tox', text: `an itchy raised rash and swollen lips (allergic to ${ACTIVE.get(al).name.toLowerCase()})`, active: al }); }
+          p.allergicUntil = td + 48 * HOUR;
+          if (rng() < 0.6) { rx.stopped = td; ev.push({ t: td, kind: 'stopped', text: `stopped ${rx.name} (the rash)` }); }
+        }
         if (rx.fluid) { fluidIn += amt / 1000; naLoad += (amt / 1000) * rx.fluid.na; }
       }
       // stop when better: the classic way a course is cut short
@@ -322,7 +389,8 @@ export function simulate(p, toT, C) {
     }
     const ds = drugState(p, t1);
     const x = { ds, rng, t: t1, hosp: p.hospital && t1 >= p.hospital.from && t1 < p.hospital.until, instr, topical, wormKills };
-    let loss = 0, hazard = 0;
+    // ~1 in 100 allergic exposures by mouth goes on to anaphylaxis; without adrenaline some of those die
+    let loss = 0, hazard = allergic * 0.002;
     for (const c of [...p.conds]) {
       const def = COND.get(c.id);
       const r = MODELS[def.model].step(p, c, 1, x);

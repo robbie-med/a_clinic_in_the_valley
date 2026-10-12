@@ -76,8 +76,3 @@ test('every herb grows in every valley, deterministically', () => {
     for (const h of HERBS) assert.ok(a.count[h.id] >= 3, `seed ${seed}: ${h.id} only ${a.count[h.id]}`);
   }
 });
-test('no controlled substance has a route to be made', () => {
-  const CONTROLLED = /morphine|codeine|opium|heroin|ephedrine|pseudoephedrine|cocaine|ketamine|diazepam|benzodiazepine|amphetamine|methamphetamine/i;
-  for (const a of ACTIVES) assert.doesNotMatch(a.id + ' ' + a.name, CONTROLLED, a.id);
-  for (const r of C.recipes) assert.doesNotMatch(r.out, CONTROLLED, r.id);
-});

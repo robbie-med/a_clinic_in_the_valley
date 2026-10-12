@@ -15,13 +15,17 @@ independent.
 - **Every clinical number needs a `ref`.** Mark effect sizes fitted to a trial as `calibrated`, and
   mark extraction efficiencies as estimates. After changing any number, run `npm test`. The outcome
   bands in `test/sim.test.mjs` must still hold; recalibrate rather than loosening them blindly.
-- **No synthesis or extraction routes for controlled substances** (opioids, benzodiazepines,
-  ketamine, ephedrine and similar precursors). `test/content.test.mjs` enforces this. The phase-3
-  chemistry lab keeps it.
+- Any drug may be made in the lab: this valley follows no real country's drug law. Recipes for drugs
+  that are controlled in the real world stay at game level (inputs, station, time, yield), with no
+  real reagents, conditions or step-by-step chemistry.
 - WTND text is paraphrased with page refs. The book (2011 PDF plus extracted text) is committed only
   encrypted, as `sources/wtnd-book.tar.gz.gpg` (AES-256, symmetric; the user holds the password). On a
   new machine, unpack it with `gpg -d sources/wtnd-book.tar.gz.gpg | tar xz -C sources`. The
   plaintext files in `sources/` are gitignored: never commit them unencrypted.
+- Patients draw each drug's PK variation from its own seeded stream (`patient.js`), so adding a
+  compound never reshuffles who walks in. Keep new per-patient randomness on its own stream too.
+- Bacterial (and parasite) strains come from `content/organisms.js` and the valley's resistance
+  index (`clinic.js`). Antibiotics act only through MIC there, never by naming an illness.
 - New game-icon name: rebuild icons (`node tools/used-icons.mjs | python3 tools/build_icons.py <game-icons repo>`;
   a clone was used from the session scratchpad, so `git clone --depth 1 https://github.com/game-icons/icons`).
 - After gameplay changes, run `npm test` and `node tools/playtest.mjs <scratch dir>` (and `--mobile`).
@@ -29,5 +33,6 @@ independent.
   matters if an APK is made later.
 
 ## Ports & services
-- 3411 `no-doctor-preview`: on-demand static preview (`.claude/launch.json`). Also used by
+- 3411 `no-doctor-preview`: on-demand static preview (`node tools/serve.mjs`, no Python needed;
+  `.claude/launch.json`). Also used by
   `tools/playtest.mjs`, which starts and stops its own server.

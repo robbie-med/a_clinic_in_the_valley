@@ -39,7 +39,7 @@ export function conditionWeight(def, person, season, hamlet) {
   if (E.onlyPregnant && !person.pregnant) return 0;
   if (E.early && person.pregnant > 14) return 0;
   if (E.late && person.pregnant < 26) return 0;
-  let w = E.w * (E.season?.[season] ?? 1);
+  let w = E.w * (E.season?.[season] ?? 1) * (E.sex?.[person.sex] ?? 1);
   if (E.age) {
     const band = E.age.find(([a, b]) => person.age >= a && person.age < b);
     w *= band ? band[2] : 0;
@@ -54,10 +54,11 @@ export function conditionWeight(def, person, season, hamlet) {
 }
 
 /**
- * A new patient. opts: { seed, key, t (game min), season, hamlet:{id,name,mosquito,water,crowd,wealth}, cond? }
+ * A new patient. opts: { seed, key, t (game min), season, hamlet:{id,name,mosquito,water,crowd,wealth}, cond?,
+ * resist? (the valley's resistance index, for the strain of a bacterial infection) }
  * Picks age/sex from the population, then an illness that fits them, then how long they have had it.
  */
-export function makePatient({ seed, key, t, season, hamlet, cond: forceCond, age: forceAge, sex: forceSex }) {
+export function makePatient({ seed, key, t, season, hamlet, cond: forceCond, age: forceAge, sex: forceSex, resist }) {
   const rng = makeRng(seed, 'patient', key);
   let person, condId, tries = 0;
   do {
@@ -75,21 +76,24 @@ export function makePatient({ seed, key, t, season, hamlet, cond: forceCond, age
   const weight = Math.round(medianWeight(age, sex) * lerp(0.82, 1, nutrition) * (1 + (rng() - 0.5) * 0.12) * 10 + (pregnant ? pregnant * 3 : 0)) / 10;
   const hb = age < 5 ? lerp(9.5, 12, rng()) : sex === 'f' ? lerp(10.5, 13.5, rng()) - (pregnant ? 1 : 0) : lerp(12.5, 15.5, rng());
   const pkv = {};
-  for (const a of ACTIVES) if (a.pk) pkv[a.id] = [Math.exp(gauss(rng) * a.pk.spread), Math.exp(gauss(rng) * a.pk.spread * 0.6)];
+  // each drug draws from its own stream, so adding a drug to the game never reshuffles who walks in
+  for (const a of ACTIVES) if (a.pk) { const r = makeRng(seed, 'pkv', key, a.id); pkv[a.id] = [Math.exp(gauss(r) * a.pk.spread), Math.exp(gauss(r) * a.pk.spread * 0.6)]; }
   const wealth = clamp((hamlet?.wealth ?? 0.5) + (rng() - 0.5) * 0.5, 0.02, 1);
   const p = {
     id: 'p' + key, key, seed: (seed ^ hashKey(key)) >>> 0,
     name: personName(rng, sex), sex, age: Math.round(age * 10) / 10, weight, nutrition, hb, pregnant,
     hamlet: hamlet?.id || null, wealth, adh: clamp(lerp(0.6, 0.95, rng()) + (age < 12 ? 0.03 : 0), 0.4, 0.98), trust: 0.5,
-    nauseaSev: lerp(0.5, 1, rng()), pkv, allergy: rng() < 0.03 ? 'aspirin' : null,
+    // true penicillin allergy ~2% (far fewer than the ~10% who say so); aspirin ~1%
+    nauseaSev: lerp(0.5, 1, rng()), pkv, allergy: ((r) => (r < 0.02 ? 'penicillin' : r < 0.03 ? 'aspirin' : null))(rng()),
     t, conds: [], hyd: 0, doses: { sys: {}, gut: [] }, rx: [], healed: [], flags: {}, toxSeen: {}, visits: [],
   };
   p.immMalaria = clamp((0.1 + (age - 0.5) / 13) * (pregnant ? 0.7 : 1) * lerp(0.6, 1.2, hamlet?.mosquito ?? 0.5) * lerp(0.35, 1.45, rng()), 0.08, 0.85);
   const def = COND.get(condId);
-  const sinceH = def.model === 'pain' || def.model === 'scabies' || def.model === 'worms' || def.model === 'heart' ? Math.round(lerp(72, 400, rng()))
+  const sinceH = def.params.since ? Math.round(lerp(def.params.since[0], def.params.since[1], rng()))
+    : def.model === 'pain' || def.model === 'scabies' || def.model === 'worms' || def.model === 'heart' ? Math.round(lerp(72, 400, rng()))
     : def.model === 'wound' || def.model === 'burn' ? Math.round(lerp(def.id === 'wound_infected' ? 60 : 2, def.id === 'wound_infected' ? 140 : 30, rng()))
       : Math.round(lerp(12, 72, rng()));
-  addCondition(p, condId, makeRng(seed, 'cond', key), sinceH);
+  addCondition(p, condId, makeRng(seed, 'cond', key), sinceH, resist);
   p.mainCond = condId;
   p.since = sinceH;
   p.complaint = complaintText(p, def, rng);

@@ -35,7 +35,7 @@ export function nextVisit(seed, v, t) {
   return vis ? Math.max(d, vis.from) : null;
 }
 
-export const LOT = (it) => (it.unit === 'g' ? (it.price * 100 >= 0.5 ? 100 : 500) : it.unit === 'ml' ? (it.price * 250 >= 0.5 ? 250 : 1000) : 1);
+export const LOT = (it) => it.pack || (it.unit === 'g' ? (it.price * 100 >= 0.5 ? 100 : 500) : it.unit === 'ml' ? (it.price * 250 >= 0.5 ? 250 : 1000) : 1);
 export const lotPrice = (it, mult) => Math.max(0.1, Math.round(it.price * LOT(it) * mult * 10) / 10);
 
 /** This visit's goods: [{ id, n (lots), price, q }]. */
@@ -53,6 +53,8 @@ export function stock(G, v, key) {
     // herbs from a trader: strength varies; sometimes it is not what they say
     let q = it.cat === 'herb' || it.cat === 'remedy' ? 0.55 + rng() * 0.8 : undefined;
     if (q !== undefined && v.adulterate && rng() < v.adulterate) q *= 0.2;
+    // falsified (no drug at all) or substandard (too little) medicine: ~1 in 10 in low-income markets (WHO 2017)
+    if (it.cat === 'medicine' && v.fakes && rng() < v.fakes) q = rng() < 0.5 ? 0 : 0.3 + rng() * 0.4;
     if (left > 0) out.push({ id, n: left, price: lotPrice(it, mult), q });
   }
   return out;
@@ -91,6 +93,54 @@ export function sell(G, v, id) {
   p.coins = Math.round((p.coins + price) * 10) / 10;
   meta.ledger.push({ t: G.W.time, kind: 'sell', text: `Sold ${it.name} to the ${v.name.toLowerCase()}`, amount: price });
   return { ok: true, price };
+}
+
+// ——— the catalogue: order by post from the city wholesaler. Paid when posted; the runner brings it to the
+// clinic shelf in 4–8 days. Sealed stock, but now and then a falsified box gets through the supply chain.
+export const CATALOGUE = { mult: 1.05, postage: 2, days: [4, 8], fakes: 0.03 };
+const round1 = (n) => Math.round(n * 10) / 10;
+export const catalogueItems = (C) => [...C.items.values()].filter((it) => it.cat === 'medicine' || (it.cat === 'tool' && it.price >= 2));
+export const orderTotal = (C, cart) => round1(Object.entries(cart).reduce((a, [id, n]) => a + lotPrice(C.items.get(id), CATALOGUE.mult) * n, 0) + CATALOGUE.postage);
+
+/** Post an order. cart: { itemId: lots }. */
+export function placeOrder(G, cart) {
+  const { C, p, meta } = G;
+  const lines = Object.entries(cart).filter(([, n]) => n > 0);
+  if (!lines.length) return { ok: false, why: 'Nothing in the order.' };
+  const total = orderTotal(C, Object.fromEntries(lines));
+  if (p.coins < total) return { ok: false, why: `The order comes to ${total} sh with postage.` };
+  meta.orders ||= [];
+  meta.orderSeq = (meta.orderSeq || 0) + 1;
+  const rng = makeRng(meta.seed, 'post', meta.orderSeq);
+  const [a, b] = CATALOGUE.days;
+  const due = (day(G.W.time) - 1 + a + Math.floor(rng() * (b - a + 1))) * DAY + 11 * 60;
+  const goods = lines.map(([id, n]) => {
+    const it = C.items.get(id);
+    const q = it.cat === 'medicine' && rng() < CATALOGUE.fakes ? (rng() < 0.5 ? 0 : 0.3 + rng() * 0.4) : undefined;
+    return [id, n * LOT(it), q];
+  });
+  meta.orders.push({ n: meta.orderSeq, goods, due, total, posted: G.W.time });
+  p.coins = round1(p.coins - total);
+  meta.ledger.push({ t: G.W.time, kind: 'buy', text: `Posted order no. ${meta.orderSeq} to the city wholesaler (due about day ${day(due)})`, amount: -total });
+  return { ok: true, total, due };
+}
+
+/** Parcels that have arrived go onto the first medicine shelf, then into your bag. Returns news. */
+export function deliverOrders(G) {
+  const news = [];
+  const orders = G.meta.orders || [];
+  for (const o of [...orders]) {
+    if (G.W.time < o.due) continue;
+    const shelf = G.W.shelves()[0]?.inv;
+    o.goods = o.goods.map(([id, n, q]) => {
+      let left = shelf ? addItem(shelf, G.C, id, n, { q, t: G.W.time }) : n;
+      if (left) left = addItem(G.p.inv, G.C, id, left, { q, t: G.W.time });
+      return [id, left, q];
+    }).filter(([, n]) => n > 0);
+    if (!o.goods.length) { orders.splice(orders.indexOf(o), 1); news.push({ kind: 'post', text: `The post runner brought order no. ${o.n}. It is on the medicine shelf.` }); }
+    else { o.due = G.W.time + DAY; news.push({ kind: 'post', text: `The post runner came with order no. ${o.n}, but there is no room on the shelf or in your bag. He will come back tomorrow.` }); }
+  }
+  return news;
 }
 
 export { VENDORS, VENDOR, DAY };

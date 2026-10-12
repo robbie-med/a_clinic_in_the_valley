@@ -4,10 +4,11 @@
 import { QUESTIONS, EXAMS, POINTS } from './content/findings.js';
 import { COND, CONDITIONS } from './content/conditions.js';
 import { ACTIVE } from './content/actives.js';
+import { ORGANISMS } from './content/organisms.js';
 import { signs } from './signs.js';
 import { count, remove, countSpec } from './inventory.js';
 import { HOUR, DAY } from './time.js';
-import { payment, collect, scheduleReturn, who } from './clinic.js';
+import { payment, collect, scheduleReturn, who, selectPressure } from './clinic.js';
 import { gainXp } from './crafting.js';
 import { stackPotency } from './crafting.js';
 import { makeRng } from './rng.js';
@@ -182,6 +183,7 @@ export function finishEncounter(G, enc) {
     if (qty <= 0) continue;
     const { q } = dispense(G, line.item, qty);
     charges += qty * it.price;
+    if (line.route === 'oral') for (const a of Object.keys(it.actives || {})) if (ORGANISMS.some((o) => a in o.mic)) selectPressure(G.meta.clinic, a);
     p.rx.push({
       item: line.item, name: it.name, q, left: qty, amount: line.amount, perDay: line.perDay, days: line.days, start: now, route: line.route,
       actives: line.route === 'oral' ? it.actives : undefined, topical: line.route === 'topical' ? it.topical : undefined,
@@ -232,7 +234,11 @@ export function judge(G, p, enc) {
   for (const i of enc.instr) given.add(i);
   const T = main.teach;
   const helped = [...T.treat, ...T.helps].filter((a) => given.has(a));
-  const harmed = T.harms.filter((a) => given.has(a) || (a === 'artemisinin_alone' && given.has('artemisinin') && !given.has('quinine')));
-  const needsRefer = !!T.refer && (main.model === 'bacterial' || main.id === 'pre_eclampsia');
-  return { dxRight, truth: main.name, helped, harmed, referredRight: needsRefer ? enc.refer : null };
+  const harmed = T.harms.filter((a) => given.has(a) || (a === 'artemisinin_alone' && ['artemisinin', 'artemether', 'artesunate'].some((x) => given.has(x)) && !['quinine', 'lumefantrine'].some((x) => given.has(x))));
+  const antibiotics = [...given].filter((a) => ACTIVE.get(a)?.abx);
+  // an antibiotic for an illness no bacterium causes helps no one and breeds resistance for everyone
+  const needless = main.params.org ? [] : antibiotics;
+  // a dangerous bacterial illness (dysentery, pneumonia, typhoid) sent home without an antibiotic needed the health centre
+  const needsRefer = (main.model === 'bacterial' && main.params.hazard >= 0.001 && !antibiotics.length) || main.id === 'pre_eclampsia';
+  return { dxRight, truth: main.name, helped, harmed, needless, referredRight: needsRefer ? enc.refer : null };
 }

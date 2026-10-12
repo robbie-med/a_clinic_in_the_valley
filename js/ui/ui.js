@@ -10,13 +10,14 @@ import { clock, day, season, SEASON_NAMES, minuteOfDay, DAY, HOUR } from '../cor
 import { CONDITIONS, COND } from '../core/content/conditions.js';
 import { HERBS, HERB } from '../core/content/herbs.js';
 import { ACTIVES, ACTIVE } from '../core/content/actives.js';
+import { ORGANISMS, ORG } from '../core/content/organisms.js';
 import { METHODS } from '../core/content/preparations.js';
 import { PLACEABLES } from '../core/content/build.js';
 import { VENDORS } from '../core/content/vendors.js';
-import { stock, buy, sell, offer, LOT, nextVisit } from '../core/economy.js';
+import { stock, buy, sell, offer, LOT, lotPrice, nextVisit, CATALOGUE, catalogueItems, orderTotal, placeOrder } from '../core/economy.js';
 import { startEncounter, ask, examine, differential, questionsFor, examsFor, remedies, rxLine, doseInfo, stockOf, finishEncounter, doProcedure, toolsAt, INSTRUCTIONS, PROCEDURES } from '../core/encounter.js';
 import { EXAMS } from '../core/content/findings.js';
-import { who, hamletOf, ageWords, OPEN, CLOSE } from '../core/clinic.js';
+import { who, hamletOf, ageWords, OPEN, CLOSE, resistance } from '../core/clinic.js';
 import { medianWeight } from '../core/patient.js';
 import { bodySVG, REGIONS } from './body.js';
 import { makeRng } from '../core/rng.js';
@@ -164,7 +165,9 @@ export function makeUI(G) {
       lines.push(h('li', {}, h('i', {}, hb.latin), ` — ${hb.part}. Evidence: ${hb.evidence}.`));
       if (it.form === 'fresh' && stack?.t !== undefined) { const age = (G.W.time - stack.t) / DAY; lines.push(h('li', {}, age > 2 ? `Picked ${fmt(age)} days ago — wilting, weaker each day.` : 'Fresh.')); }
     }
-    if (it.actives) for (const [a, mg] of Object.entries(it.actives)) lines.push(h('li', {}, `${ACTIVE.get(a).name}: about ${fmt(mg)} mg per ${it.unit || 'unit'} (nominal — the real strength of this batch is unknown without an assay).`));
+    if (it.actives && it.cat === 'medicine') for (const [a, mg] of Object.entries(it.actives)) lines.push(h('li', {}, `${ACTIVE.get(a).name}: ${fmt(mg)} mg per ${it.unit || 'tablet'}, as the label says. Sold in ${it.unit ? `bottles of ${it.pack} ${it.unit}` : `boxes of ${it.pack}`}.`));
+    else if (it.actives) for (const [a, mg] of Object.entries(it.actives)) lines.push(h('li', {}, `${ACTIVE.get(a).name}: about ${fmt(mg)} mg per ${it.unit || 'unit'} (nominal — the real strength of this batch is unknown without an assay).`));
+    if (it.ref) lines.push(h('li', { class: 'dim' }, `Where There Is No Doctor, Green Pages ${it.ref.replace('WTND ', '')}.`));
     if (it.topical) for (const a of Object.keys(it.topical)) lines.push(h('li', {}, `On the skin: ${ACTIVE.get(a).name} (${ACTIVE.get(a).class}).`));
     if (it.fluid) lines.push(h('li', {}, 'Replaces water and salt lost in diarrhoea and vomiting.'));
     if (stack?.t !== undefined && it.shelfDays && it.form !== 'fresh') { const age = (G.W.time - stack.t) / DAY; if (age > it.shelfDays) lines.push(h('li', { class: 'bad' }, 'Past its keeping time — weak or spoiled.')); else if (it.shelfDays < 5) lines.push(h('li', {}, `Keeps about ${it.shelfDays < 1 ? Math.round(it.shelfDays * 24) + ' hours' : it.shelfDays + ' days'}.`)); }
@@ -268,7 +271,7 @@ export function makeUI(G) {
         h('p', { class: 'hint' }, `Makes about ${amt(it, r.yields * S.makeTimes)}${r.hours ? ` after ${r.hours >= 48 ? r.hours / 24 + ' days' : r.hours + ' hours'}` : ''}. Takes ${r.min * S.makeTimes} minutes.`),
         h('div', { class: 'acts' }, h('button', { onclick: () => { S.makeTimes = Math.max(1, S.makeTimes - 1); render(); } }, '−'), h('span', {}, `× ${S.makeTimes}`), h('button', { onclick: () => { S.makeTimes++; render(); } }, '+'),
           h('button', { class: 'primary', disabled: !!why, onclick: () => { const res = make(G, r, S.makeTimes); if (!res.ok) ui.toast(res.why); else G.scene.handle(res.ev); render(); } }, 'Make')),
-        why ? h('p', { class: 'bad' }, why) : null);
+        why ? h('p', { class: 'bad' }, why) : '');
     }
     panel.append(head('Make remedies'), h('div', { class: 'pbody craft' }, h('div', { class: 'scroll' }, list), detail));
   };
@@ -289,7 +292,7 @@ export function makeUI(G) {
       detail.append(itemDetail(b.id), h('ul', { class: 'ing' }, b.cost.map(([id, n]) => h('li', { class: count(G.p.inv, id) >= n ? 'ok' : 'no' }, `${n} ${G.C.items.get(id).name.toLowerCase()} (have ${count(G.p.inv, id)})`)),
         r.station ? h('li', { class: G.stations.has(r.station) ? 'ok' : 'no' }, 'At the workbench') : null),
         h('div', { class: 'acts' }, h('button', { class: 'primary', disabled: !!why, onclick: () => { const res = make(G, r); if (!res.ok) { ui.toast(res.why); return; } G.scene.handle(res.ev); const i = G.p.inv.slots.findIndex((s) => s?.id === b.id); if (i >= 0) holdItem(i); ui.toast('Tap a spot near you to place it.'); } }, 'Make and place')),
-        why ? h('p', { class: 'bad' }, why) : null);
+        why ? h('p', { class: 'bad' }, why) : '');
     }
     panel.append(head('Build'), h('div', { class: 'pbody craft' }, h('div', { class: 'scroll' }, list), detail));
   };
@@ -373,7 +376,7 @@ export function makeUI(G) {
     if (!R.item && rems.length) R.item = rems[0].id;
     const it = R.item && G.C.items.get(R.item);
     if (it && !it.route.includes(R.route)) R.route = it.route[0];
-    const presets = !it ? [] : it.unit === 'ml' ? [['drop', 0.05], ['1 ml', 1], ['tsp', 5], ['tbsp', 15], ['½ cup', 125], ['cup', 250]] : it.unit === 'g' ? (it.id === 'honey' ? [['tsp', 7], ['tbsp', 20], ['dressing', 15]] : [['0.05 g', 0.05], ['0.1 g', 0.1], ['pinch', 0.3], ['tsp', 2], ['tbsp', 6]]) : [['1', 1]];
+    const presets = !it ? [] : it.unit === 'ml' ? [['drop', 0.05], ['1 ml', 1], ['tsp', 5], ['tbsp', 15], ['½ cup', 125], ['cup', 250]] : it.unit === 'g' ? (it.id === 'honey' ? [['tsp', 7], ['tbsp', 20], ['dressing', 15]] : [['0.05 g', 0.05], ['0.1 g', 0.1], ['pinch', 0.3], ['tsp', 2], ['tbsp', 6]]) : it.cat === 'medicine' ? [['¼', 0.25], ['½', 0.5], ['1', 1], ['2', 2]] : [['1', 1]];
     const weighed = !!enc.found.weight;
     const estW = weighed ? p.weight : Math.round(medianWeight(p.age, p.sex) * 10) / 10;
     const line = it ? rxLine(G, R.item, R.amount, R.perDay, R.days, R.route) : null;
@@ -387,10 +390,10 @@ export function makeUI(G) {
         h('div', { class: 'row' }, h('span', {}, 'Times a day:'), h('span', { class: 'chips' }, [1, 2, 3, 4, 6].map((n) => h('button', { class: R.perDay === n ? 'on' : '', onclick: () => { R.perDay = n; render(); } }, n)))),
         h('div', { class: 'row' }, h('span', {}, 'For days:'), h('span', { class: 'chips' }, [1, 2, 3, 5, 7, 10, 14, 21].map((n) => h('button', { class: R.days === n ? 'on' : '', onclick: () => { R.days = n; render(); } }, n)))),
         dinfo.length ? h('div', { class: 'doseinfo' }, dinfo.map((d) => h('div', {}, `${d.name.split(' (')[0]}: ${fmt(d.mg)} mg a dose = ${fmt(d.mgkg)} mg/kg (${fmt(d.perDayKg)} mg/kg/day)`)),
-          h('small', {}, `${weighed ? 'Weighed' : 'Guessed by age'}: ${estW} kg. Nominal strength — this batch has not been assayed.`)) : null,
+          h('small', {}, `${weighed ? 'Weighed' : 'Guessed by age'}: ${estW} kg. ${it.cat === 'medicine' ? 'Strength as labelled.' : 'Nominal strength — this batch has not been assayed.'}`)) : null,
         h('div', { class: 'row' }, h('span', { class: 'hint' }, `Dispense ${amt(it, line.qty)} (in stock ${amt(it, stockOf(G, it.id))})`),
           h('button', { disabled: !R.amount || line.qty > stockOf(G, it.id), onclick: () => { enc.rx.push(line); render(); } }, 'Add'))) : h('p', { class: 'hint' }, 'No remedies in your bag or on the shelves.'),
-      enc.rx.length ? h('ul', { class: 'rxlist' }, enc.rx.map((l, i) => h('li', {}, `${l.name}: ${amt(G.C.items.get(l.item), l.amount)} ${l.route === 'topical' ? 'applied' : ''} ${l.perDay}× a day for ${l.days} days`, h('button', { class: 'link', onclick: () => { enc.rx.splice(i, 1); render(); } }, ' remove')))) : null);
+      enc.rx.length ? h('ul', { class: 'rxlist' }, enc.rx.map((l, i) => h('li', {}, `${l.name}: ${amt(G.C.items.get(l.item), l.amount)} ${l.route === 'topical' ? 'applied' : ''} ${l.perDay}× a day for ${l.days} days`, h('button', { class: 'link', onclick: () => { enc.rx.splice(i, 1); render(); } }, ' remove')))) : '');
     treat.append(h('h4', {}, 'In the clinic'), h('div', { class: 'chips' }, PROCEDURES.filter((pr) => pr.applies(p)).map((pr) => h('button', { class: enc.proc.has(pr.id) ? 'on' : '', onclick: () => { const r = doProcedure(G, enc, pr.id); ui.toast(r.text); render(); } }, pr.label))));
     treat.append(h('h4', {}, 'Advice'), h('div', { class: 'checks' }, INSTRUCTIONS.map((ins) => h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: enc.instr.has(ins.id), onchange: (e) => { if (e.target.checked) enc.instr.add(ins.id); else enc.instr.delete(ins.id); } }), ins.label))));
     treat.append(h('div', { class: 'row' }, h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: enc.refer, onchange: (e) => { enc.refer = e.target.checked; } }), 'Refer to the health centre (two days\' walk)')),
@@ -405,7 +408,8 @@ export function makeUI(G) {
   };
   const regionOf = (k) => ({ temp: 'head', feels_hot: 'head', fontanel: 'head', alert: 'head', flushed: 'face', pupils: 'face', yellow_vision: 'face', sunken_eyes: 'face', dry_mouth: 'face', tears: 'face', pallor: 'face', thin: 'head',
     rr: 'chest', indrawing: 'chest', grunting: 'chest', crackles: 'chest', spleen: 'belly', pot_belly: 'belly', tender: 'belly', skin_pinch: 'belly', muac: 'arm', bp: 'arm', hr: 'wrist', pulse_regular: 'wrist',
-    burrows: 'hands', skin_sores: 'hands', edema: 'legs', back_exam: 'back', pus: 'wound', redness: 'wound', red_streaks: 'wound', glands: 'wound', wound_size: 'wound', burn_area: 'wound', blisters: 'wound', burn_deep: 'wound' }[k]);
+    burrows: 'hands', skin_sores: 'hands', rash: 'hands', measles_rash: 'hands', ear_pus: 'head', neck_glands: 'head', tonsils: 'face', koplik: 'face', red_eyes: 'face',
+    suprapubic: 'belly', rose_spots: 'belly', bloating: 'belly', loin_pain: 'back', edema: 'legs', back_exam: 'back', pus: 'wound', redness: 'wound', red_streaks: 'wound', glands: 'wound', wound_size: 'wound', burn_area: 'wound', blisters: 'wound', burn_deep: 'wound' }[k]);
   function finish() {
     const enc = S.enc;
     const p = G.meta.clinic.patients[enc.pid];
@@ -424,7 +428,7 @@ export function makeUI(G) {
 
   // ———————————————————————————————————— handbook
   PANELS.handbook = () => {
-    const tabs = h('div', { class: 'chips' }, [['conditions', 'Illnesses'], ['plants', 'Plants'], ['compounds', 'Compounds'], ['methods', 'Preparing'], ['about', 'About']].map(([k, l]) => h('button', { class: S.hbTab === k ? 'on' : '', onclick: () => { S.hbTab = k; S.hbSel = null; render(); } }, l)));
+    const tabs = h('div', { class: 'chips' }, [['conditions', 'Illnesses'], ['plants', 'Plants'], ['compounds', 'Compounds'], ['germs', 'Germs'], ['methods', 'Preparing'], ['about', 'About']].map(([k, l]) => h('button', { class: S.hbTab === k ? 'on' : '', onclick: () => { S.hbTab = k; S.hbSel = null; render(); } }, l)));
     const list = h('div', { class: 'rlist' });
     const detail = h('div', { class: 'detail' });
     if (S.hbTab === 'conditions') {
@@ -442,11 +446,21 @@ export function makeUI(G) {
       const a = ACTIVE.get(S.hbSel) || ACTIVES[0];
       detail.append(h('h3', {}, a.name), h('p', {}, `${a.class} · acts ${a.channel === 'systemic' ? 'through the blood' : a.channel === 'gut' ? 'in the gut' : a.channel === 'topical' ? 'on the skin' : 'as fluid'}`));
       if (a.pk) detail.append(h('p', {}, `Absorbed ${Math.round(a.pk.F * 100)}% · half-life ${a.pk.half} h · spreads into ${a.pk.vd} L/kg${a.pk.induce ? ' · the body learns to clear it faster over days of use' : ''}.`));
-      for (const e of a.effects || []) detail.append(h('p', {}, e.prr ? `Kills malaria parasites: up to 10^${e.prr}-fold per 48 hours; half-effect at ${e.ec50} mg/L.` : `${e.on}: half its effect at ${e.ec50} mg/L.`));
+      if (a.abx) {
+        const hits = ORGANISMS.filter((o) => a.id in o.mic), miss = ORGANISMS.filter((o) => !(a.id in o.mic));
+        detail.append(h('p', {}, `Kills bacteria ${a.abx.hill >= 3 ? 'while the level stays above their MIC (time matters more than height)' : a.abx.kmax >= 0.3 ? 'faster the higher the level' : 'slowly: it mostly stops them growing and the body does the rest'}. Only the unbound part acts: ${Math.round(a.pk.fu * 100)}% is free in the blood.`),
+          h('ul', {}, hits.map((o) => h('li', {}, `${o.name}: MIC ${o.mic[a.id]} mg/L; resistant strains ×${o.fold[a.id]}.`)), miss.map((o) => h('li', { class: 'dim' }, `${o.name}: no effect.`))));
+      }
+      for (const e of a.effects || []) detail.append(h('p', {}, e.prr ? `Kills malaria parasites while in the blood: at full strength about ${fmt(e.prr / 48)} log₁₀ (a ${fmt(10 ** (e.prr / 48))}-fold fall) an hour; half-effect at ${e.ec50} mg/L.` : `${e.on}: half its effect at ${e.ec50} mg/L.`));
       for (const tx of a.toxic || []) detail.append(h('p', { class: 'bad' }, `Above ${tx.at} mg/L: ${tx.text}.`));
       for (const c of a.cautions || []) detail.append(h('p', { class: 'bad' }, c));
       if (a.note) detail.append(h('p', { class: 'note' }, a.note));
       detail.append(h('p', { class: 'hint' }, a.ref));
+    } else if (S.hbTab === 'germs') {
+      for (const o of ORGANISMS) list.append(h('button', { class: 'recipe' + (S.hbSel === o.id ? ' sel' : ''), onclick: () => { S.hbSel = o.id; render(); } }, h('span', {}, o.name)));
+      const o = ORG.get(S.hbSel) || ORGANISMS[0];
+      detail.append(h('h3', {}, o.name), h('p', { class: 'note' }, 'The MIC is the lowest level of a medicine, in the blood and free of protein, that stops this germ growing. Keep the free level above it long enough and the germ dies; dose too low or stop too soon and the strong survivors are the ones that spread.'),
+        h('ul', {}, Object.entries(o.mic).map(([d, m]) => h('li', {}, o.parasite ? `${ACTIVE.get(d).name}: resistant strains need ${o.fold[d]}× the level to be killed as fast` : `${ACTIVE.get(d).name}: ${m} mg/L (resistant strains ${fmt(m * o.fold[d])} mg/L)`))), h('p', { class: 'hint' }, o.ref));
     } else if (S.hbTab === 'methods') {
       for (const [k, m] of Object.entries(METHODS)) list.append(h('button', { class: 'recipe' + (S.hbSel === k ? ' sel' : ''), onclick: () => { S.hbSel = k; render(); } }, h('span', {}, m.name), h('small', {}, m.verb)));
       detail.append(h('p', { class: 'note' }, 'How much of a plant\'s medicine ends up in what you make depends on the method. Quinine hardly dissolves in plain water — boil cinchona with lime juice, or soak it in spirit. Artemisinin breaks down with long boiling. Powders keep everything, but the dose is bulky and bitter. These extraction figures are estimates from each compound\'s chemistry, not measurements.'),
@@ -462,7 +476,7 @@ export function makeUI(G) {
   // ———————————————————————————————————— ledger
   PANELS.ledger = () => {
     const cl = G.meta.clinic;
-    const tabs = h('div', { class: 'chips' }, [['patients', 'Patients'], ['money', 'Money'], ['market', 'Traders']].map(([k, l]) => h('button', { class: S.ledTab === k ? 'on' : '', onclick: () => { S.ledTab = k; S.ledSel = null; render(); } }, l)));
+    const tabs = h('div', { class: 'chips' }, [['patients', 'Patients'], ['money', 'Money'], ['market', 'Traders'], ['post', 'Order by post'], ['report', 'Health office']].map(([k, l]) => h('button', { class: S.ledTab === k ? 'on' : '', onclick: () => { S.ledTab = k; S.ledSel = null; render(); } }, l)));
     const list = h('div', { class: 'rlist' });
     const detail = h('div', { class: 'detail' });
     const st = cl.stats;
@@ -479,7 +493,7 @@ export function makeUI(G) {
         for (const v of p.visits) {
           detail.append(h('div', { class: 'entry' }, h('small', {}, `Day ${day(v.t)} ${clock(v.t)}`), h('b', {}, `You thought: ${v.dx.map((d) => COND.get(d).name).join(', ') || '—'}`),
             h('p', {}, v.rx.length ? 'Gave: ' + v.rx.join('; ') : 'No medicine.'), v.instr.length ? h('p', { class: 'dim' }, 'Advice: ' + v.instr.join(', ')) : null, v.refer ? h('p', {}, 'Referred.') : null,
-            (p.dead || p.recovered) ? h('p', { class: v.judged.dxRight ? 'good' : 'bad' }, `In hindsight it was ${v.judged.truth}.${v.judged.helped.length ? ' What helped: ' + v.judged.helped.join(', ') + '.' : ''}${v.judged.harmed.length ? ' What harmed: ' + v.judged.harmed.join(', ') + '.' : ''}`) : null));
+            (p.dead || p.recovered) ? h('p', { class: v.judged.dxRight ? 'good' : 'bad' }, `In hindsight it was ${v.judged.truth}.${v.judged.helped.length ? ' What helped: ' + v.judged.helped.join(', ') + '.' : ''}${v.judged.harmed.length ? ' What harmed: ' + v.judged.harmed.join(', ') + '.' : ''}${v.judged.needless?.length ? ' No germ to kill: the ' + v.judged.needless.join(', ') + ' only bred resistance.' : ''}`) : null));
         }
       }
     } else if (S.ledTab === 'money') {
@@ -487,11 +501,42 @@ export function makeUI(G) {
       detail.append(h('h4', {}, 'Your charges'), h('div', { class: 'row' }, h('span', {}, 'Consultation fee: '), h('span', { class: 'chips' }, [0, 1, 2, 3, 5].map((n) => h('button', { class: cl.fee === n ? 'on' : '', onclick: () => { cl.fee = n; render(); } }, sh(n))))),
         h('div', { class: 'row' }, h('span', {}, 'Medicines at cost ×'), h('span', { class: 'chips' }, [1, 1.3, 1.6, 2].map((n) => h('button', { class: cl.markup === n ? 'on' : '', onclick: () => { cl.markup = n; render(); } }, n)))),
         h('p', { class: 'hint' }, 'Higher fees keep the poorest away; they pay in eggs and maize when coins run short.'));
+    } else if (S.ledTab === 'post') {
+      const cart = (S.cart ||= {});
+      for (const [title, cat] of [['Medicines', 'medicine'], ['Tools', 'tool']]) {
+        list.append(h('h4', {}, title));
+        for (const it of catalogueItems(G.C).filter((x) => x.cat === cat)) {
+          const n = cart[it.id] || 0;
+          list.append(h('div', { class: 'trow' }, icon(it.icon, 30), h('span', {}, it.name, h('small', {}, LOT(it) > 1 ? ` ${amt(it, LOT(it))}` : '')), h('small', {}, sh(lotPrice(it, CATALOGUE.mult))),
+            h('button', { disabled: !n, onclick: () => { cart[it.id] = n - 1; render(); } }, '−'), h('b', {}, n), h('button', { onclick: () => { cart[it.id] = n + 1; render(); } }, '+')));
+        }
+      }
+      const lines = Object.entries(cart).filter(([, n]) => n > 0);
+      detail.append(h('h4', {}, 'Your order'), lines.length ? h('ul', {}, lines.map(([id, n]) => h('li', {}, `${n} × ${G.C.items.get(id).name}`))) : h('p', { class: 'hint' }, 'Nothing yet.'),
+        h('p', {}, `Postage ${sh(CATALOGUE.postage)} · total ${sh(orderTotal(G.C, Object.fromEntries(lines)))}`),
+        h('div', { class: 'acts' }, h('button', { class: 'primary', disabled: !lines.length, onclick: () => { const r = placeOrder(G, cart); if (!r.ok) ui.toast(r.why); else { sfx('coin'); ui.toast(`Order posted. Due about day ${day(r.due)}.`); S.cart = {}; } render(); ui.refresh(); } }, 'Post the order')),
+        h('p', { class: 'hint' }, 'Paid when posted. The post runner brings it to the medicine shelf in 4–8 days. Sealed boxes from the city wholesaler, though no supply chain is perfect.'));
+      const pend = G.meta.orders || [];
+      if (pend.length) detail.append(h('h4', {}, 'On the way'), h('ul', {}, pend.map((o) => h('li', {}, `No. ${o.n}: ${o.goods.length} item${o.goods.length > 1 ? 's' : ''}, due day ${day(o.due)}`))));
+    } else if (S.ledTab === 'report') {
+      const r = healthReport();
+      list.append(h('p', { class: 'note' }, `District health office, laboratory bulletin for ${SEASON_NAMES[r.season].toLowerCase()} (day ${r.day}). Share of germs from the valley that resist each medicine, from ${r.n} samples of each. A new bulletin comes each season.`));
+      for (const o of ORGANISMS) list.append(h('h4', {}, o.name), h('ul', {}, Object.keys(o.mic).map((d) => { const v = r.data[o.id][d]; return h('li', { class: v >= 0.5 ? 'bad' : v >= 0.2 ? '' : 'good' }, `${ACTIVE.get(d).name}: ${Math.round(v * 100)}% resistant`); })));
+      detail.append(h('p', { class: 'hint' }, 'Every course of an antibiotic, needed or not, breeds resistance in the germs people carry. Doses too small or stopped too soon breed it fastest. Left unused for a long time, a medicine slowly regains its power.'));
     } else {
       for (const v of VENDORS) { const n = nextVisit(G.meta.seed, v, G.W.time); list.append(h('div', { class: 'lrow' }, h('span', {}, v.name), h('small', {}, v.fixed ? `daily ${clock(v.open[0])}–${clock(v.open[1])}` : n ? (n === day(G.W.time) ? 'today' : `day ${n}`) : '—'))); }
     }
     panel.append(head('Ledger'), h('div', { class: 'pbody craft' }, h('div', { class: 'scroll' }, tabs, list), detail));
   };
+  /** The season's lab bulletin: the valley's real resistance, sampled (n isolates each), fixed once issued. */
+  function healthReport() {
+    const cl = G.meta.clinic, s = Math.floor((day(G.W.time) - 1) / 10);
+    if (cl.report?.s === s) return cl.report;
+    const R = resistance(cl), rng = makeRng(G.meta.seed, 'report', s), n = 40, data = {};
+    for (const o of ORGANISMS) { data[o.id] = {}; for (const d of Object.keys(o.mic)) { let k = 0; for (let i = 0; i < n; i++) if (rng() < (R[o.id][d] ?? 0)) k++; data[o.id][d] = k / n; } }
+    cl.report = { s, day: s * 10 + 1, season: season(G.W.time), n, data };
+    return cl.report;
+  }
   // ———————————————————————————————————— map
   PANELS.map = () => {
     const R = G.W.R, N = G.W.N;

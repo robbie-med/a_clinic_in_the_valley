@@ -9,10 +9,10 @@ Clinical content follows **Where There Is No Doctor** (David Werner, Hesperian),
 page references. The pharmacology is real: absorption, half-life, effective and toxic levels for each
 compound, with sources.
 
-- **Local preview:** `python3 -m http.server 3411 --bind 127.0.0.1` → http://127.0.0.1:3411 (or `npm run serve`)
+- **Local preview:** `npm run serve` → http://127.0.0.1:3411
 - Static ES modules, no build step, libraries vendored in `vendor/`.
 
-## How it plays (phase 1: the herbal clinic)
+## How it plays (phases 1–2: the herbal clinic and the Green Pages)
 
 - **The valley** (`js/core/region.js`) is a 160×160 map made from the seed:
   - highlands in one corner and a river running down from them;
@@ -26,7 +26,7 @@ compound, with sources.
   - a seeded age, sex, weight, nutrition, pregnancy and haemoglobin;
   - their own drug clearance;
   - their own adherence and wealth;
-  - one of 16 WTND conditions, already some hours or days in.
+  - one of 24 WTND conditions, already some hours or days in.
 
   How many come each day depends on your name in the valley and your fee.
 - **The illness runs in the body** (`disease.js`). There are 11 models: viral, bacterial,
@@ -55,18 +55,50 @@ compound, with sources.
   - the village shop, open daily;
   - market day, every 7th day;
   - a wandering herb seller, whose goods are sometimes adulterated;
-  - a tool peddler.
+  - a tool peddler;
+  - the mission medical stores, every 9–13 days, with sealed Green Pages medicines.
+
+  About 1 in 10 medicines in poor markets is falsified or substandard (WHO 2017). Loose tablets
+  from the market tray can be chalk.
+- **Germs and antibiotics** (`content/organisms.js`, `disease.js`, `clinic.js`):
+  - each bacterial infection is caught from a strain with its own MIC for each antibiotic;
+  - antibiotics kill by their free blood level against that MIC (time-dependent for the
+    penicillins, concentration-dependent for ciprofloxacin, mostly growth-stopping for the rest);
+  - a level that sits between the MIC and the mutant-prevention level can breed resistance in the
+    patient;
+  - every course raises the valley's resistance index, and it fades slowly when a drug is rested;
+  - the district health office sends a resistance bulletin each season (Ledger);
+  - true penicillin allergy (~2%) shows as hives, rarely anaphylaxis.
+
+  Malaria parasites carry the same kind of resistance (chloroquine widely resisted, artemisinins
+  slowly slipping), and the bulletin reports it.
+- **Green Pages medicines** (`content/medicines.js`): antibiotics, paracetamol, ibuprofen, aspirin,
+  codeine, chloroquine, artemether–lumefantrine, artesunate, quinine tablets, mebendazole,
+  albendazole, permethrin, benzyl benzoate, WHO ORS sachets, zinc, metronidazole, iron and
+  vitamin A, each with real PK and the book's page.
+  - Buy them from the shop, the market tray, the mission stores van, or **order by post**
+    (Ledger): paid when posted, on your shelf in 4–8 days.
+- **More of the book** (phase 2): urinary infection, ear infection, strep throat, typhoid, amoebic
+  dysentery, giardia, hookworm with anaemia (iron rebuilds the blood), and measles (vitamin A
+  cuts deaths).
 - **Hindsight**: the ledger shows what it really was, what helped and what harmed, once the
   patient recovers or dies.
 
 ## Roadmap
-- **Phase 2:** Green Pages medicines bought from a wholesaler and a mail-order catalogue (delivery
-  in days). Antibiotics with organism MICs and a resistance index for the valley. The rest of the
-  WTND chapters.
+- **Phase 2 (done):** Green Pages medicines from the mission stores and a mail-order catalogue;
+  antibiotics with organism MICs and the valley's resistance index; eight more WTND conditions.
+  Still to come from the book: injections (benzathine penicillin, ceftriaxone), TB, tetanus,
+  meningitis, asthma, high blood pressure, eye problems, STIs, malnutrition, childbirth and the
+  newborn.
 - **Phase 3:** a chemistry lab: glassware, reagents, extraction, semi-synthesis and synthesis (willow →
   salicin → aspirin, cinchona → quinine, *Artemisia* → artemisinin → artesunate, paracetamol,
-  sulfanilamide, compounding), with purity checks (melting point, TLC). **Controlled substances have no
-  synthesis or extraction route** (buy-only, behind a licence; a test enforces this).
+  sulfanilamide, compounding), with purity checks (melting point, TLC).
+  - **Apothecary** (village): bring herbs and pay in coins or produce; he makes tinctures, extracts
+    and pills, steadier and labelled in mg, dearer than making them yourself.
+  - **Chemist** (town): purifies, semi-synthesises and makes anything (controlled drugs at game
+    level only). He comes to town once your herbal skill is high enough; his price falls as your
+    reputation rises. Hire him into a built dispensary and his work is faster, though it still takes
+    real-world times.
 - **Phase 4:** clinic → hospital: lab, ward, maternity, theatre, staff, community health.
 - After phase 1, if wanted: PWA hosting, APK and save sync, copied from `dont get lost`.
 

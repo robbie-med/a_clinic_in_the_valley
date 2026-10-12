@@ -70,13 +70,14 @@ export const gutExposure = (mg, perMg) => 1 - Math.exp(-mg * perMg);
 export function drugState(p, t) {
   const out = { relief: {}, worse: {}, prr: {}, heart: 0, conc: {} };
   const relieve = (on, v) => { out.relief[on] = 1 - (1 - (out.relief[on] || 0)) * (1 - v); };
+  const strain = p.conds?.find((c) => c.org === 'p_falciparum')?.mic; // a resistant parasite needs more drug
   for (const id of Object.keys(p.doses?.sys || {})) {
     const a = ACTIVE.get(id);
     const c = conc(p, id, t);
     out.conc[id] = c;
     if (c <= 0) continue;
     for (const e of a.effects || []) {
-      const f = hill(c, e.ec50, e.hill || 1);
+      const f = hill(c, e.ec50 * (e.prr ? strain?.[id] ?? 1 : 1), e.hill || 1);
       if (e.prr) out.prr[e.on] = (out.prr[e.on] || 0) + e.prr * f;
       else if (e.on === 'heart') out.heart = Math.max(out.heart, (e.emax || 1) * f);
       else relieve(e.on, (e.emax || 1) * f);

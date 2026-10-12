@@ -6,12 +6,30 @@ import { makePatient } from './patient.js';
 import { simulate } from './disease.js';
 import { COND } from './content/conditions.js';
 import { addItem } from './inventory.js';
+import { deliverOrders } from './economy.js';
+import { ORGANISMS, baseResistance } from './content/organisms.js';
 
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 export const OPEN = 7 * 60, CLOSE = 18 * 60, LAST_ARRIVAL = 15.5 * 60;
 
 export function newClinic() {
-  return { rep: 0.3, fee: 1, markup: 1.3, patients: {}, sched: {}, returns: [], seq: 0, stats: { seen: 0, recovered: 0, died: 0, referred: 0, income: 0, harmed: 0 } };
+  return { rep: 0.3, fee: 1, markup: 1.3, patients: {}, sched: {}, returns: [], seq: 0, resist: baseResistance(), stats: { seen: 0, recovered: 0, died: 0, referred: 0, income: 0, harmed: 0 } };
+}
+
+// ——— the valley's resistance index: { org: { drug: share of strains resistant } }
+// Every course of an antibiotic selects resistant strains among the bacteria people carry, and resistant
+// strains bred inside a patient spread from their household. Without the drug, resistance costs the
+// bacteria fitness and slowly fades. The rates are estimates, tuned so that heavy use visibly erodes a
+// drug within a game year (Goossens H et al. Lancet 2005;365:579; Andersson DI, Hughes D. Nat Rev
+// Microbiol 2010;8:260).
+export const resistance = (cl) => (cl.resist ||= baseResistance());
+export function selectPressure(cl, activeId, k = 1) {
+  const R = resistance(cl);
+  for (const o of ORGANISMS) if (activeId in o.mic) { const r = R[o.id][activeId] ?? 0; R[o.id][activeId] = r + 0.0015 * k * (1 - r); }
+}
+function resistanceDay(cl) {
+  const R = resistance(cl);
+  for (const o of ORGANISMS) for (const d of Object.keys(o.mic)) { const r = R[o.id][d] ?? 0, r0 = o.resist0[d] ?? 0; R[o.id][d] = r + (r0 - r) * 0.004; }
 }
 const feeFactor = (fee) => clamp(1.15 - fee * 0.07, 0.4, 1.15);
 
@@ -27,6 +45,7 @@ export function dayPlan(G, d) {
   do { n++; pr *= rng(); } while (pr > L && n < 30);
   n = Math.min(n - 1, 3 + seats * 2);
   const places = [[R.village, 2.2], ...R.hamlets.map((h) => [h, 1 / (1 + h.dist / 35)])];
+  resistanceDay(cl);
   const list = [];
   for (let k = 0; k < n; k++) {
     const h = weighted(places, rng());
@@ -48,7 +67,7 @@ export function dueArrivals(G) {
     if (a.spawned || a.t > t) continue;
     a.spawned = true;
     if (t - a.t > 3 * HOUR) { cl.missed = (cl.missed || 0) + 1; continue; } // came while you were away, went home
-    const p = makePatient({ seed: G.meta.seed, key: a.key, t: a.t, season: season(a.t), hamlet: hamletOf(G, a.hamlet) });
+    const p = makePatient({ seed: G.meta.seed, key: a.key, t: a.t, season: season(a.t), hamlet: hamletOf(G, a.hamlet), resist: resistance(cl) });
     p.status = 'arriving'; p.firstSeen = a.t;
     cl.patients[p.id] = p;
     out.push(p.id);
@@ -91,6 +110,8 @@ export function tickHome(G) {
       }
     }
     if (p.status === 'dead') continue;
+    // a resistant strain bred in this patient spreads through the household
+    for (const c of p.conds) for (const id of Object.keys(c.res || {})) if (!c.spread?.[id]) { (c.spread ||= {})[id] = 1; selectPressure(cl, id, 6); }
     if (p.status === 'hospital' && t > p.hospital.until) { p.status = 'home'; G.meta.ledger.push({ t, kind: 'note', pid: p.id, text: `${who(p)} is back from the health centre.` }); }
     // recovered?
     if (!p.conds.length && !p.recovered) {
@@ -120,6 +141,7 @@ export function tickHome(G) {
       }
     }
   }
+  if (G.W.shelves) news.push(...deliverOrders(G));
   return news;
 }
 
