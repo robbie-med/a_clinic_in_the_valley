@@ -150,12 +150,12 @@ export function makeUI(G) {
     return h('div', { class: 'phead' }, h('h2', {}, title), extra || '', h('button', { class: 'x', onclick: ui.close, title: 'Close (Esc)' }, '✕'));
   }
   function render() {
-    const keepScroll = [...panel.querySelectorAll('.scroll, .log, .detail')].map((e) => e.scrollTop);
+    const keepScroll = [...panel.querySelectorAll('.scroll, .log, .detail, .ebody > section, .qchips, .regmenu, .pbody.single')].map((e) => e.scrollTop);
     panel.innerHTML = '';
     panel.className = 'panel ' + S.panel;
     const f = PANELS[S.panel];
     if (f) f();
-    [...panel.querySelectorAll('.scroll, .log, .detail')].forEach((e, i) => { if (keepScroll[i] !== undefined) e.scrollTop = keepScroll[i]; });
+    [...panel.querySelectorAll('.scroll, .log, .detail, .ebody > section, .qchips, .regmenu, .pbody.single')].forEach((e, i) => { if (keepScroll[i] !== undefined) e.scrollTop = keepScroll[i]; });
   }
 
   // A search box for the long lists (hundreds of species, hundreds of imported goods).
@@ -380,7 +380,18 @@ export function makeUI(G) {
     notes.append(h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: S.helper, onchange: (e) => { S.helper = e.target.checked; render(); } }), 'Show the differential helper'));
     // treat
     const treat = h('div', { class: 'treatbox' });
-    treat.append(h('h4', {}, 'Working diagnosis'), h('div', { class: 'chips' }, CONDITIONS.map((c) => h('button', { class: enc.dx.includes(c.id) ? 'on' : '', onclick: () => { const i = enc.dx.indexOf(c.id); if (i >= 0) enc.dx.splice(i, 1); else enc.dx.push(c.id); render(); } }, c.name))));
+    // working diagnosis: type to find (name or local name); Enter takes the first match; tap a chosen one to drop it
+    const q = (S.dxq || '').trim().toLowerCase();
+    const hits = !q ? [] : CONDITIONS.filter((c) => !enc.dx.includes(c.id) && [c.name, ...(c.local || [])].some((n) => n.toLowerCase().includes(q))).slice(0, 12);
+    const addDx = (id) => { enc.dx.push(id); S.dxq = ''; S.qFocus = 'dxq'; render(); };
+    const dxIn = h('input', { type: 'search', placeholder: 'Type a diagnosis…', value: S.dxq || '' });
+    dxIn.addEventListener('input', () => { S.dxq = dxIn.value; S.qFocus = 'dxq'; render(); });
+    dxIn.addEventListener('keydown', (e) => { if (e.key === 'Enter' && hits.length) addDx(hits[0].id); });
+    if (S.qFocus === 'dxq') setTimeout(() => { S.qFocus = null; dxIn.focus({ preventScroll: true }); dxIn.setSelectionRange(dxIn.value.length, dxIn.value.length); }, 0);
+    treat.append(h('h4', {}, 'Working diagnosis'),
+      enc.dx.length ? h('div', { class: 'chips' }, enc.dx.map((id) => h('button', { class: 'on', title: 'Remove', onclick: () => { enc.dx.splice(enc.dx.indexOf(id), 1); render(); } }, COND.get(id).name + ' ✕'))) : null,
+      h('div', { class: 'row' }, dxIn),
+      hits.length ? h('div', { class: 'chips' }, hits.map((c) => h('button', { onclick: () => addDx(c.id) }, c.name))) : q ? h('p', { class: 'hint' }, 'Nothing by that name.') : null);
     // prescription builder
     const rems = remedies(G);
     const R = S.rx;
