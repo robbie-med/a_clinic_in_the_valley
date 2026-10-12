@@ -2,39 +2,75 @@
 // (look / feel / listen / count) and measurements that need a tool. Each costs game minutes. The
 // values come from the patient's real state (signs.js); this table says how to get at them.
 
+// One topic per question, grouped as a history is taken. The answer gives what is there; if nothing is, the first
+// finding's "no". `only` limits a question to who could answer it (a woman, a baby's mother), never to a diagnosis.
+const woman = (p) => p.sex === 'f' && p.age >= 13 && p.age < 50, baby = (p) => p.age < 0.25, adult = (p) => p.age >= 13;
+const back = (p) => p.visits.length > 0;
 export const QUESTIONS = [
-  { id: 'q_duration', label: 'How long has this been going on?', min: 1, reveals: ['duration'] },
-  { id: 'q_stool', label: 'Any loose stools? How many, what do they look like?', min: 2, reveals: ['stools', 'blood_stool', 'worms_seen', 'stool_frothy', 'stool_on_off', 'constipation', 'pale_stool'] },
-  { id: 'q_vomit', label: 'Vomiting? Can (s)he keep drinks down?', min: 1, reveals: ['vomiting', 'drinking'] },
-  { id: 'q_urine', label: 'Passing urine? What colour? Does it burn?', min: 1, reveals: ['urine', 'thirst', 'dysuria', 'frequency', 'cloudy_urine'] },
-  { id: 'q_fever', label: 'Fever? Chills or sweats? Does it come and go?', min: 2, reveals: ['fever_hx', 'chills', 'fever_pattern', 'fever_rising', 'headache', 'night_sweats'] },
-  { id: 'q_cough', label: 'Cough? Worse at night? Runny nose, sore throat?', min: 2, reveals: ['cough', 'night_cough', 'runny', 'throat'] },
-  { id: 'q_breath', label: 'Short of breath? Lying flat, walking?', min: 1, reveals: ['breathless_walk', 'orthopnea'] },
-  { id: 'q_itch', label: 'Itching? Where, and when is it worst?', min: 1, reveals: ['itch_night', 'itch_family', 'anal_itch'] },
-  { id: 'q_pain', label: 'Where does it hurt? Since when, what makes it worse?', min: 2, reveals: ['pain_site', 'cramp', 'ear_pain'] },
-  { id: 'q_rash', label: 'Any rash? Where did it start? Are the eyes red?', min: 1, reveals: ['rash_hx', 'red_eyes'] },
-  { id: 'q_belly', label: 'Is the belly swollen with gas? Burping?', min: 1, reveals: ['bloating', 'burps'] },
-  { id: 'q_tired', label: 'Tired or short of breath? (Children:) does (s)he eat earth?', min: 1, reveals: ['fatigue', 'pica'] },
-  { id: 'q_injury', label: 'How did the injury happen? Was it cleaned?', min: 1, reveals: ['injury_how'] },
-  { id: 'q_preg', label: 'Could you be pregnant? When was your last monthly bleeding?', min: 1, reveals: ['pregnancy', 'nausea_preg'], only: (p) => p.sex === 'f' && p.age >= 13 && p.age < 50 },
-  { id: 'q_vision', label: 'Headache? Blurred vision or spots? Swelling of face/hands?', min: 1, reveals: ['headache', 'vision', 'face_swelling'] },
-  { id: 'q_meds', label: 'Any medicines or remedies taken already?', min: 1, reveals: ['meds_taken', 'tox_symptoms'] },
-  { id: 'q_herb', label: 'Show me the plant you have been giving.', min: 1, reveals: ['herb_seen'], only: (p) => p.rx.some((r) => r.home) },
-  { id: 'q_allergy', label: 'Has any medicine ever given you a rash or swelling?', min: 1, reveals: ['allergy_hx'] },
-  { id: 'q_eat', label: 'Eating? Losing weight?', min: 1, reveals: ['appetite', 'weight_loss'] },
-  // ——— chronic illness and emergencies (WTND chapters 10, 11, 13, 22)
-  { id: 'q_attacks', label: 'Attacks of wheezing before? What brings them on?', min: 1, reveals: ['attacks'] },
-  { id: 'q_fits', label: 'Any fits — falling, jerking, not answering? How often?', min: 1, reveals: ['fits_hx'] },
-  { id: 'q_weak', label: 'Did weakness or trouble speaking come suddenly?', min: 1, reveals: ['stroke_hx'] },
-  { id: 'q_bite', label: 'Bitten or stung by anything? Swallowed kerosene, medicine or poison?', min: 1, reveals: ['bite_hx', 'swallowed'] },
-  { id: 'q_sugar', label: 'Always thirsty? Passing much urine? Always hungry?', min: 1, reveals: ['polyuria', 'hunger'] },
-  { id: 'q_stomach', label: 'Burning in the stomach? Worse when hungry or at night? Black stools?', min: 1, reveals: ['epigastric', 'black_stool'] },
-  { id: 'q_food', label: 'What does the child eat, how often? Still breastfed?', min: 2, reveals: ['diet_hx'], only: (p) => p.age < 6 },
-  // ——— infections (WTND chapters 13–18, 21)
-  { id: 'q_sweats', label: 'Night sweats? Any blood in the spit?', min: 1, reveals: ['night_sweats', 'blood_sputum'] },
-  { id: 'q_private', label: 'Any discharge, sores or pain in the private parts? Does your partner have it too?', min: 2, reveals: ['discharge', 'genital_sore', 'dysuria', 'partner_sx'], only: (p) => p.age >= 13 },
-  { id: 'q_vax', label: 'Has (s)he had the tetanus injections?', min: 1, reveals: ['tetanus_vax', 'tetanus_cord'] },
-  { id: 'q_numb', label: 'Any patches without feeling? Numb hands or feet?', min: 1, reveals: ['numb_hands'] },
+  // ——— since the last visit
+  { id: 'q_better', group: 'Since last time', label: 'Is it better or worse since you were here?', min: 1, reveals: ['better'], only: back },
+  { id: 'q_doses', group: 'Since last time', label: 'Did you take all the medicine? Any doses missed?', min: 2, reveals: ['doses'], only: back },
+  { id: 'q_side', group: 'Since last time', label: 'Any trouble from the medicine?', min: 1, reveals: ['tox_symptoms'], only: back },
+  { id: 'q_kept', group: 'Since last time', label: 'Could you do what I advised?', min: 1, reveals: ['advice_kept'], only: back },
+  // ——— the story: an open question; what they tell is filled per patient (encounter.js storyOf)
+  { id: 'q_story', group: 'The story', label: 'Tell me about it from the start.', min: 3, reveals: [] },
+  { id: 'q_duration', group: 'The story', label: 'How long has this been going on?', min: 1, reveals: ['duration'] },
+  // ——— fever
+  { id: 'q_fever', group: 'Fever', label: 'Any fever? Does it come and go?', min: 1, reveals: ['fever_hx', 'fever_pattern', 'fever_rising'] },
+  { id: 'q_chills', group: 'Fever', label: 'Shaking chills?', min: 1, reveals: ['chills'] },
+  { id: 'q_sweats', group: 'Fever', label: 'Sweats at night?', min: 1, reveals: ['night_sweats'] },
+  // ——— head and senses
+  { id: 'q_headache', group: 'Head, eyes, ears', label: 'Headache?', min: 1, reveals: ['headache'] },
+  { id: 'q_eyes', group: 'Head, eyes, ears', label: 'Any trouble with the eyes or the sight?', min: 1, reveals: ['eyes_hx', 'vision', 'yellow_vision'] },
+  { id: 'q_ears', group: 'Head, eyes, ears', label: 'Ear pain?', min: 1, reveals: ['ear_pain'] },
+  { id: 'q_throat', group: 'Head, eyes, ears', label: 'Sore throat? Does it hurt to swallow?', min: 1, reveals: ['throat'] },
+  { id: 'q_nose', group: 'Head, eyes, ears', label: 'Runny or blocked nose?', min: 1, reveals: ['runny'] },
+  { id: 'q_fits', group: 'Head, eyes, ears', label: 'Any fits: falling, stiffening, jerking, not answering?', min: 1, reveals: ['fits_hx'] },
+  { id: 'q_weak', group: 'Head, eyes, ears', label: 'Did weakness or trouble speaking come suddenly?', min: 1, reveals: ['stroke_hx'] },
+  // ——— chest
+  { id: 'q_cough', group: 'Chest', label: 'Cough? Worse at night?', min: 1, reveals: ['cough', 'night_cough'] },
+  { id: 'q_spit', group: 'Chest', label: 'Any blood in the spit?', min: 1, reveals: ['blood_sputum'] },
+  { id: 'q_breath', group: 'Chest', label: 'Hard to breathe? Walking, or lying flat?', min: 1, reveals: ['breath_hx', 'breathless_walk', 'orthopnea'] },
+  { id: 'q_attacks', group: 'Chest', label: 'Attacks like this before? What brings them on?', min: 1, reveals: ['attacks'] },
+  // ——— belly
+  { id: 'q_stool', group: 'Belly and stools', label: 'Loose stools? How many, what do they look like?', min: 2, reveals: ['stools', 'blood_stool', 'stool_frothy', 'stool_on_off', 'pale_stool', 'black_stool', 'constipation'] },
+  { id: 'q_worms', group: 'Belly and stools', label: 'Any worms seen?', min: 1, reveals: ['worms_seen'] },
+  { id: 'q_vomit', group: 'Belly and stools', label: 'Vomiting? Can drinks stay down?', min: 1, reveals: ['vomiting', 'drinking'] },
+  { id: 'q_belly', group: 'Belly and stools', label: 'Belly swollen with gas? Burping?', min: 1, reveals: ['bloating', 'burps'] },
+  { id: 'q_stomach', group: 'Belly and stools', label: 'Burning in the pit of the stomach?', min: 1, reveals: ['epigastric'] },
+  { id: 'q_eat', group: 'Belly and stools', label: 'Eating? Losing weight?', min: 1, reveals: ['appetite', 'weight_loss'] },
+  // ——— urine and private parts
+  { id: 'q_urine', group: 'Urine and private parts', label: 'Passing urine: how much, what colour?', min: 1, reveals: ['urine', 'cloudy_urine'] },
+  { id: 'q_burn', group: 'Urine and private parts', label: 'Does it burn to pass urine? Going often?', min: 1, reveals: ['dysuria', 'frequency'] },
+  { id: 'q_thirst', group: 'Urine and private parts', label: 'Very thirsty? Passing much urine? Always hungry?', min: 1, reveals: ['thirst', 'polyuria', 'hunger'] },
+  { id: 'q_private', group: 'Urine and private parts', label: 'Any discharge or sores in the private parts?', min: 2, reveals: ['discharge', 'genital_sore'], only: adult },
+  { id: 'q_partner', group: 'Urine and private parts', label: 'Does your partner have the same trouble?', min: 1, reveals: ['partner_sx'], only: adult },
+  // ——— skin
+  { id: 'q_rash', group: 'Skin', label: 'Any rash, spots, blisters or sores? Where did it start?', min: 1, reveals: ['rash_hx'] },
+  { id: 'q_itch', group: 'Skin', label: 'Does anything itch? Where, and when is it worst?', min: 1, reveals: ['itch'] },
+  { id: 'q_numb', group: 'Skin', label: 'Any patches without feeling? Numb hands or feet?', min: 1, reveals: ['numb_hands'] },
+  // ——— pain, swelling, injuries
+  { id: 'q_pain', group: 'Pain and swelling', label: 'Where is the pain? What makes it worse?', min: 1, reveals: ['pain_site', 'cramp', 'pelvic_pain'] },
+  { id: 'q_swelling', group: 'Pain and swelling', label: 'Any swelling or lump? Where?', min: 1, reveals: ['swelling_hx'] },
+  { id: 'q_injury', group: 'Pain and swelling', label: 'How did it happen? Was it cleaned?', min: 1, reveals: ['injury_how'] },
+  { id: 'q_bite', group: 'Pain and swelling', label: 'Bitten or stung by anything?', min: 1, reveals: ['bite_hx'] },
+  { id: 'q_swallow', group: 'Pain and swelling', label: 'Swallowed kerosene, medicine or poison?', min: 1, reveals: ['swallowed'] },
+  // ——— women
+  { id: 'q_preg', group: 'Pregnancy and birth', label: 'Could you be pregnant? When was your last monthly bleeding?', min: 1, reveals: ['pregnancy', 'nausea_preg'], only: woman },
+  { id: 'q_birth', group: 'Pregnancy and birth', label: 'A birth lately? Labour pains now?', min: 1, reveals: ['postpartum', 'labour_hx'], all: true, only: woman },
+  { id: 'q_bleed', group: 'Pregnancy and birth', label: 'Any bleeding from the birth opening?', min: 1, reveals: ['bleeding_pv'], only: woman },
+  { id: 'q_tt', group: 'Pregnancy and birth', label: 'Have you had tetanus injections, in this pregnancy or before?', min: 1, reveals: ['tt_hx'], only: woman },
+  // ——— children
+  { id: 'q_suck', group: 'The child', label: 'Does the baby suck well?', min: 1, reveals: ['suck'], only: baby },
+  { id: 'q_food', group: 'The child', label: 'What does the child eat, how often? Still breastfed?', min: 2, reveals: ['diet_hx'], only: (p) => p.age < 6 },
+  { id: 'q_pica', group: 'The child', label: 'Does the child eat earth or clay?', min: 1, reveals: ['pica'], only: (p) => p.age >= 1 && p.age < 13 },
+  // ——— background
+  { id: 'q_tired', group: 'Background', label: 'Tired all the time? No strength?', min: 1, reveals: ['fatigue'] },
+  { id: 'q_meds', group: 'Background', label: 'Any medicines or remedies taken already?', min: 1, reveals: ['meds_taken', 'tox_symptoms'], all: true, only: (p) => !back(p) },
+  { id: 'q_herb', group: 'Background', label: 'Show me the plant you have been giving.', min: 1, reveals: ['herb_seen'], only: (p) => p.rx.some((r) => r.home) },
+  { id: 'q_allergy', group: 'Background', label: 'Has any medicine ever given you a rash or swelling?', min: 1, reveals: ['allergy_hx'] },
+  { id: 'q_vax', group: 'Background', label: 'Had the tetanus injections?', min: 1, reveals: ['tetanus_vax', 'tetanus_cord'] },
+  { id: 'q_family', group: 'Background', label: 'Anyone at home with the same?', min: 1, reveals: ['family_hx'] },
 ];
 
 export const EXAMS = [
@@ -80,11 +116,11 @@ export const POINTS = {
   temp: { malaria: 2, pneumonia: 2, dysentery: 1, typhoid: 2, measles: 1, strep_throat: 1 }, feels_hot: { malaria: 1, pneumonia: 1 },
   cough: { common_cold: 2, cough_child: 3, pneumonia: 2, measles: 1, tb: 2 }, night_cough: { cough_child: 3 }, runny: { common_cold: 4, measles: 1 }, throat: { common_cold: 2, strep_throat: 3 },
   rr: { pneumonia: 4 }, indrawing: { pneumonia: 5 }, grunting: { pneumonia: 4 }, crackles: { pneumonia: 3, heart_failure: 2 },
-  spleen: { malaria: 3 }, pallor: { malaria: 2, hookworm: 3 }, itch_night: { scabies: 5 }, itch_family: { scabies: 3 }, burrows: { scabies: 6 }, anal_itch: { pinworm: 6 },
+  spleen: { malaria: 3 }, pallor: { malaria: 2, hookworm: 3 }, burrows: { scabies: 6 },
   pot_belly: { ascaris: 3 }, wound_size: { wound_minor: 3, wound_infected: 1 }, pus: { wound_infected: 5 }, redness: { wound_infected: 2 }, red_streaks: { wound_infected: 4 },
   burn_area: { burn_minor: 6 }, blisters: { burn_minor: 3 }, pain_site: { back_pain: 2 }, back_exam: { back_pain: 4 },
   edema: { heart_failure: 3, pre_eclampsia: 3 }, orthopnea: { heart_failure: 5 }, breathless_walk: { heart_failure: 3 },
-  pregnancy: { nausea_pregnancy: 3, pre_eclampsia: 2 }, nausea_preg: { nausea_pregnancy: 5 }, vision: { pre_eclampsia: 4 }, face_swelling: { pre_eclampsia: 4 }, bp: { pre_eclampsia: 6, heart_failure: 1 },
+  pregnancy: { nausea_pregnancy: 3, pre_eclampsia: 2 }, nausea_preg: { nausea_pregnancy: 5 }, vision: { pre_eclampsia: 4 }, bp: { pre_eclampsia: 6, heart_failure: 1 },
   cramp: { dysentery: 1, watery_diarrhea: 1, amoebiasis: 1 },
   dysuria: { uti: 6, gonorrhoea: 3, chlamydia: 1, trichomonas: 1 }, frequency: { uti: 3 }, cloudy_urine: { uti: 3 }, suprapubic: { uti: 3 }, loin_pain: { pyelonephritis: 6, uti: 1 },
   joints: { rheumatic_fever: 7 }, mastoid: { mastoiditis: 9 },
@@ -103,6 +139,15 @@ export const POINTS = {
   crusts: { impetigo: 8 }, red_patch: { cellulitis: 8 }, rings: { tinea: 8 }, follicles: { trachoma: 8 }, eye_scratch: { eye_injury: 8 }, pox: { chickenpox: 8 }, parotid: { mumps: 8 },
 };
 
+// what the patient tells of, across illnesses (signs.js HISTORY): where it itches, swells, hurts says more than whether
+Object.assign(POINTS, {
+  itch: { scabies: 3, pinworm: 3, chickenpox: 1, tinea: 1, impetigo: 1, trichomonas: 1 },
+  rash_hx: { measles: 3, chickenpox: 2, impetigo: 2, tinea: 2, scabies: 1, syphilis: 2, leprosy: 2, cellulitis: 2, kwashiorkor: 1 },
+  eyes_hx: { conjunctivitis: 4, trachoma: 3, eye_injury: 4, measles: 2, hepatitis: 4, newborn_jaundice: 4 },
+  swelling_hx: { goitre: 3, mumps: 3, tb_nodes: 3, heart_failure: 2, pre_eclampsia: 4, kwashiorkor: 2, mastoiditis: 3, fracture: 2, sprain: 2, mastitis: 3, cellulitis: 2, rheumatic_fever: 2, snakebite: 2, chancroid: 2, wound_infected: 2 },
+  breath_hx: { pneumonia: 3, asthma: 4, heart_failure: 2, anaemia: 1, hookworm: 1, kerosene: 2 },
+  family_hx: { scabies: 3, impetigo: 1, conjunctivitis: 1, tinea: 1, measles: 1, chickenpox: 1, mumps: 1 },
+});
 // ——— chronic illness and emergencies (WTND chapters 10, 11, 13, 22)
 Object.assign(POINTS, {
   wheeze: { asthma: 6 }, attacks: { asthma: 4 }, fits_hx: { epilepsy: 4, febrile_fits: 4 }, weak_side: { stroke: 8 }, face_droop: { stroke: 4 }, speech: { stroke: 3 }, stroke_hx: { stroke: 3 },
@@ -114,12 +159,6 @@ Object.assign(POINTS, {
 // findings shared with the rows above: add their pull toward the new conditions without rewriting those rows
 for (const [f, m] of Object.entries({ bp: { hypertension: 6 }, headache: { hypertension: 1 }, pallor: { anaemia: 4 }, fatigue: { anaemia: 3 }, edema: { kwashiorkor: 4 }, joints: { arthritis: 5 }, rr: { asthma: 1, kerosene: 2 }, temp: { febrile_fits: 1 } })) Object.assign(POINTS[f], m);
 // ——— childbirth and the newborn (WTND chapter 19, pp.249–278)
-const woman = (p) => p.sex === 'f' && p.age >= 13 && p.age < 50, baby = (p) => p.age < 0.25;
-QUESTIONS.push(
-  { id: 'q_birth', label: 'Labour, a birth, bleeding? When, how long, how much? Any fits?', min: 2, reveals: ['postpartum', 'labour_hx', 'bleeding_pv', 'pelvic_pain', 'discharge', 'fits_hx'], only: woman },
-  { id: 'q_tt', label: 'Have you had tetanus injections, in this pregnancy or before?', min: 1, reveals: ['tt_hx'], only: woman },
-  { id: 'q_baby', label: 'Does the baby suck well? Any fits or stiffness? Turning yellow?', min: 1, reveals: ['suck', 'fits_hx', 'jaundice'], only: baby },
-);
 EXAMS.push(
   { id: 'x_womb', label: 'Feel the womb through the belly', min: 2, reveals: ['womb'], only: woman },
   { id: 'x_baby', label: 'Look at the baby: cord stump, skin colour, jaw', min: 1, reveals: ['cord', 'jaundice', 'lockjaw'], only: baby },

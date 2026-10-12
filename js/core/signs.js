@@ -171,11 +171,8 @@ export function signs(p, t, tools = new Set()) {
   const py = cond('pyelonephritis');
   set('loin_pain', (py?.s || 0) > 0.2 ? 'Sharp pain when the back over the kidney is tapped.' : 'No pain over the kidneys.', (py?.s || 0) > 0.2);
   set('pot_belly', (asc?.W || 0) > 18 && p.age < 12 ? 'Swollen pot belly.' : 'Belly normal size.', (asc?.W || 0) > 18 && p.age < 12);
-  const sawWorm = ((asc?.W || 0) > 4 && rng() < 0.6) || ((pin?.W || 0) > 10 && rng() < 0.45);
+  const wr = makeRng(p.seed, 'wormseen')(), sawWorm = ((asc?.W || 0) > 4 && wr < 0.6) || ((pin?.W || 0) > 10 && wr < 0.45);
   set('worms_seen', sawWorm ? ((asc?.W || 0) > 4 ? 'Yes, a long white worm came out in the stool.' : 'Tiny white threads in the stool.') : 'No worms seen.', sawWorm);
-  set('anal_itch', (pin?.W || 0) > 10 ? 'Scratches the bottom at night, sleeps badly.' : 'No.', (pin?.W || 0) > 10);
-  set('itch_night', (sc?.s || 0) > 0.2 ? 'Itching all over, much worse at night.' : 'No itching.', (sc?.s || 0) > 0.2);
-  set('itch_family', sc && rng() < 0.7 ? 'Yes, the brothers and sisters itch too.' : 'No one else.', !!sc);
   const burrows = (sc?.M || 0) > 3 && rng() < (tools.has('magnifier') ? 0.85 : 0.5);
   set('burrows', burrows ? 'Small bumps and fine wavy lines between the fingers and on the wrists.' : (sc?.s || 0) > 0.2 ? 'Scratch marks, but no clear burrows seen.' : 'Skin clear.', burrows);
   set('skin_sores', (sc?.I || 0) > 1 ? 'Scratched bumps with pus and crusts.' : '—', (sc?.I || 0) > 1);
@@ -206,7 +203,7 @@ export function signs(p, t, tools = new Set()) {
   set('joints', (rf?.s || 0) > 0.15 ? 'Wrists and ankles swollen, hot and red; the pain has moved from joint to joint.' : 'Joints normal.', (rf?.s || 0) > 0.15);
   const bp = cond('back_pain');
   const relief = V.ds.relief.pain || 0;
-  set('pain_site', rf && rf.s > 0.15 ? 'The joints — first the ankles, now the wrists.' : py && py.s > 0.2 ? 'In the side of the back, one side.' : bp ? `Low back, ${bp.s * (1 - relief) > 0.4 ? 'bad' : 'aching'}, worse bending and lifting.` : wd || cond('dysentery') ? 'Cramps in the belly.' : w || b ? 'The wound/burn pains.' : 'No particular pain.', !!bp);
+  set('pain_site', rf && rf.s > 0.15 ? 'The joints — first the ankles, now the wrists.' : py && py.s > 0.2 ? 'In the side of the back, one side.' : bp ? `Low back, ${bp.s * (1 - relief) > 0.4 ? 'bad' : 'aching'}, worse bending and lifting.` : wd || cond('dysentery') ? 'Cramps in the belly.' : w ? 'The wound pains.' : b ? 'The burn pains.' : 'No particular pain.', !!(rf?.s > 0.15 || py?.s > 0.2 || bp || wd || cond('dysentery') || w || b));
   set('cramp', (cond('amoebiasis')?.s || 0) > 0.2 || (cond('dysentery')?.s || 0) > 0.2 || (wd?.s || 0) > 0.4 ? `Cramping belly pains${(V.ds.relief.cramp || 0) > 0.4 ? ' (eased by the remedy)' : ''}.` : 'No cramps.', (cond('dysentery')?.s || 0) > 0.2 || (wd?.s || 0) > 0.4);
   set('back_exam', bp ? 'Tender muscles beside the lower spine; legs strong, feeling normal.' : 'Back normal.', !!bp);
   const pe = cond('pre_eclampsia') || cond('eclampsia');
@@ -216,7 +213,6 @@ export function signs(p, t, tools = new Set()) {
   const np = cond('nausea_pregnancy');
   set('nausea_preg', (np?.s || 0) > 0.2 ? `Sick every morning${(V.ds.relief.nausea || 0) > 0.3 ? ', a little better with the remedy' : ''}.` : '—', (np?.s || 0) > 0.2);
   set('vision', (pe?.sev || 0) > 0.5 ? 'Sees spots and blurred.' : 'Vision fine.', (pe?.sev || 0) > 0.5);
-  set('face_swelling', (pe?.sev || 0) > 0.3 ? 'Face and hands swollen.' : 'No.', (pe?.sev || 0) > 0.3);
   set('bp', `${V.bpS}/${V.bpD} mmHg`, V.bpS >= 140 || V.bpD >= 90, V.bpS);
 
   // ——— childbirth and the newborn (WTND chapter 19)
@@ -225,7 +221,7 @@ export function signs(p, t, tools = new Set()) {
   const woman = p.sex === 'f' && p.age >= 13 && p.age < 50, baby = p.age < 0.25;
   const since = p.delivered != null ? (t - p.delivered) / (24 * HOUR) : null;
   if (woman) {
-    set('postpartum', since == null ? 'No birth lately.' : since < 1 ? `Gave birth ${Math.max(1, Math.round(since * 24))} hours ago.` : `Gave birth ${Math.round(since)} days ago.`, false);
+    set('postpartum', since == null ? 'No birth lately.' : since < 1 ? `Gave birth ${Math.max(1, Math.round(since * 24))} hours ago.` : `Gave birth ${Math.round(since)} days ago.`, since != null && since < 42);
     set('labour_hx', ol ? `Labour pains for ${Math.round(ol.age)} hours; the waters broke long ago, and the baby does not come down.` : p.pregnant >= 37 ? 'No labour pains yet.' : '—', !!ol);
     const bleed = [pph, mc, ect].filter(Boolean).reduce((a, c) => Math.max(a, c.rup || !c.id.startsWith('ect') ? c.rate : 0), 0);
     set('bleeding_pv', bleed > 150 ? 'Blood pours from the birth opening, soaking cloth after cloth, with clots.' : bleed > 30 ? 'Steady bleeding from the vagina, with clots.' : bleed > 10 ? 'Bleeding with clots, less than before.' : ect ? 'A little dark bleeding, on and off.' : 'No heavy bleeding.', bleed > 10 || !!ect);
@@ -260,6 +256,7 @@ export function signs(p, t, tools = new Set()) {
   const thinks = p.allergy ? said < 0.7 : said < 0.05;
   set('allergy_hx', thinks ? (p.allergy === 'aspirin' ? 'Yes — aspirin once made it hard to breathe.' : 'Yes — penicillin gave a rash and swelling once.') : 'No allergies that I know of.', thinks);
   const hives = (p.allergicUntil || 0) > t;
+  if (hives) set('itch', 'Itchy lumps all over since the medicine.', true);
   set('rash', p.lastTox?.includes('sjs') ? 'Blisters and peeling skin over the body; raw sores in the mouth and red eyes.' : hives ? 'Raised, itchy pale welts over the body (hives); the lips are a little swollen.' : 'No rash.', hives);
   const taking = (p.rx || []).filter((r) => !r.instr && !r.stopped && r.left > 0).map((r) => r.name);
   // the plant itself, if you ask to see it: what it really is, whatever they call it
@@ -302,7 +299,7 @@ export function signs(p, t, tools = new Set()) {
       set('fits_hx', ep ? `Yes — falls, stiffens and jerks, the eyes roll up, then sleeps. About ${many} a month.` : 'Yes — with the fever: stiff, then jerking, a few minutes, then slept.', true);
       if (fit.status) set('alert', 'Fitting now: jerking all over, eyes rolled back, does not answer.', true);
       else if (fit.ago < 2) set('alert', 'Dull and sleepy after the fit.', true);
-    } else set('fits_hx', 'No fits.', false);
+    } else if (!F.fits_hx?.pos) set('fits_hx', 'No fits.', false); // eclampsia and newborn tetanus set it above
     if (tox.includes('barb_drowsy') || tox.includes('benzo_drowsy')) set('alert', 'Very sleepy and unsteady, words slurred.', true);
     if (tox.includes('barb_resp') || tox.includes('benzo_resp')) set('alert', 'Cannot be woken; breathing slow and shallow.', true);
     // stroke
@@ -371,6 +368,7 @@ export function signs(p, t, tools = new Set()) {
     for (const s of tox) if (T[s]) F.tox_symptoms.v = F.tox_symptoms.v.replace(s, T[s]);
   }
   infectionSigns(p, F, set);
+  followUp(p, t, set);
   return F;
 }
 
@@ -456,10 +454,73 @@ const TOX_WORDS = { orange_urine: 'urine and tears orange', tb_hepatitis: 'yello
   ototoxic: 'ears ringing, dizzy, hearing less', methaemoglobin: 'blue lips, breathless', dapsone_syndrome: 'fever and a spreading rash', benzo_drowsy: 'very sleepy',
   benzo_resp: 'cannot be woken', benzo_withdrawal: 'shaking, anxious, sleepless', serum_sickness: 'fever, rash, aching joints' };
 function infectionSigns(p, F, set) {
-  for (const [k, on, v, no] of SHOWN) {
-    const c = p.conds.find((x) => on[x.id]?.(x, p));
+  for (const [k, on, v, no] of [...SHOWN, ...HISTORY]) {
+    const c = p.conds.find((x) => on[x.id]?.(x, p, F));
     if (c) set(k, typeof v === 'function' ? v(c, p, F) : v, true);
     else if (!F[k] && no) set(k, no, false);
   }
   set('tetanus_vax', tetanusVaccinated(p) ? 'Yes, all the tetanus injections.' : 'Never had the tetanus injections.', !tetanusVaccinated(p));
+}
+
+// ——— what the patient tells (history), across illnesses. Same rows as SHOWN; a row overrides a normal answer from above.
+// Every claim in an opening complaint (conditions.js `says`) must be answered here or above (test/history.test.mjs).
+const always = () => true;
+const secondary = (c) => c.age > 6 * wk && c.age < 24 * wk && c.s > 0; // secondary syphilis
+const HISTORY = [
+  ['itch', { scabies: above(0.2), pinworm: (c) => c.W > 10, chickenpox: above(0.1), tinea: (c) => c.M > 2, impetigo: (c) => c.I > 1, trichomonas: above(0.1), trachoma: above(0.1) },
+    (c) => ({ scabies: 'Itching all over, much worse at night.', pinworm: 'The bottom itches at night; sleeps badly.', chickenpox: 'The blisters itch.', tinea: 'The rings itch.',
+      impetigo: 'The sores itch a little.', trichomonas: 'It itches down below.', trachoma: 'The eyes itch.' })[c.id], 'No itching.'],
+  ['rash_hx', { chickenpox: above(0.1), impetigo: (c) => c.I > 1, tinea: (c) => c.M > 2, scabies: above(0.2), syphilis: secondary, leprosy: (c) => c.A > 4, kwashiorkor: above(0.4), cellulitis: above(0.15) },
+    (c) => ({ chickenpox: 'Yes — little water blisters, first on the body, then everywhere.', impetigo: 'Sores with yellow crusts that keep spreading.', tinea: 'Round scaly patches that grow outward.',
+      scabies: 'Little bumps between the fingers and on the wrists.', syphilis: 'Spots all over, even on the palms and soles.', leprosy: 'A pale patch that has grown for months.',
+      kwashiorkor: 'The skin of the legs peels in dark patches.', cellulitis: 'A red, hot patch that spreads.' })[c.id]],
+  ['pain_site', { ascaris: (c) => c.W > 18, typhoid: above(0.3), uti: above(0.25), ulcer: above(0.15), mastoiditis: above(0.2), ear_infection: above(0.05), strep_throat: above(0.15), meningitis: above(0.2),
+    malaria: above(0.3), hypertension: (c) => c.L > 45, pre_eclampsia: (c) => c.sev > 0.4, eclampsia: (c) => c.sev > 0.4, obstructed_labour: always, puerperal_sepsis: above(0.2), ectopic: always, miscarriage: always,
+    pid: above(0.2), chlamydia: above(0.25), mastitis: above(0.15), chancroid: above(0.15), cellulitis: above(0.15), eye_injury: (c) => c.heal < 1, mumps: above(0.15), tetanus: above(0.3) },
+    (c) => ({ ascaris: 'The belly aches.', typhoid: 'All over the belly.', uti: 'Low in the belly, above the bone.', ulcer: 'A burning in the pit of the stomach.', mastoiditis: 'Behind the ear.',
+      ear_infection: 'Deep in the ear.', strep_throat: 'The throat, worst on swallowing.', meningitis: 'The head, terribly, and the back of the neck.', malaria: 'The head, and the whole body aches.',
+      hypertension: 'The head, often.', pre_eclampsia: 'The head.', eclampsia: 'The head.', obstructed_labour: 'Labour pains that never let up.', puerperal_sepsis: 'Low in the belly.',
+      ectopic: 'Low in the belly, on one side.', miscarriage: 'Cramps low in the belly.', pid: 'Low in the belly, both sides.', chlamydia: 'A dull ache low in the belly.',
+      mastitis: 'One breast; feeding hurts.', chancroid: 'The sores down below.', cellulitis: 'The red patch.', eye_injury: 'The eye, worse in the light.', mumps: 'Below the ear, when chewing.',
+      tetanus: 'The jaw, the neck and the back, in spasms.' })[c.id]],
+  ['swelling_hx', { wound_infected: (c) => c.I > 2, heart_failure: (c) => c.V > 2, pre_eclampsia: (c) => c.sev > 0.2, kwashiorkor: above(0.25), rheumatic_fever: above(0.15), mastoiditis: above(0.2),
+    goitre: (c) => c.L > 0.5, snakebite: (c) => c.D0 > 0 && !c.neuro, fracture: always, sprain: always, tb_nodes: above(0.1), chancroid: above(0.4), cellulitis: above(0.15), mumps: above(0.15),
+    mastitis: above(0.15), hiv: above(0.2), syphilis: secondary, strep_throat: above(0.25) },
+    (c) => ({ wound_infected: 'Around the wound: red, hot and swollen.', heart_failure: 'The feet and legs.', pre_eclampsia: 'Face, hands and feet.', kwashiorkor: 'Feet, hands and face.',
+      rheumatic_fever: 'The wrists and ankles.', mastoiditis: 'A lump behind the ear.', goitre: 'The front of the neck.', snakebite: 'The bitten limb.', fracture: 'The arm, above the wrist.',
+      sprain: 'The ankle.', tb_nodes: 'Lumps in the neck.', chancroid: 'A lump in the groin.', cellulitis: 'The red patch.', mumps: 'Below and in front of the ear.', mastitis: 'One breast.',
+      hiv: 'Lumps in the neck and armpits.', syphilis: 'Lumps in the neck and the groin.', strep_throat: 'Under the jaw.' })[c.id], 'No swelling.'],
+  ['eyes_hx', { conjunctivitis: above(0.1), trachoma: above(0.1), eye_injury: (c) => c.heal < 1 || c.I > 2, measles: above(0.3), hepatitis: (c) => c.age > 72 && c.s > 0.2,
+    newborn_jaundice: above(0.2), snakebite: (c) => c.neuro && c.s > 0.4 },
+    (c) => ({ conjunctivitis: 'Both eyes red, with pus; the lids stick together in the morning.', trachoma: 'Red, watering eyes for months; the light hurts them.',
+      eye_injury: 'One eye red and watering; it hurts in the light.', measles: 'The eyes are red and watering; the light hurts them.', hepatitis: 'The whites of the eyes have gone yellow.',
+      newborn_jaundice: 'The skin and the whites of the eyes are yellow.', snakebite: 'The eyelids droop.' })[c.id], 'No trouble with the eyes.'],
+  ['breath_hx', { pneumonia: above(0.3), asthma: above(0.15), kerosene: above(0.2), heart_failure: (c) => c.V > 2, anaemia: (c, p, F) => F.fatigue?.pos, hookworm: (c, p, F) => F.fatigue?.pos },
+    (c) => ({ pneumonia: 'Breathing hard and fast.', asthma: 'Fights for breath; the chest whistles.', kerosene: 'Breathing fast, choking.', heart_failure: 'Breathless on the path; worse lying flat.',
+      anaemia: 'Breathless going up the hill.', hookworm: 'Breathless going up the hill.' })[c.id], 'Breathing is easy.'],
+  ['chills', { pyelonephritis: above(0.3), cellulitis: above(0.3), puerperal_sepsis: above(0.3) }, 'Shaking chills with the fever.', 'No chills.'],
+  ['throat', { syphilis: secondary }, 'A sore throat, and sores in the mouth.'],
+  ['stools', { hiv: above(0.5) }, 'Loose stools, on and off for over a month.'],
+  ['fever_hx', { hiv: above(0.5) }, 'Fevers that come and go, for weeks.'],
+  // household: scabies spreads to most of a family; the other catching skin and eye illnesses to about half (estimates)
+  ['family_hx', { scabies: (c, p) => hashf(p.seed, 0, 2, 9001) < 0.7, ...Object.fromEntries(['impetigo', 'conjunctivitis', 'tinea', 'measles', 'chickenpox', 'mumps', 'trachoma'].map((id) => [id, (c, p) => hashf(p.seed, 0, 2, 9001) < 0.5])) },
+    (c) => (c.id === 'scabies' ? 'Yes — the brothers and sisters itch too.' : 'Yes — other children at home have the same.'), 'No one else at home.'],
+];
+
+// ——— since the last visit (asked when they come back), from their own record
+function followUp(p, t, set) {
+  const last = p.visits?.[p.visits.length - 1];
+  if (!last) return;
+  const now = p.conds.reduce((a, c) => a + (c.s || 0), 0), before = last.burden ?? now, r = before > 0.02 ? now / before : now > 0.05 ? 2 : 0;
+  set('better', now < 0.03 ? 'Well again.' : r < 0.5 ? 'Much better.' : r < 0.85 ? 'A little better.' : r < 1.15 ? 'About the same.' : 'Worse.', now >= 0.03 && r >= 0.85);
+  const short = (x) => x.name.split(' (')[0];
+  const days = (x) => Math.max(1, Math.round((x.stopped - x.start) / (24 * HOUR)));
+  const meds = (p.rx || []).filter((x) => !x.instr && !x.home && x.route !== 'inj' && x.start >= last.t);
+  const how = (x) => (x.stopped ? `stopped after ${days(x)} day${days(x) > 1 ? 's' : ''}, ${x.stopWhy === 'rash' ? 'because of a rash' : 'when better'}`
+    : x.missed ? `missed ${x.missed} dose${x.missed > 1 ? 's' : ''}` : x.left <= 0 ? 'all taken' : 'taking every dose');
+  set('doses', meds.length ? meds.map((x) => `${short(x)}: ${how(x)}.`).join(' ') : 'There was no medicine to take at home.', meds.some((x) => x.stopped || x.missed));
+  const adv = (p.rx || []).filter((x) => x.instr && x.start >= last.t && x.seen);
+  const kept = (x) => x.kept / x.seen;
+  set('advice_kept', adv.length ? adv.map((x) => `${x.name}: ${kept(x) > 0.85 ? 'yes, every day' : kept(x) > 0.5 ? 'most days' : 'only now and then'}.`).join(' ') : 'You gave no advice.',
+    adv.some((x) => kept(x) <= 0.5));
 }

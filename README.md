@@ -48,10 +48,22 @@ compound, with sources.
 
   Gut-acting and skin-acting remedies are handled separately.
 - **Diagnosis** (`signs.js`, `encounter.js`): findings are computed from the true state.
-  - History questions cost minutes.
+  - History questions cost minutes. They are grouped by topic (the story, fever, head, chest, belly, urine, skin,
+    pain and swelling, pregnancy, the child, background) and ask one thing each; "Tell me about it from the start"
+    gets the story of the main illness. An answer gives what is there, or a plain "no".
+  - What a patient says first is true when they say it: each complaint line names its claims (`says` in
+    `conditions.js`), people come in while the illness shows (a semi-immune adult with silent parasites does not
+    walk in with a fever), and they never "haven't noticed" what they came about. `test/history.test.mjs` checks
+    every illness.
+  - When they come back: better or worse since last time, which doses they missed or when they stopped, any
+    trouble from the medicine, and how well they kept your advice.
   - Examination is by body region, on an SVG figure (`js/ui/body.js`) that shows what you found.
   - Some exams need tools: watch, thermometer, scale, MUAC tape, magnifier, stethoscope, BP cuff.
   - A differential helper can be switched off.
+- **Advice** (`encounter.js` INSTRUCTIONS): one thing per line, grouped (medicine, when to come back, care at home,
+  prevention, family, birth and the baby), and only what fits the person (age, sex, pregnancy, a newborn), never the
+  diagnosis. "Come back at once if…" brings them back sooner when it turns bad. Prevention (a net, boiled water, a
+  latrine, shoes, washed faces, no smoke) lowers what that person catches next (`epi.prevent`, with references).
 - **Herbs → medicine** (`content/herbs.js`, `content/preparations.js`, `crafting.js`):
   - 12 real plants (Latin name, part, % content range, habitat, season, evidence, harms).
   - Methods: drying, powder, infusion, decoction, sour (acid) decoction, cold soak and tincture,
@@ -158,10 +170,9 @@ compound, with sources.
 
 ## Roadmap
 - **Phase 2 (done):** Green Pages medicines from the mission stores and a mail-order catalogue;
-  antibiotics with organism MICs and the valley's resistance index; eight more WTND conditions.
-  Still to come from the book: injections (benzathine penicillin, ceftriaxone), TB, tetanus,
-  meningitis, asthma, high blood pressure, eye problems, STIs, malnutrition, childbirth and the
-  newborn.
+  antibiotics with organism MICs and the valley's resistance index; the rest of the book's illnesses (injections,
+  TB, tetanus, meningitis, asthma, high blood pressure, eyes, STIs, malnutrition, childbirth and the newborn);
+  history-taking and advice rebuilt. Still open: evidence grading per species (HerbMedPro-style).
 - **Phase 3:** a chemistry lab: glassware, reagents, extraction, semi-synthesis and synthesis (willow →
   salicin → aspirin, cinchona → quinine, *Artemisia* → artemisinin → artesunate, paracetamol,
   sulfanilamide, compounding), with purity checks (melting point, TLC).
@@ -187,7 +198,32 @@ compound, with sources.
     - local plants and animals with their own real chemistry, never a stand-in for the imported one.
 - **Later: full pregnancy/foetus/newborn physiology** (foetal growth, preterm labour, labour itself, breast milk
   carrying drugs, a newborn's slow drug clearance, bilirubin), replacing the basic models in `people.js`.
-- After phase 1, if wanted: PWA hosting, APK and save sync, copied from `dont get lost`.
+- After phase 1, if wanted: PWA hosting, APK and save sync, copied from `dont get lost`. (Hosting done:
+  GitHub Pages at clinic.robbiemed.org.)
+
+## Later plans (phase 5 and beyond; not scheduled)
+- **Ask anything.** A game for doctors should let you ask about every body part and process. Build questions
+  from parts, as a template: [how often / since when / how much] + [verb] + [object] ("How often do you take
+  paracetamol?", "How often do you have sex?", "Do you drink alcohol?", "Any pain when you swallow?"). Answers come
+  from properties of the person, so each verb and noun has to link to something real:
+  - a **symptom vocabulary** for every body part, each with SOCRATES-style attributes (site, onset, character,
+    radiation, timing, what makes it better or worse, severity) that illnesses fill in from their state, the way
+    `signs.js` HISTORY rows do now;
+  - a **life record** for each person (habits, diet, water source, work, sex and partners, alcohol, tobacco,
+    medicines they buy, travel, who they live with), drawn from the population model so it is stable across
+    visits and shared by a household;
+  - honest uncertainty: "I don't know", answers that drift when the patient is embarrassed or the question is
+    leading, and a parent who cannot know what a child feels.
+- **Patient compliance as individuals.** Each person keeps advice and doses by their own habits, beliefs, money
+  and trust in you, instead of one adherence number. Over-advising may then cost something.
+- **Faster time.** A control to speed the clock, with chronic illness (already compressed, `COMPRESS`) and the
+  everyday clock running at different rates.
+- **People who persist and work for you.** Individuals live in their villages from visit to visit; hire them to
+  harvest, and make contracts to build (a field of drying racks) and to staff it (others to fill the racks with
+  herbs).
+- **A bank** for loans.
+- **An ultrasound** to buy (pregnancy dating, the baby's position, fluid in the belly).
+- **Mechanics from the other apps** (e.g. `dont get lost`), where they fit.
 
 ## The book
 `sources/wtnd-book.tar.gz.gpg` holds *Where There Is No Doctor* (2011 PDF + extracted text), encrypted.

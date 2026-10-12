@@ -167,8 +167,10 @@ export function tickHome(G) {
       const back = fever && fever.s > 0.35 && p.lowSince;
       if (fever && fever.s < 0.1) p.lowSince ||= t;
       const rngR = makeRng(p.seed, 'ret', Math.floor(t / DAY));
-      if ((b > left * 1.35 && b > 0.35) || back || ranOut) {
-        if (rngR() < 0.35 + p.trust * 0.5) scheduleReturn(G, p, t + DAY * 0.3, back ? 'the fever came back' : ranOut ? 'still unwell, the medicine is finished' : 'getting worse');
+      // told the danger signs (IMCI counselling), they notice a turn for the worse sooner and come at once (estimates)
+      const warned = p.rx.some((r) => r.instr === 'danger_signs' && !r.stopped && r.until > t);
+      if ((b > left * (warned ? 1.15 : 1.35) && b > (warned ? 0.25 : 0.35)) || back || ranOut) {
+        if (rngR() < 0.35 + p.trust * 0.5 + (warned ? 0.35 : 0)) scheduleReturn(G, p, t + DAY * (warned ? 0.1 : 0.3), back ? 'the fever came back' : ranOut ? 'still unwell, the medicine is finished' : 'getting worse');
         else p.leftBurden = b; // gives up on you for now
       }
     }

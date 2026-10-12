@@ -237,6 +237,7 @@ kbd { font: inherit; font-size: var(--fs-s); padding: 0 5px; border: 1px solid #
 .line.exam { background: #1f2a1c; align-self: stretch; color: #d4ecc8; border-left: 3px solid #6a9a4a; }
 .line b { color: var(--accent); font-weight: 600; }
 .qchips { margin-top: 8px; max-height: 42%; overflow-y: auto; touch-action: pan-y; }
+.qhead { display: block; margin: 6px 0 2px; color: var(--dim); font-size: var(--fs-s); }
 .qchips button, .regmenu button { text-align: left; font-size: var(--fs-s); }
 .qchips button.done, .regmenu button.done { opacity: 0.55; }
 .examgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; flex: 1; min-height: 0; }

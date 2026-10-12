@@ -18,7 +18,7 @@ import { stock, buy, sell, offer, LOT, lotPrice, nextVisit, CATALOGUE, IMPORT, c
 import { lookalikes, climateFit } from '../core/flora.js';
 import { teaOf } from '../core/homecare.js';
 import { CLIMATE } from '../core/content/flora_herbs.js';
-import { startEncounter, ask, examine, differential, questionsFor, examsFor, remedies, rxLine, doseInfo, stockOf, finishEncounter, doProcedure, injectNow, toolsAt, INSTRUCTIONS, PROCEDURES } from '../core/encounter.js';
+import { startEncounter, ask, examine, differential, questionsFor, examsFor, remedies, rxLine, doseInfo, stockOf, finishEncounter, doProcedure, injectNow, toolsAt, adviceFor, PROCEDURES } from '../core/encounter.js';
 import { EXAMS } from '../core/content/findings.js';
 import { who, hamletOf, ageWords, OPEN, CLOSE, healthReport } from '../core/clinic.js';
 import { medianWeight } from '../core/patient.js';
@@ -344,7 +344,10 @@ export function makeUI(G) {
     ui.encTime = () => { timer.textContent = `${Math.round(G.W.time - enc.t0)} min`; };
     // talk
     const log = h('div', { class: 'log' }, enc.log.map((l) => h('div', { class: 'line ' + (l.who === 'You' ? 'me' : l.who === 'Exam' ? 'exam' : 'them') }, h('b', {}, l.who === 'Exam' ? '' : l.who + ': '), l.text)));
-    const chips = h('div', { class: 'chips qchips' }, questionsFor(p).map((q) => h('button', { class: enc.done.has(q.id) ? 'done' : '', onclick: () => { ask(G, enc, q.id); sfx('ui'); render(); } }, q.label)));
+    // questions by topic, in the order a history is taken
+    const byGroup = (list) => [...new Set(list.map((x) => x.group))].map((g) => [g, list.filter((x) => x.group === g)]);
+    const chips = h('div', { class: 'qchips' }, byGroup(questionsFor(p)).map(([g, qs]) => h('div', {}, h('small', { class: 'qhead' }, g),
+      h('div', { class: 'chips' }, qs.map((q) => h('button', { class: enc.done.has(q.id) ? 'done' : '', onclick: () => { ask(G, enc, q.id); sfx('ui'); render(); } }, q.label))))));
     const talk = h('section', { class: 'talk' }, h('h3', {}, 'Talk'), log, chips);
     // examine
     const svgWrap = h('div', { class: 'bodywrap', html: bodySVG(p, enc.found, p.conds.some((c) => c.id.startsWith('wound') || c.id === 'burn_minor') ? (S.woundSite === 'arm' ? 'arm' : 'leg') : null) });
@@ -389,9 +392,9 @@ export function makeUI(G) {
     dxIn.addEventListener('keydown', (e) => { if (e.key === 'Enter' && hits.length) addDx(hits[0].id); });
     if (S.qFocus === 'dxq') setTimeout(() => { S.qFocus = null; dxIn.focus({ preventScroll: true }); dxIn.setSelectionRange(dxIn.value.length, dxIn.value.length); }, 0);
     treat.append(h('h4', {}, 'Working diagnosis'),
-      enc.dx.length ? h('div', { class: 'chips' }, enc.dx.map((id) => h('button', { class: 'on', title: 'Remove', onclick: () => { enc.dx.splice(enc.dx.indexOf(id), 1); render(); } }, COND.get(id).name + ' ✕'))) : null,
+      enc.dx.length ? h('div', { class: 'chips' }, enc.dx.map((id) => h('button', { class: 'on', title: 'Remove', onclick: () => { enc.dx.splice(enc.dx.indexOf(id), 1); render(); } }, COND.get(id).name + ' ✕'))) : '',
       h('div', { class: 'row' }, dxIn),
-      hits.length ? h('div', { class: 'chips' }, hits.map((c) => h('button', { onclick: () => addDx(c.id) }, c.name))) : q ? h('p', { class: 'hint' }, 'Nothing by that name.') : null);
+      hits.length ? h('div', { class: 'chips' }, hits.map((c) => h('button', { onclick: () => addDx(c.id) }, c.name))) : q ? h('p', { class: 'hint' }, 'Nothing by that name.') : '');
     // prescription builder
     const rems = remedies(G);
     const R = S.rx;
@@ -422,7 +425,7 @@ export function makeUI(G) {
     const teas = Object.keys(G.p.known).filter((id) => teaOf(G.C, id)).sort((a, b) => HERB.get(a).name.localeCompare(HERB.get(b).name));
     if (teas.length) treat.append(h('h4', {}, 'Send them to gather'), h('select', { onchange: (e) => { enc.gather = e.target.value || null; } },
       [h('option', { value: '' }, 'Nothing'), ...teas.map((id) => h('option', { value: id, selected: enc.gather === id }, `${HERB.get(id).name}: a cup of tea 3 times a day, 5 days`))]));
-    treat.append(h('h4', {}, 'Advice'), h('div', { class: 'checks' }, INSTRUCTIONS.filter((ins) => !ins.only || ins.only(p)).map((ins) => h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: enc.instr.has(ins.id), onchange: (e) => { if (e.target.checked) enc.instr.add(ins.id); else enc.instr.delete(ins.id); } }), ins.label))));
+    treat.append(h('h4', {}, 'Advice'), h('div', { class: 'checks' }, byGroup(adviceFor(p)).map(([g, list]) => [h('small', { class: 'qhead' }, g), ...list.map((ins) => h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: enc.instr.has(ins.id), onchange: (e) => { if (e.target.checked) enc.instr.add(ins.id); else enc.instr.delete(ins.id); } }), ins.label))]).flat()));
     treat.append(h('div', { class: 'row' }, h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: enc.refer, onchange: (e) => { enc.refer = e.target.checked; } }), 'Refer to the health centre (two days\' walk)')),
       h('div', { class: 'row' }, h('span', {}, 'Come back in:'), h('span', { class: 'chips' }, [0, 1, 2, 3, 7].map((n) => h('button', { class: enc.returnDays === n ? 'on' : '', onclick: () => { enc.returnDays = n; render(); } }, n ? n + ' d' : 'only if worse')))),
       h('div', { class: 'acts' }, h('button', { class: 'primary', onclick: () => finish() }, 'Finish and send home')));

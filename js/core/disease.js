@@ -85,7 +85,7 @@ const MODELS = {
       const vuln = p.age < 5 ? 1.6 : p.age >= 65 ? 1.6 : 0.5;
       // cured, but an untreated partner (or household) passes the same strain back (WTND pp.237, 220)
       const R = P.reinfect;
-      if (c.L < 1 && R && !x.instr.has(R.instr) && makeRng(p.seed, 'reinfect', c.id, Math.floor(x.t))() < R.odds) (p.pending ||= []).push({ id: c.id, t: x.t + lerp(R.days[0], R.days[1], x.rng()) * 24 * HOUR, org: c.org, mic: { ...c.mic } });
+      if (c.L < 1 && R && !x.instr.has(R.instr) && makeRng(p.seed, 'reinfect', c.id, Math.floor(x.t))() < R.odds * Object.entries(R.cut || {}).reduce((k, [i, by]) => k * (x.instr.has(i) ? 1 - by : 1), 1)) (p.pending ||= []).push({ id: c.id, t: x.t + lerp(R.days[0], R.days[1], x.rng()) * 24 * HOUR, org: c.org, mic: { ...c.mic } });
       return { loss, hazard: P.hazard * c.s ** 3 * vuln / hostDefence(p) * (P.pace || 1), done: c.L < 1 };
     },
   },
@@ -335,7 +335,7 @@ const MODELS = {
       c.st += ((R.steroid || 0) - c.st) * Math.min(1, dt / 6);
       c.left -= dt * (1 + P.steroidFaster * c.st);
       const cold = p.conds.some((q) => q.id === 'common_cold' || q.id === 'cough_child') ? 3 : 1;
-      if (c.left <= 0 && x.rng() < (P.perWeek / 168) * dt * (c.base / 0.3) * cold * (1 - P.steroidFewer * c.st)) {
+      if (c.left <= 0 && x.rng() < (P.perWeek / 168) * dt * (c.base / 0.3) * cold * (1 - P.steroidFewer * c.st) * (x.instr.has('no_smoke') ? 1 - P.smoke : 1)) {
         c.peak = lerp(P.attack[0], P.attack[1], x.rng()); c.left = lerp(P.hours[0], P.hours[1], x.rng());
       }
       c.att += ((c.left > 0 ? c.peak : c.base) - c.att) * Math.min(1, dt / 2);
@@ -715,7 +715,14 @@ export function simulate(p, toT, C) {
     const t0 = p.t, t1 = p.t + HOUR;
     const topical = {};
     const wormKills = {};
-    const instr = new Set((p.rx || []).filter((r) => r.instr && !r.stopped && (r.until ?? Infinity) > t0 && rng() < (p.adh ?? 0.8) + 0.15).map((r) => r.instr));
+    // advice kept this hour; each line counts how often (asked about on the next visit: signs.js followUp)
+    const instr = new Set();
+    for (const r of p.rx || []) {
+      if (!r.instr || r.stopped || (r.until ?? Infinity) <= t0) continue;
+      const kept = rng() < (p.adh ?? 0.8) + 0.15;
+      r.seen = (r.seen || 0) + 1;
+      if (kept) { r.kept = (r.kept || 0) + 1; instr.add(r.instr); }
+    }
     let fluidIn = 0, naLoad = 0;
     // complications and late sequels set in motion earlier (rheumatic fever, a kidney infection, an abscess)
     for (const q of [...(p.pending || [])]) {
@@ -747,14 +754,14 @@ export function simulate(p, toT, C) {
           if (!p.toxSeen.allergy) { p.toxSeen.allergy = td; ev.push({ t: td, kind: 'tox', text: `an itchy raised rash and swollen lips (allergic to ${ACTIVE.get(al).name.toLowerCase()})`, active: al }); }
           p.allergicUntil = td + 48 * HOUR;
           if (makeRng(p.seed, 'ana', rx.item, rx.start, k)() < (rx.route === 'inj' ? 0.1 : 0.01)) { p.ana = td; p.anaTo = al; ev.push({ t: td, kind: 'tox', text: 'the throat swells, wheezing, faint and cold (anaphylaxis)', active: al }); }
-          if (rx.route !== 'inj' && rng() < 0.6) { rx.stopped = td; ev.push({ t: td, kind: 'stopped', text: `stopped ${rx.name} (the rash)` }); }
+          if (rx.route !== 'inj' && rng() < 0.6) { rx.stopped = td; rx.stopWhy = 'rash'; ev.push({ t: td, kind: 'stopped', text: `stopped ${rx.name} (the rash)` }); }
         }
         if (rx.fluid) { fluidIn += amt / 1000; naLoad += (amt / 1000) * rx.fluid.na; }
       }
       // stop when better: the classic way a course is cut short
       // someone who watches every dose (a treatment supporter, as TB programmes use) makes stopping far rarer
       if (!rx.instr && !rx.stopped && p.feelBetter && !rx.fluid && rng() < (rx.counselled ? 0.0015 : 0.008) * (instr.has('supporter') ? 0.1 : 1)) {
-        rx.stopped = t0; ev.push({ t: t0, kind: 'stopped', text: `stopped ${rx.name} (felt better)` });
+        rx.stopped = t0; rx.stopWhy = 'better'; ev.push({ t: t0, kind: 'stopped', text: `stopped ${rx.name} (felt better)` });
       }
     }
     const ds = drugState(p, t1);
