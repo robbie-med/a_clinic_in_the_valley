@@ -15,18 +15,34 @@ export const CLIMATE = {
   sa: { name: 'subalpine or subarctic', fit: 0.1, habitat: { highland: 0.3 } },
 };
 
-const LIFE = {
-  tree: { tree: true, sprites: ['dngn/trees/tree2', 'dngn/trees/tree6', 'dngn/trees/tree8', 'dngn/trees/tree11'], regrow: 12, seasons: 'all' },
-  shrub: { sprites: ['mon/fungi_plants/bush2', 'mon/fungi_plants/bush3', 'mon/fungi_plants/bush4'], regrow: 8, seasons: 'all' },
-  climber: { sprites: ['mon/fungi_plants/briar_patch'], regrow: 7, seasons: 'all' },
-  succulent: { sprites: ['mon/fungi_plants/oklob_sapling'], regrow: 10, seasons: 'all' },
-  epiphyte: { sprites: ['mon/fungi_plants/plant_09'], regrow: 10, seasons: 'all' },
-  geophyte: { sprites: ['mon/fungi_plants/plant_04', 'mon/fungi_plants/plant_05'], regrow: 20, seasons: ['rains', 'late_rains', 'cool_dry'] },
-  herb: { sprites: ['mon/fungi_plants/plant_01', 'mon/fungi_plants/plant_03', 'mon/fungi_plants/plant_07', 'mon/fungi_plants/plant_08', 'mon/fungi_plants/plant_10'], regrow: 6, seasons: ['rains', 'late_rains', 'cool_dry'] },
+// Art is data, not code: each life form has a POOL of sprite keys, and a species picks one from the
+// pool by a hash of its id, then tints it. Adding tiles later (e.g. the CC0 DCSS supplemental plant
+// set) means adding keys to a pool here — no code change anywhere else.
+export const LIFE_SPRITES = {
+  tree: ['dngn/trees/tree2', 'dngn/trees/tree6', 'dngn/trees/tree8', 'dngn/trees/tree11'],
+  shrub: ['mon/fungi_plants/bush2', 'mon/fungi_plants/bush3', 'mon/fungi_plants/bush4'],
+  climber: ['mon/fungi_plants/briar_patch'],
+  succulent: ['mon/fungi_plants/oklob_sapling'],
+  epiphyte: ['mon/fungi_plants/plant_09'],
+  geophyte: ['mon/fungi_plants/plant_04', 'mon/fungi_plants/plant_05'],
+  herb: ['mon/fungi_plants/plant_01', 'mon/fungi_plants/plant_03', 'mon/fungi_plants/plant_07', 'mon/fungi_plants/plant_08', 'mon/fungi_plants/plant_10'],
+  grass: ['mon/fungi_plants/plant_01'],
 };
-// A gathered unit: a realistic handful of that part, its dry fraction, the tool needed, the icon, and
-// which preparations make sense (preparations.js ids; 'dry' is always possible).
-const PART = {
+/** How each life form behaves: whether it blocks the way, how fast it comes back, when it is there. */
+export const LIFE_FORM = {
+  tree: { tree: true, regrow: 12, seasons: 'all' },
+  shrub: { regrow: 8, seasons: 'all' },
+  climber: { regrow: 7, seasons: 'all' },
+  succulent: { regrow: 10, seasons: 'all' },
+  epiphyte: { regrow: 10, seasons: 'all' },
+  geophyte: { regrow: 20, seasons: ['rains', 'late_rains', 'cool_dry'] },
+  herb: { regrow: 6, seasons: ['rains', 'late_rains', 'cool_dry'] },
+  grass: { regrow: 5, seasons: ['rains', 'late_rains', 'cool_dry'] },
+};
+// A gathered unit: a realistic handful of that part, its dry fraction, the tool needed, the icon (one
+// generic icon per part — swap the keys when better art arrives) and which preparations make sense
+// (preparations.js ids; 'dry' is always possible).
+export const PART = {
   leaf: { unit: 'handful of leaves', g: 20, dry: 0.3, icon: 'three-leaves', methods: ['infusion', 'tincture'] },
   shoot: { unit: 'handful of shoots', g: 20, dry: 0.3, icon: 'three-leaves', methods: ['infusion', 'tincture'] },
   plant: { unit: 'whole plant', g: 25, dry: 0.3, icon: 'three-leaves', methods: ['infusion', 'tincture'] },
@@ -56,7 +72,8 @@ export const USE_NAMES = {
 };
 
 function toHerb(s) {
-  const L = LIFE[s.l] || LIFE.herb, P = PART[s.p];
+  const L = LIFE_FORM[s.l] || LIFE_FORM.herb, P = PART[s.p];
+  const pool = LIFE_SPRITES[s.l] || LIFE_SPRITES.herb;
   const h = hash(s.i);
   const contains = {};
   for (const [cl, v] of Object.entries(s.k)) contains[cl] = [v[0], v[1]];
@@ -64,7 +81,7 @@ function toHerb(s) {
     id: s.i, flora: true, name: s.cn || s.n, latin: s.n, family: s.f, part: s.p, life: s.l, climate: s.c,
     estimated: Object.values(s.k).some((v) => v[2]),
     habitat: CLIMATE[s.c].habitat, seasons: L.seasons, density: 0, tree: !!L.tree,
-    sprite: L.sprites[h % L.sprites.length], tint: TINTS[(h >>> 5) % TINTS.length], icon: P.icon, color: TINTS[(h >>> 5) % TINTS.length],
+    sprite: pool[h % pool.length], tint: TINTS[(h >>> 5) % TINTS.length], icon: P.icon, color: TINTS[(h >>> 5) % TINTS.length],
     unit: { name: P.unit, g: P.g }, dry: P.dry, tool: P.tool || null, regrowDays: L.regrow,
     contains, methods: ['dry', ...P.methods],
     evidence: 'traditional', uses: (s.u || []).map((u) => USE_NAMES[u] || u), folk: s.u || [],

@@ -69,6 +69,7 @@ export function buy(G, v, key, id) {
   const left = addItem(p.inv, C, id, LOT(it), { q: row.q, t: G.W.time });
   if (left) { if (left < LOT(it)) remove(p.inv, id, LOT(it) - left); return { ok: false, why: 'Your bag is full.' }; }
   p.coins = Math.round((p.coins - row.price) * 10) / 10;
+  if (it.herb || it.plant) (p.known ||= {})[it.herb || it.plant] = 1;   // you have met the plant now
   meta.trade ||= {};
   const k = v.id + ':' + key;
   meta.trade[k] ||= {};
@@ -149,6 +150,8 @@ export function deliverOrders(G) {
     if (G.W.time < o.due) continue;
     const shelf = G.W.shelves()[0]?.inv;
     o.goods = o.goods.map(([id, n, q]) => {
+      const it = G.C.items.get(id);
+      if (it.herb || it.plant) (G.p.known ||= {})[it.herb || it.plant] = 1;
       let left = shelf ? addItem(shelf, G.C, id, n, { q, t: G.W.time }) : n;
       if (left) left = addItem(G.p.inv, G.C, id, left, { q, t: G.W.time });
       return [id, left, q];

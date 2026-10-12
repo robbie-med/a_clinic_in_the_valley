@@ -14,7 +14,9 @@ import { ORGANISMS, ORG } from '../core/content/organisms.js';
 import { METHODS } from '../core/content/preparations.js';
 import { PLACEABLES } from '../core/content/build.js';
 import { VENDORS } from '../core/content/vendors.js';
-import { stock, buy, sell, offer, LOT, lotPrice, nextVisit, CATALOGUE, catalogueItems, orderTotal, placeOrder } from '../core/economy.js';
+import { stock, buy, sell, offer, LOT, lotPrice, nextVisit, CATALOGUE, IMPORT, catalogueItems, importItems, orderTotal, placeOrder } from '../core/economy.js';
+import { lookalikes, climateFit } from '../core/flora.js';
+import { CLIMATE } from '../core/content/flora_herbs.js';
 import { startEncounter, ask, examine, differential, questionsFor, examsFor, remedies, rxLine, doseInfo, stockOf, finishEncounter, doProcedure, toolsAt, INSTRUCTIONS, PROCEDURES } from '../core/encounter.js';
 import { EXAMS } from '../core/content/findings.js';
 import { who, hamletOf, ageWords, OPEN, CLOSE, healthReport } from '../core/clinic.js';
@@ -155,6 +157,14 @@ export function makeUI(G) {
     [...panel.querySelectorAll('.scroll, .log, .detail')].forEach((e, i) => { if (keepScroll[i] !== undefined) e.scrollTop = keepScroll[i]; });
   }
 
+  // A search box for the long lists (hundreds of species, hundreds of imported goods).
+  const searchBox = (key, placeholder) => {
+    const inp = h('input', { type: 'search', placeholder, value: S[key] || '' });
+    inp.addEventListener('input', () => { S[key] = inp.value; S.qFocus = key; render(); });
+    if (S.qFocus === key) setTimeout(() => { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }, 0);
+    return h('div', { class: 'row' }, inp);
+  };
+
   // ———————————————————————————————————— item detail
   function itemDetail(id, stack) {
     const it = G.C.items.get(id);
@@ -251,9 +261,9 @@ export function makeUI(G) {
     const groups = [['Herbal remedies', G.C.recipes.filter((r) => r.herb && !r.hours)], ['Hand preparations', G.C.recipes.filter((r) => r.special)], ['Soaks & tinctures (at a steeping jar)', G.C.recipes.filter((r) => r.hours)]];
     for (const [title, rs] of groups) {
       list.append(h('h3', {}, title));
-      const sorted = [...rs].sort((a, b) => (!!blocker(G, a) - !!blocker(G, b)) || a.out.localeCompare(b.out));
+      const mine = rs.filter((r) => !r.herb || G.p.known[r.herb] || count(G.p.inv, 'fresh_' + r.herb) || count(G.p.inv, 'dried_' + r.herb));
+      const sorted = mine.sort((a, b) => (!!blocker(G, a) - !!blocker(G, b)) || a.out.localeCompare(b.out));
       for (const r of sorted) {
-        if (r.herb && !G.p.known[r.herb] && !count(G.p.inv, 'fresh_' + r.herb) && !count(G.p.inv, 'dried_' + r.herb)) continue;
         const it = G.C.items.get(r.out), why = blocker(G, r);
         list.append(h('button', { class: 'recipe' + (why ? ' miss' : '') + (S.makeSel === r.id ? ' sel' : ''), onclick: () => { S.makeSel = r.id; S.makeTimes = 1; render(); } }, icon(it.icon, 30), h('span', {}, it.name), h('small', {}, why ? '—' : 'ready')));
       }
@@ -436,11 +446,27 @@ export function makeUI(G) {
       const c = COND.get(S.hbSel) || CONDITIONS[0];
       detail.append(h('h3', {}, c.name), h('p', { class: 'note' }, c.learn), h('p', {}, h('b', {}, 'When to refer: '), c.teach.refer || '—'), h('p', { class: 'hint' }, `Also called: ${c.local.join(', ')}. Source: Where There Is No Doctor, ${c.ref.replace('WTND ', '')} (Hesperian), paraphrased.`));
     } else if (S.hbTab === 'plants') {
-      for (const hb of HERBS) list.append(h('button', { class: 'recipe' + (S.hbSel === hb.id ? ' sel' : ''), onclick: () => { S.hbSel = hb.id; render(); } }, icon({ gi: hb.icon, c: hb.color }, 28), h('span', {}, hb.name, h('small', {}, ' ' + hb.latin)), h('small', {}, hb.evidence)));
-      const hb = HERB.get(S.hbSel) || HERBS[0];
+      // the 12 plants of the valley, plus every species you have gathered or bought
+      const known = [...new Set([...HERBS.map((x) => x.id), ...Object.keys(G.p.known || {})])].map((id) => HERB.get(id)).filter(Boolean);
+      const q = (S.hbQ || '').toLowerCase().trim();
+      const plants = known.filter((x) => !q || `${x.name} ${x.latin} ${x.family} ${x.part} ${x.uses.join(' ')}`.toLowerCase().includes(q))
+        .sort((a, b) => (!!a.flora - !!b.flora) || a.name.localeCompare(b.name));
+      list.append(searchBox('hbQ', `Search ${known.length} plants you know…`));
+      for (const hb of plants.slice(0, 150)) list.append(h('button', { class: 'recipe' + (S.hbSel === hb.id ? ' sel' : ''), onclick: () => { S.hbSel = hb.id; render(); } }, icon({ gi: hb.icon, c: hb.color }, 28), h('span', {}, hb.name, h('small', {}, ' ' + hb.latin)), h('small', {}, hb.evidence)));
+      if (plants.length > 150) list.append(h('p', { class: 'hint' }, `…and ${plants.length - 150} more. Type a name, a family or a use to narrow the list.`));
+      const hb = (plants.includes(HERB.get(S.hbSel)) ? HERB.get(S.hbSel) : plants[0]) || HERBS[0];
+      const fit = climateFit(hb.id);
       detail.append(h('h3', {}, `${hb.name} — `, h('i', {}, hb.latin)), h('p', {}, `${hb.family}. Part used: ${hb.part}. Grows: ${Object.keys(hb.habitat).join(', ')}; ${hb.seasons === 'all' ? 'all year' : hb.seasons.map((s) => SEASON_NAMES[s].toLowerCase()).join(', ')}.`),
+        hb.flora ? h('p', {}, `A ${CLIMATE[hb.climate].name} ${hb.life}. ${fit >= 0.9 ? 'At home in this valley.' : fit >= 0.6 ? 'It manages here.' : 'Out of its country here: what grows is thin and weak.'}`) : null,
         h('p', {}, h('b', {}, 'Contains: '), Object.entries(hb.contains).map(([a, r]) => ACTIVE.get(a).channel === 'topical' ? ACTIVE.get(a).name : `${ACTIVE.get(a).name} ${r[0]}–${r[1]}% of dry weight`).join('; ')),
-        h('p', {}, h('b', {}, 'Used for: '), hb.uses.join(', '), `. Evidence: ${hb.evidence}.`), h('p', { class: 'note' }, hb.note), hb.harms.length ? h('p', { class: 'bad' }, hb.harms.join(' ')) : null, h('p', { class: 'hint' }, hb.ref));
+        hb.estimated ? h('p', { class: 'hint' }, 'Some of those figures are the usual content of the compound, not a measurement of this plant: nobody has assayed it.') : null,
+        h('p', {}, h('b', {}, hb.flora ? 'People use it for: ' : 'Used for: '), hb.uses.length ? hb.uses.join(', ') : 'nothing anyone wrote down', `. Evidence: ${hb.evidence}.`),
+        h('p', { class: 'note' }, hb.note));
+      if (hb.harms.length) detail.append(h('p', { class: 'bad' }, hb.harms.join(' ')));
+      for (const c of [...new Set(Object.keys(hb.contains).flatMap((a) => ACTIVE.get(a).cautions || []))]) detail.append(h('p', { class: 'bad' }, c));
+      const look = lookalikes(hb.id, 5).filter((x) => known.some((k) => k.id === x.id));
+      if (look.length) detail.append(h('p', {}, h('b', {}, 'Easily mistaken for: '), look.map((x) => `${x.name} (${x.why})`).join('; ')));
+      detail.append(h('p', { class: 'hint' }, hb.ref));
     } else if (S.hbTab === 'compounds') {
       for (const a of ACTIVES) list.append(h('button', { class: 'recipe' + (S.hbSel === a.id ? ' sel' : ''), onclick: () => { S.hbSel = a.id; render(); } }, h('span', {}, a.name), h('small', {}, a.class)));
       const a = ACTIVE.get(S.hbSel) || ACTIVES[0];
@@ -511,11 +537,22 @@ export function makeUI(G) {
             h('button', { disabled: !n, onclick: () => { cart[it.id] = n - 1; render(); } }, '−'), h('b', {}, n), h('button', { onclick: () => { cart[it.id] = n + 1; render(); } }, '+')));
         }
       }
+      list.append(h('h4', {}, 'Town import house'), h('p', { class: 'hint' }, `Dried herbs, seed and the animal and mineral goods of the far traditions: ${importItems(G.C).length} listed, ${IMPORT.baseDays}-${IMPORT.baseDays + IMPORT.perZone * 5 + 10} days by post, priced by how far they come.`), searchBox('impQ', 'Search by name: goldthread, antler, seed…'));
+      const iq = (S.impQ || '').toLowerCase().trim();
+      const imports = iq.length >= 3 ? importItems(G.C).filter((it) => it.name.toLowerCase().includes(iq)) : [];
+      if (iq.length < 3) list.append(h('p', { class: 'hint' }, 'Type three letters or more.'));
+      for (const it of imports.slice(0, 40)) {
+        const n = cart[it.id] || 0;
+        list.append(h('div', { class: 'trow' }, icon(it.icon, 30), h('span', {}, it.name, h('small', {}, `${LOT(it) > 1 ? ' ' + amt(it, LOT(it)) : ''} · ${IMPORT.baseDays + IMPORT.perZone * (it.zone || 1)} days`)), h('small', {}, sh(lotPrice(it, IMPORT.mult))),
+          h('button', { disabled: !n, onclick: () => { cart[it.id] = n - 1; render(); } }, '−'), h('b', {}, n), h('button', { onclick: () => { cart[it.id] = n + 1; render(); } }, '+')));
+      }
+      if (imports.length > 40) list.append(h('p', { class: 'hint' }, `…and ${imports.length - 40} more.`));
       const lines = Object.entries(cart).filter(([, n]) => n > 0);
       detail.append(h('h4', {}, 'Your order'), lines.length ? h('ul', {}, lines.map(([id, n]) => h('li', {}, `${n} × ${G.C.items.get(id).name}`))) : h('p', { class: 'hint' }, 'Nothing yet.'),
         h('p', {}, `Postage ${sh(CATALOGUE.postage)} · total ${sh(orderTotal(G.C, Object.fromEntries(lines)))}`),
         h('div', { class: 'acts' }, h('button', { class: 'primary', disabled: !lines.length, onclick: () => { const r = placeOrder(G, cart); if (!r.ok) ui.toast(r.why); else { sfx('coin'); ui.toast(`Order posted. Due about day ${day(r.due)}.`); S.cart = {}; } render(); ui.refresh(); } }, 'Post the order')),
-        h('p', { class: 'hint' }, 'Paid when posted. The post runner brings it to the medicine shelf in 4–8 days. Sealed boxes from the city wholesaler, though no supply chain is perfect.'));
+        h('p', { class: 'hint' }, 'Paid when posted. The post runner brings it to the medicine shelf in 4–8 days. Sealed boxes from the city wholesaler, though no supply chain is perfect.'),
+        h('p', { class: 'hint' }, `Imported herbs come weeks later, and about one sack in three holds another species altogether — far more for antler. ${IMPORT.ref}`));
       const pend = G.meta.orders || [];
       if (pend.length) detail.append(h('h4', {}, 'On the way'), h('ul', {}, pend.map((o) => h('li', {}, `No. ${o.n}: ${o.goods.length} item${o.goods.length > 1 ? 's' : ''}, due day ${day(o.due)}`))));
     } else if (S.ledTab === 'report') {
