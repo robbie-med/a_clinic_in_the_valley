@@ -5,7 +5,8 @@
 import { COND } from './content/conditions.js';
 import { drugState } from './pk.js';
 import { sinceWords } from './patient.js';
-import { makeRng } from './rng.js';
+import { makeRng, hashf } from './rng.js';
+import { tetanusVaccinated } from './disease.js';
 
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -59,7 +60,7 @@ export function signs(p, t, tools = new Set()) {
   const set = (k, v, pos, n) => { F[k] = { v, pos: !!pos, n }; };
 
   const main = p.conds.find((c) => c.id === p.mainCond) || p.conds[0];
-  set('duration', main ? cap(sinceWords((t - main.t0) / HOUR)) + '.' : 'It is better now.', false);
+  set('duration', main ? cap(sinceWords(((t - main.t0) / HOUR) * (COND.get(main.id).params.pace || 1))) + '.' : 'It is better now.', false);
 
   // ——— stools, vomiting, water
   let stools = 0, blood = false;
@@ -89,7 +90,7 @@ export function signs(p, t, tools = new Set()) {
   // ——— general
   const mal = cond('malaria'), pn = cond('pneumonia');
   const ty = cond('typhoid');
-  const sick = p.lastTox?.some((s) => ['reye', 'iron_severe', 'iron_lethal', 'opioid_resp', 'sjs'].includes(s)) || (ty?.s || 0) > 0.85 || (mal?.sev || 0) > 0.9 || (pn?.s || 0) > 0.85 || d > 0.09 || any((c) => c.I > 6.5) || p.lastTox?.includes('anticholinergic_severe');
+  const sick = p.lastTox?.some((s) => ['reye', 'iron_severe', 'iron_lethal', 'opioid_resp', 'sjs', 'benzo_resp'].includes(s)) || (ty?.s || 0) > 0.85 || (mal?.sev || 0) > 0.9 || (pn?.s || 0) > 0.85 || d > 0.09 || any((c) => c.I > 6.5) || p.lastTox?.includes('anticholinergic_severe');
   set('alert', sick ? (p.lastTox?.includes('anticholinergic_severe') ? 'Confused, picking at the air, agitated.' : 'Very weak and drowsy, hard to wake.') : 'Awake and alert.', sick);
   set('pallor', V.hb < 6 ? 'Palms and inner eyelids very pale (white).' : V.hb < 8.5 ? 'Palms and eyelids pale.' : 'Good colour.', V.hb < 8.5);
   set('thin', p.nutrition < 0.7 ? 'Very thin, ribs and shoulder bones show.' : p.nutrition < 0.8 ? 'Thin.' : 'Well nourished.', p.nutrition < 0.8);
@@ -222,7 +223,7 @@ export function signs(p, t, tools = new Set()) {
   set('meds_taken', taking.length ? 'Taking: ' + taking.join(', ') + '.' : 'Nothing yet.', false);
   const tox = [];
   if (hives) tox.push('an itchy rash all over');
-  for (const s of p.lastTox || []) tox.push({ tinnitus: 'ears ringing', cinchonism: 'ears ringing, dizzy, sick', quinine_toxic: 'cannot see well', digitalis_gi: 'nausea, sees yellow', digitalis_arrhythmia: 'heart stumbling', anticholinergic: 'mouth dry as dust, heart racing', anticholinergic_severe: 'seeing things that are not there', marrow: 'tired, bruises easily', grey_baby: 'the baby is grey and floppy', kidney_injury: 'hardly any urine', sjs: 'blisters, peeling skin, sore mouth and eyes', reye: 'vomiting, then drowsy and confused', iron_gi: 'vomiting, belly pain', iron_severe: 'vomiting blood, very drowsy', iron_lethal: 'cannot be woken', vita_acute: 'headache and vomiting', zinc_gi: 'vomiting, cramps', opioid_withdrawal: 'aching, yawning, loose stools, sleepless' }[s] || s);
+  for (const s of p.lastTox || []) tox.push({ tinnitus: 'ears ringing', cinchonism: 'ears ringing, dizzy, sick', quinine_toxic: 'cannot see well', digitalis_gi: 'nausea, sees yellow', digitalis_arrhythmia: 'heart stumbling', anticholinergic: 'mouth dry as dust, heart racing', anticholinergic_severe: 'seeing things that are not there', marrow: 'tired, bruises easily', grey_baby: 'the baby is grey and floppy', kidney_injury: 'hardly any urine', sjs: 'blisters, peeling skin, sore mouth and eyes', reye: 'vomiting, then drowsy and confused', iron_gi: 'vomiting, belly pain', iron_severe: 'vomiting blood, very drowsy', iron_lethal: 'cannot be woken', vita_acute: 'headache and vomiting', zinc_gi: 'vomiting, cramps', opioid_withdrawal: 'aching, yawning, loose stools, sleepless' }[s] || TOX_WORDS[s] || s);
   set('tox_symptoms', tox.length ? 'Complains of: ' + tox.join('; ') + '.' : 'No new complaints from the medicine.', tox.length > 0);
   const poorly = p.conds.some((c) => (c.s || 0) > 0.35);
   set('appetite', poorly ? 'Eating little.' : 'Eating well.', poorly);
@@ -235,5 +236,78 @@ export function signs(p, t, tools = new Set()) {
     const muac = Math.round((13.6 + (p.nutrition - 0.85) * 14) * 10) / 10;
     set('muac', `${muac.toFixed(1)} cm${muac < 11.5 ? ' — SEVERE malnutrition (red)' : muac < 12.5 ? ' — moderate malnutrition (yellow)' : ' (green)'}`, muac < 12.5, muac);
   }
+  infectionSigns(p, F, set);
   return F;
+}
+
+// ——— infections (WTND chapters 13–18, 21 and pp.399–403). Each row: [finding, { condition: test(c, p) }, text, normal
+// text]. The finding shows when any listed condition passes its test, overriding a normal answer from above; text may be
+// a function of (c, p, F). Tests read only the condition's true state.
+const above = (min) => (c) => (c.s || 0) > min;
+const wk = 7 * 24; // real hours: the slow (paced) conditions keep their age in real-time hours
+const STI = ['gonorrhoea', 'chlamydia', 'syphilis', 'trichomonas', 'chancroid'];
+const SHOWN = [
+  ['cough', { tb: above(0.1) }, 'A cough for weeks, worst on waking, with thick spit.'],
+  ['blood_sputum', { tb: above(0.55) }, 'Yes — there has been blood in the spit.', 'No blood in the spit.'],
+  ['night_sweats', { tb: above(0.15), tb_nodes: above(0.4), hiv: above(0.3) }, 'Sweats soak the bed at night; a slight fever most evenings.', 'No night sweats.'],
+  ['crackles', { tb: above(0.45) }, 'Crackles high up in the chest, at the top of one lung.'],
+  ['weight_loss', { tb: (c) => c.waste > 0.04, tb_nodes: (c) => c.waste > 0.04, hiv: (c) => c.waste > 0.04 }, 'Yes — much thinner over the months; the clothes hang loose.'],
+  ['thin', { tb: (c) => c.waste > 0.12, hiv: (c) => c.waste > 0.12 }, 'Wasted: ribs, cheekbones and shoulder blades stand out.'],
+  ['neck_glands', { tb_nodes: above(0.1), hiv: above(0.2), syphilis: (c) => c.age > 6 * wk && c.age < 24 * wk },
+    (c) => (c.id === 'tb_nodes' ? 'Big, firm, painless lumps in the neck; one has opened and drains pus.' : 'Swollen glands in the neck, armpits and groin.')],
+  ['skin_patch', { leprosy: (c) => c.A > 4 }, 'A pale patch with no clear border, not scaly, not itchy.', 'No odd patches on the skin.'],
+  ['patch_feeling', { leprosy: (c) => c.A > 4.5 }, 'Cannot feel the wisp of cotton or the pin inside the patch.', 'Feels the cotton everywhere.'],
+  ['thick_nerves', { leprosy: (c) => c.A > 6 || c.nerve > 0.1 }, 'The nerve at the elbow and the one behind the ear are thick like cords.', 'Nerves feel normal.'],
+  ['numb_hands', { leprosy: (c) => c.nerve > 0.2 }, 'Hands and feet numb; old burns and cuts that were never felt.', 'Feeling in hands and feet is normal.'],
+  ['claw', { leprosy: (c, p) => (p.flags.nerve || 0) > 0.5 }, 'The fingers are clawed and one foot drops.', 'Hands and feet move normally.'],
+  ['nodules', { leprosy: (c) => c.A > 8.5 }, 'Lumps on the face, thick lumpy ear lobes, eyebrows gone thin.', 'No lumps.'],
+  ['lockjaw', { tetanus: above(0.25) }, 'Cannot open the mouth more than a finger\'s width: the jaw is locked.', 'Opens the mouth normally.'],
+  ['spasms', { tetanus: above(0.5) }, 'Painful spasms arch the back and clench the fists at a touch or a noise.', 'No spasms.'],
+  ['stiff_neck', { tetanus: above(0.3), meningitis: above(0.25) }, 'The neck is stiff: the head will not bend forward to the chest.', 'The neck bends freely.'],
+  ['knee_jerk', { tetanus: above(0.2), meningitis: above(0.5) }, 'The leg jumps high.', 'A small, normal jump.'],
+  ['injury_how', { tetanus: (c, p) => p.age >= 0.1 }, 'Stepped on a nail about two weeks ago; the wound was not cleaned.'],
+  ['tetanus_cord', { tetanus: (c, p) => p.age < 0.1 }, 'The baby stopped sucking and cries all the time; the cord stump is dirty.', '—'],
+  ['headache', { meningitis: above(0.2), hiv: above(0.7) }, 'Yes, a terrible headache.'],
+  ['vomiting', { meningitis: above(0.3), cholera: above(0.3), hepatitis: above(0.4), pid: above(0.6) }, 'Yes, vomiting.'],
+  ['alert', { meningitis: above(0.6) }, 'Very drowsy, confused, hard to wake.'],
+  ['fontanel', { meningitis: (c, p) => p.age < 1.5 && c.s > 0.3 }, 'The soft spot bulges.'],
+  ['petechiae', { meningitis: (c) => c.org === 'n_meningitidis' && c.s > 0.5 }, 'Small dark red spots on the skin that do not fade when pressed.', 'No spots.'],
+  ['stools', { cholera: above(0.15) }, (c, p, F) => `${Math.max(10, F.stools?.n || 0)} or more stools a day like rice water, pouring out.`],
+  ['jaundice', { hepatitis: (c) => c.age > 72 && c.s > 0.2 }, 'The whites of the eyes are yellow.', 'Whites of the eyes are white.'],
+  ['urine', { hepatitis: (c) => c.age > 48 && c.s > 0.2 }, 'The urine is dark, like tea or cola.'],
+  ['pale_stool', { hepatitis: (c) => c.age > 72 && c.s > 0.3 }, 'The stools have gone pale, almost white.', 'Stools a normal colour.'],
+  ['liver_tender', { hepatitis: above(0.2) }, 'Tender under the right ribs; the liver edge can be felt.', 'Nothing tender under the ribs.'],
+  ['discharge', { gonorrhoea: above(0.1), chlamydia: above(0.25), trichomonas: above(0.1), pid: above(0.2) },
+    (c, p) => (c.id === 'trichomonas' ? 'A thin, foamy, greenish-yellow discharge that smells bad.' : c.id === 'gonorrhoea' && p.sex === 'm' ? 'Drops of pus from the penis.' : c.id === 'chlamydia' ? 'A little thin, clear discharge.' : 'A yellow-green discharge.'),
+    'No discharge.'],
+  ['dysuria', { gonorrhoea: (c, p) => c.s > (p.sex === 'm' ? 0.1 : 0.4), chlamydia: above(0.35), trichomonas: above(0.4) }, 'Yes — it burns when passing urine.'],
+  ['genital_sore', { syphilis: (c) => c.age < 6 * wk, chancroid: above(0.15) },
+    (c) => (c.id === 'syphilis' ? 'One painless sore with a clean base and a hard edge.' : 'Several soft, ragged, painful sores that bleed easily.'), 'No sores.'],
+  ['bubo', { chancroid: above(0.4) }, 'A swollen, tender lump in the groin, ready to burst.', 'No lumps in the groin.'],
+  ['syph_rash', { syphilis: (c) => c.age > 6 * wk && c.age < 24 * wk && c.s > 0 }, 'A rash of copper-coloured spots, even on the palms and soles; sores in the mouth.', '—'],
+  ['partner_sx', Object.fromEntries(STI.map((id) => [id, (c, p) => hashf(p.seed, 0, 1, 7717) < 0.6])), 'Yes — my partner has the same trouble.', 'No one I know of.'],
+  ['pelvic_pain', { pid: above(0.2) }, 'Tender low in the belly on both sides; pain on moving.', '—'],
+  ['thrush', { hiv: above(0.4) }, 'White patches inside the mouth that scrape off, leaving it red (thrush).', 'Mouth clean.'],
+  ['crusts', { impetigo: (c) => c.I > 1 }, 'Sores with shiny honey-yellow crusts around the mouth and nose, and on the arms.', 'No crusted sores.'],
+  ['red_patch', { cellulitis: above(0.15) }, 'A hot, bright red, swollen, very tender patch that has spread since yesterday.', 'No red patch.'],
+  ['rings', { tinea: (c) => c.M > 2 }, 'Round scaly rings with a raised edge, clearing in the middle.', 'No rings.'],
+  ['red_eyes', { conjunctivitis: above(0.1), trachoma: above(0.1), eye_injury: (c) => c.heal < 1 },
+    (c) => (c.id === 'conjunctivitis' ? 'Both eyes red with yellow pus; the lids stick together.' : c.id === 'trachoma' ? 'Both eyes red and watering.' : 'One eye red and watering, squeezed shut against the light.')],
+  ['follicles', { trachoma: (c) => c.age > 4 * wk && c.s > 0.1 }, 'Under the turned-back upper lid: pinkish-grey lumps (follicles), and grey vessels at the top of the cornea.', 'Inside of the lids smooth.'],
+  ['eye_scratch', { eye_injury: (c) => c.heal < 1 || c.I > 2 },
+    (c) => (c.I > 3 ? 'A painful grey spot on the clear front of the eye, red all round it: an ulcer.' : 'A small scratch on the clear front of the eye.'), 'The front of the eye is clear.'],
+  ['vision', { eye_injury: (c) => c.I > 4 }, 'Sight blurred in the hurt eye.'],
+  ['pox', { chickenpox: above(0.1) }, 'Small blisters like drops of water, some crusted, thickest on the body.', '—'],
+  ['parotid', { mumps: above(0.15) }, 'A painful swelling below and in front of the ear, at the angle of the jaw.', 'No swelling by the jaw.'],
+];
+const TOX_WORDS = { orange_urine: 'urine and tears orange', tb_hepatitis: 'yellow eyes, no appetite, vomiting', pza_joints: 'aching joints', optic_neuritis: 'colours fading, sight blurred',
+  ototoxic: 'ears ringing, dizzy, hearing less', methaemoglobin: 'blue lips, breathless', dapsone_syndrome: 'fever and a spreading rash', benzo_drowsy: 'very sleepy',
+  benzo_resp: 'cannot be woken', benzo_withdrawal: 'shaking, anxious, sleepless', serum_sickness: 'fever, rash, aching joints' };
+function infectionSigns(p, F, set) {
+  for (const [k, on, v, no] of SHOWN) {
+    const c = p.conds.find((x) => on[x.id]?.(x, p));
+    if (c) set(k, typeof v === 'function' ? v(c, p, F) : v, true);
+    else if (!F[k] && no) set(k, no, false);
+  }
+  set('tetanus_vax', tetanusVaccinated(p) ? 'Yes, all the tetanus injections.' : 'Never had the tetanus injections.', !tetanusVaccinated(p));
 }

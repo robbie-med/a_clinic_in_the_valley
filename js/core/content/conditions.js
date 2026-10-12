@@ -8,6 +8,11 @@
 //
 // Page refs: Where There Is No Doctor (Hesperian, 2011 printing). Paraphrased, never copied.
 
+import { COMPRESS } from '../time.js';
+
+// Time: illness runs in real hours, but anything taking months or years (a worm's lifespan, a pregnancy, chronic
+// damage) runs COMPRESS (~9) times faster, on the game's 40-day year. Such numbers are written as real time / COMPRESS.
+
 export const CONDITIONS = [
   {
     id: 'watery_diarrhea', name: 'Watery diarrhoea', local: ['the runs', 'loose belly'], model: 'viral',
@@ -66,7 +71,7 @@ export const CONDITIONS = [
   {
     id: 'wound_minor', name: 'Cut or scrape', local: ['a cut'], model: 'wound',
     epi: { w: 5, age: [[0, 5, 1], [5, 15, 2], [15, 60, 1.6], [60, 99, 0.8]], season: { cool_dry: 1, hot_dry: 1, rains: 1.3, late_rains: 1.4 } },
-    params: { org: 's_aureus', size: [1, 5], dirt: [0.2, 0.8], I0: [0, 1.5], days: 7 },
+    params: { org: 's_aureus', size: [1, 5], dirt: [0.2, 0.8], I0: [0, 1.5], days: 7, tetanus: 6e-5 }, // tetanus: spores per hour × dirt in the unvaccinated (estimate)
     complaint: ['{who} cut {refl} with a panga {ago}.', 'A cut on the leg from a thorn, {ago}.', 'Fell on the rocks {ago}. The knee is torn open.'],
     teach: { treat: ['clean'], helps: ['honey', 'aloe_gel'], harms: [], refer: 'Deep wound with spurting blood, or a wound from a dirty nail in someone never vaccinated (tetanus).' },
     learn: 'Clean is everything. Wash the wound and the skin around it with soap and boiled water, take out every bit of dirt, cover it with a clean cloth. Honey on a dressing helps clean wounds heal and keeps germs down.',
@@ -75,7 +80,7 @@ export const CONDITIONS = [
   {
     id: 'wound_infected', name: 'Infected wound', local: ['a sore with pus'], model: 'wound',
     epi: { w: 2.5, age: [[0, 5, 1], [5, 15, 2], [15, 99, 1.2]], season: { cool_dry: 0.9, hot_dry: 1, rains: 1.4, late_rains: 1.4 } },
-    params: { org: 's_aureus', size: [1.5, 6], dirt: [0.5, 1], I0: [3, 4.5], days: 4 },
+    params: { org: 's_aureus', size: [1.5, 6], dirt: [0.5, 1], I0: [3, 4.5], days: 4, tetanus: 6e-5 },
     complaint: ['The cut on {poss} foot is swollen and full of pus {when}.', 'An old wound, now hot and red and paining, {when}.'],
     teach: { treat: ['clean', 'hot_compress'], helps: ['honey', 'dicloxacillin'], harms: [], refer: 'Red streaks up the limb, swollen glands with fever: the infection is spreading — it needs an antibiotic that works on staph (dicloxacillin), and help if it keeps spreading.' },
     learn: 'Swollen, red, hot, painful, pus, bad smell. Raise the limb, hot compresses 20 minutes 4 times a day, clean out the pus. If red lines run up the arm or leg or there is fever, it is spreading: antibiotics.',
@@ -215,7 +220,7 @@ export const CONDITIONS = [
     id: 'mastoiditis', name: 'Mastoiditis', local: ['the swelling behind the ear'], model: 'bacterial',
     epi: { w: 0 },
     // can spread inward to the brain (meningitis, abscess); the hazard is an estimate
-    params: { org: 's_pneumoniae', L0: [6, 7], r: 0.04, Lsym: 4, Lmax: 9, imm: 0.02, onset: 200, hazard: 0.002, mastoid: true, fever: [1, 2.2] },
+    params: { org: 's_pneumoniae', L0: [6, 7], r: 0.04, Lsym: 4, Lmax: 9, imm: 0.02, onset: 200, hazard: 0.002, mastoid: true, fever: [1, 2.2], ascend: { to: 'meningitis', perH: 1e-4, minS: 0.5 } }, // ~2% reach the brain untreated (estimate)
     complaint: ['A painful swelling has come up behind {poss} ear, with fever.'],
     teach: { treat: ['ceftriaxone'], helps: ['paracetamol'], harms: [], refer: 'Refer at once: it needs injected antibiotics and often an operation.' },
     learn: 'An ear infection that spreads into the bone behind the ear: a hot, painful swelling behind the ear that pushes the ear forward, fever, a very sick child. It can spread to the brain. Injected antibiotics and the hospital.',
@@ -269,6 +274,253 @@ export const CONDITIONS = [
     teach: { treat: ['vitamin_a'], helps: ['paracetamol', 'oral_fluid'], harms: [], refer: 'Fast breathing, fits, very drowsy, unable to drink, or bloody diarrhoea: refer at once.' },
     learn: 'Begins like a bad cold with high fever, red watery eyes and cough. On the 3rd or 4th day tiny white spots like grains of salt appear inside the cheeks, then a blotchy rash spreads from the face down. Dangerous in thin children: pneumonia, diarrhoea, blindness. Give vitamin A (two doses, a day apart), keep feeding and giving drinks. Vaccination prevents it.',
     ref: 'WTND pp.311–312', icon: 'spider-web', color: '#d05050',
+  },
+
+  // ——— infections (WTND chapters 13–18, 21 and pp.399–403)
+  // `pace: COMPRESS`: an infection of months or years (TB, leprosy, syphilis, trachoma, HIV) runs on the game calendar,
+  // and the treatment that cures it with it: six months of TB treatment is ~20 game days. Their other times (`since`,
+  // rates) are written in real time and divided or multiplied by COMPRESS.
+  {
+    id: 'tb', name: 'Tuberculosis of the lungs', local: ['the long cough', 'consumption'], model: 'mycobacterial',
+    epi: { w: 1.4, age: [[0, 5, 0.3], [5, 15, 0.4], [15, 35, 1.6], [35, 60, 1.3], [60, 99, 1]], sex: { m: 1.5, f: 1 }, season: { cool_dry: 1.1, hot_dry: 1, rains: 1, late_rains: 1 }, crowd: 1.5 },
+    // ~10^9 bacilli in a lung cavity, doubling in ~22 h (r log10/h); 1 in 100 semi-dormant (sleep/wake per hour).
+    // Untreated smear-positive TB kills ~70% within 10 years, most in the first 3 (Tiemersma EW et al. PLoS One 2011;
+    // 6:e17601): ~20% a year; hazard calibrated to that. Walks in after 4–12 weeks of cough.
+    params: { org: 'm_tuberculosis', pace: COMPRESS, since: [28 * 24 / COMPRESS, 84 * 24 / COMPRESS], A0: [8, 9.5], r: 0.0137, Asym: 6, Amax: 9.5, imm: 0.012,
+      sleep: 1e-5, wake: 1e-3, hazard: 1.5e-5, waste: 7e-5, hosp: 0.02, tb: true, fever: [0.3, 1.2] },
+    complaint: ['I have coughed for weeks now, and I sweat at night.', '{who} has a cough that will not go, for more than a month, and is getting thin.', 'A long cough, and this week some blood in the spit.'],
+    teach: { treat: ['isoniazid', 'rifampicin', 'pyrazinamide', 'ethambutol'], helps: [], harms: [], refer: 'The health centre can test the sputum and gives TB medicine free. Coughing much blood, or very weak: refer.' },
+    learn: 'A cough of more than 3 weeks, often worst on waking; slight fever in the evening, night sweats, chest or back pain, slow weight loss and weakness; later blood in the spit. Four medicines together (isoniazid, rifampicin, pyrazinamide, ethambutol) for 2 months, then two for 4 more — every day, never stopping early, or it comes back and learns to resist. One medicine alone breeds resistant TB. Eat well and rest; the family should be checked.',
+    ref: 'WTND pp.179–180, 359–361', icon: 'heart-beats', color: '#a07070',
+  },
+  {
+    id: 'tb_nodes', name: 'Tuberculosis of the neck glands (scrofula)', local: ['the neck lumps'], model: 'mycobacterial',
+    epi: { w: 0.4, age: [[0, 5, 0.8], [5, 35, 1.2], [35, 99, 0.6]], season: { cool_dry: 1, hot_dry: 1, rains: 1, late_rains: 1 }, crowd: 1.3 },
+    // fewer bacilli than a lung cavity; rarely fatal on its own (hazard an estimate)
+    params: { org: 'm_tuberculosis', pace: COMPRESS, since: [42 * 24 / COMPRESS, 120 * 24 / COMPRESS], A0: [6, 7.5], r: 0.0137, Asym: 4.5, Amax: 7.5, imm: 0.012,
+      sleep: 1e-5, wake: 1e-3, hazard: 2e-6, waste: 3e-5, hosp: 0.02, nodes: true, fever: [0, 0.6] },
+    complaint: ['There are lumps in {poss} neck that have grown for months; one broke open and drains.', 'Swellings under the jaw and above the collar bone, for months, not painful.'],
+    teach: { treat: ['isoniazid', 'rifampicin', 'pyrazinamide', 'ethambutol'], helps: [], harms: [], refer: 'Any chronic swollen glands or sore: tests at the health centre.' },
+    learn: 'Big, painless lymph nodes in the neck or above the collar bone that open, drain pus, close and open again. The same germ as TB of the lungs, treated the same way, often longer.',
+    ref: 'WTND pp.180, 212', icon: 'person', color: '#b08070',
+  },
+  {
+    id: 'leprosy', name: 'Leprosy (Hansen\'s disease)', local: ['the numb patches'], model: 'mycobacterial',
+    epi: { w: 0.15, age: [[0, 10, 0.5], [10, 99, 1]], season: { cool_dry: 1, hot_dry: 1, rains: 1, late_rains: 1 }, crowd: 1.5 },
+    // M. leprae doubles in ~13 days; from a few patches (10^5) to the lumpy form (10^10). Nerve damage builds over years
+    // untreated and stays after cure. Rates are estimates; it hardly ever kills by itself.
+    params: { org: 'm_leprae', pace: COMPRESS, since: [180 * 24 / COMPRESS, 720 * 24 / COMPRESS], A0: [5, 10], r: 0.001, Asym: 4, Amax: 11, imm: 0.0009,
+      sleep: 1e-5, wake: 1e-4, hazard: 0, waste: 0, hosp: 0, nerve: 1.1e-5, leprosy: true },
+    complaint: ['There is a pale patch on my arm that has grown for months. I cannot feel a thorn in it.', 'My hands tingle and are numb, and I burned my fingers on the pot without feeling it.'],
+    teach: { treat: ['dapsone', 'rifampicin'], helps: [], harms: [], refer: 'Pain along the nerves, sudden weakness, red painful eyes (a lepra reaction): refer, but keep the medicine.' },
+    learn: 'A slowly growing pale patch that does not itch or hurt, and later loses feeling; thick nerves at the elbow, knee and neck; numb hands and feet that get burned and cut without pain; in the lumpy form, thick ear lobes and lost eyebrows. Dapsone every day with rifampicin, for 6 months (patches only) to a year (lumps). Damage already done stays: protect numb hands, feet and eyes.',
+    ref: 'WTND pp.191–192, 362–363', icon: 'hand', color: '#c0a080',
+  },
+  {
+    id: 'tetanus', name: 'Tetanus (lockjaw)', local: ['lockjaw'], model: 'tetanus',
+    epi: { w: 0.3, age: [[0, 0.05, 6], [0.05, 5, 0.3], [5, 99, 1]], season: { cool_dry: 1, hot_dry: 1, rains: 1.3, late_rains: 1.2 } },
+    // Germs grow in a dirty wound, toxin binds over a week or two, then stiffness and spasms for weeks. Walks in 1–4 days
+    // into the spasms. Without intensive care ~half die even in hospital (WTND p.184); in African hospitals ~43%
+    // (Woldeamanuel YW et al. J Neurol Sci 2016;368:292). Hazard calibrated: untreated ~55%, newborns far more.
+    params: { org: 'c_tetani', since: [190, 300], L0: [1, 2], r: 0.05, Lmax: 6.5, imm: 0.06, heal: 336, toxin: 0.008, bind: 0.02, recover: 340, hazard: 0.006, tetanus: true, fever: [0.3, 1.2] },
+    complaint: ['{who} cannot open the mouth, the neck is stiff, and the body jerks in painful spasms.', 'My jaw is locked and swallowing is hard; I stepped on a nail two weeks ago.'],
+    teach: { treat: ['tetanus_ig', 'tetanus_antitoxin', 'metronidazole', 'benzylpenicillin', 'diazepam'], helps: [], harms: [], refer: 'Tetanus is deadly: refer at once. Meanwhile clean the wound, antitoxin, penicillin or metronidazole, diazepam for the spasms, quiet and dark.' },
+    learn: 'A stiff jaw (lockjaw), then a stiff neck and body, and painful spasms set off by touch, noise or light; the knee jerk jumps high. In newborns: stops sucking and cries all the time, 3–10 days after birth, from a dirty cord. Clean the wound, give penicillin (or metronidazole), human immune globulin (or horse antitoxin, with adrenaline ready), diazepam for the spasms; touch and move the person little. Vaccination prevents it; so does a clean wound and a clean cord.',
+    ref: 'WTND pp.182–184, 388–390', icon: 'person', color: '#806060',
+  },
+  {
+    id: 'meningitis', name: 'Meningitis', local: ['the stiff-neck fever'], model: 'bacterial',
+    epi: { w: 0.7, age: [[0, 1, 3], [1, 5, 2], [5, 30, 1.2], [30, 99, 0.4]], season: { cool_dry: 1, hot_dry: 2.2, rains: 0.6, late_rains: 0.7 }, crowd: 1.4 },
+    // Untreated bacterial meningitis nearly always kills; treated, ~10% (meningococcal) to ~30% (pneumococcal) die in
+    // Africa (WHO 2015). The germ must be killed in the CSF (`csf`: only the CSF share of the blood level reaches it).
+    params: { org: 'n_meningitidis', csf: true, since: [6, 36], L0: [6, 7.5], r: 0.08, Lsym: 4, Lmax: 10, imm: 0.02, onset: 48, hazard: 0.025, meningitis: true, fever: [1.5, 3] },
+    complaint: ['{who} has a terrible headache, high fever and a stiff neck since {ago}, and vomits.', '{who} is hot, very sleepy and will not bend the neck. It started {ago}.'],
+    teach: { treat: ['ceftriaxone', 'benzylpenicillin', 'chloramphenicol'], helps: ['paracetamol'], harms: [], refer: 'Every minute counts: start an injected antibiotic and take the person to hospital.' },
+    learn: 'Fever, severe headache, a stiff neck (cannot put the head between the knees), vomiting; in babies a bulging soft spot, a strange cry, sleepiness; later fits and unconsciousness. It can follow measles, an ear infection or TB. Injected antibiotics at once (ceftriaxone, or ampicillin/penicillin with chloramphenicol) and hospital.',
+    ref: 'WTND pp.185, 351–359', icon: 'thermometer-hot', color: '#b04060',
+  },
+  {
+    id: 'cholera', name: 'Cholera', local: ['the rice-water sickness'], model: 'bacterial',
+    epi: { w: 0.6, age: [[0, 2, 0.5], [2, 15, 1], [15, 99, 1.2]], season: { cool_dry: 0.4, hot_dry: 0.8, rains: 1.8, late_rains: 1.2 }, water: 3 },
+    // Severe cholera loses up to ~1 L an hour in an adult; untreated up to half die, with fluids <1% (WHO 2017). Most
+    // deaths are dehydration (the water model). Doxycycline halves the stool and its duration (Leibovici-Weissman Y et al.
+    // Cochrane 2014;CD008625).
+    params: { org: 'v_cholerae', since: [4, 24], L0: [6.5, 8], r: 0.1, Lsym: 4, Lmax: 9, imm: 0.07, onset: 40, hazard: 0, stool: { perDay: 20, mlKg: [160, 160, 170, 170] }, cholera: true, fever: [0, 0.3] },
+    complaint: ['{who} has poured out watery stools like rice water since {ago}, and vomits.', 'Stool like rice water, again and again, since {ago}. I am so weak and thirsty.'],
+    teach: { treat: ['oral_fluid'], helps: ['doxycycline', 'ciprofloxacin', 'erythromycin'], harms: ['tropane'], refer: 'Cannot drink, no urine, or the pulse is weak: needs a drip at the health centre. Report cholera to the health authorities.' },
+    learn: 'Huge amounts of watery stool like rice water, often vomiting, and dehydration within hours, worst in older children and adults. Give the rehydration drink almost without stopping, as much as the person can take. Doxycycline (erythromycin for children) only in severe cases shortens it. Clean water and latrines prevent it.',
+    ref: 'WTND pp.158, 152, 355', icon: 'water-drop', color: '#e0e0d0',
+  },
+  {
+    id: 'hepatitis', name: 'Hepatitis (viral)', local: ['the yellow sickness'], model: 'viral',
+    epi: { w: 1, age: [[0, 5, 0.6], [5, 40, 1.4], [40, 99, 0.6]], season: { cool_dry: 1, hot_dry: 1, rains: 1.2, late_rains: 1.1 }, water: 1.5 },
+    // Very sick 2–3 weeks; liver failure in ~0.1% of children and ~1% of adults (hepatitis A: Jeong SH, Lee HS. World J
+    // Gastroenterol 2010;16:5463); hazard and per-age vulnerability (vuln, by age band) calibrated to that.
+    params: { since: [72, 200], days: [21, 5], peak: 9, jaundice: true, vomit: 0.3, fever: [0, 0.8], hazard: 0.00006, vuln: [0.1, 0.1, 0.3, 2] },
+    complaint: ['{who} is so tired and will not eat {when}, and now the eyes are yellow.', 'My urine is dark like tea and my eyes have gone yellow. I feel sick at the smell of food.'],
+    teach: { treat: [], helps: ['oral_fluid'], harms: [], refer: 'Confused, very drowsy, bleeding, or the belly swells: the liver is failing — refer.' },
+    learn: 'Tired, no appetite, sick at the smell of food, pain under the right ribs; after a few days yellow eyes and skin, urine dark like cola, pale stools. No medicine cures it. The book warns that medicines such as paracetamol add to the damage; at ordinary doses trials found little harm, but keep doses low. Rest, plenty to drink, fruit and soup; no alcohol for 6 months. Hepatitis A spreads by stool and dirty water; B and C by sex, blood and unboiled needles.',
+    ref: 'WTND p.172', icon: 'eye-target', color: '#e0c040',
+  },
+  {
+    id: 'gonorrhoea', name: 'Gonorrhoea', local: ['the drip', 'the clap'], model: 'bacterial',
+    epi: { w: 1.2, age: [[0, 15, 0], [15, 25, 1.6], [25, 45, 1], [45, 99, 0.2]], sex: { m: 1.6, f: 1 }, season: { cool_dry: 1, hot_dry: 1, rains: 1, late_rains: 1 } },
+    // Untreated it lingers for months; in women it climbs to the tubes (PID) in ~10–20% (Haggerty CL et al. J Infect Dis
+    // 2010;201 Suppl 2:S134: perH an estimate). An untreated partner gives it back.
+    params: { org: 'n_gonorrhoeae', since: [48, 200], L0: [5.5, 7], r: 0.05, Lsym: 4, Lmax: 9, imm: 0.004, onset: 400, hazard: 0, sti: 'drip',
+      ascend: { to: 'pid', perH: 1e-4, minS: 0.2, sex: 'f' }, reinfect: { instr: 'treat_partner', odds: 0.5, days: [3, 20] } },
+    complaint: ['Pus drips from down below and it burns like fire when I pass water, since {ago}.', 'There is a yellow discharge and it burns to pass water, {when}.'],
+    teach: { treat: ['ceftriaxone', 'ciprofloxacin'], helps: ['doxycycline'], harms: [], refer: 'Fever with pain low in the belly in a woman: pelvic infection — treat and refer.' },
+    learn: 'In men pus drips from the penis and passing urine burns, 2–5 days after sex with someone infected; women often have no signs, or a yellow discharge and pain low in the belly. Penicillin no longer works in most places; ceftriaxone does. Treat for chlamydia at the same time. The partner must be treated too, or it comes straight back. Untreated it can leave women and men unable to have children.',
+    ref: 'WTND pp.236–237, 359', icon: 'water-drop', color: '#d0c050',
+  },
+  {
+    id: 'chlamydia', name: 'Chlamydia', local: ['the quiet drip'], model: 'bacterial',
+    epi: { w: 1, age: [[0, 15, 0], [15, 25, 1.8], [25, 45, 0.9], [45, 99, 0.1]], sex: { m: 1, f: 1.3 }, season: { cool_dry: 1, hot_dry: 1, rains: 1, late_rains: 1 } },
+    params: { org: 'c_trachomatis', since: [96, 400], L0: [5, 6.5], r: 0.03, Lsym: 4, Lmax: 8, imm: 0.002, onset: 600, hazard: 0, sti: 'drip',
+      ascend: { to: 'pid', perH: 6e-5, minS: 0.15, sex: 'f' }, reinfect: { instr: 'treat_partner', odds: 0.5, days: [3, 20] } },
+    complaint: ['It burns a little when I pass water, and there is some discharge, {when}.', 'A thin discharge and a dull ache low in the belly, {when}.'],
+    teach: { treat: ['doxycycline', 'erythromycin', 'amoxicillin'], helps: [], harms: [], refer: null },
+    learn: 'Like a mild gonorrhoea, or no signs at all, so it spreads quietly and can scar a woman\'s tubes. Doxycycline for 7 days (erythromycin or amoxicillin in pregnancy). Treat the partner too.',
+    ref: 'WTND pp.236–237, 359', icon: 'water-drop', color: '#c0c070',
+  },
+  {
+    id: 'pid', name: 'Pelvic infection (PID)', local: ['the low-belly fever'], model: 'bacterial',
+    epi: { w: 0 },
+    // complication of gonorrhoea or chlamydia in women (the strain carries over); abscess or peritonitis now and then
+    params: { org: 'n_gonorrhoeae', L0: [5.5, 7], r: 0.05, Lsym: 4, Lmax: 9, imm: 0.01, onset: 96, hazard: 0.0004, pelvic: true, fever: [1, 2.2] },
+    complaint: ['Pain low in my belly, fever, and a bad-smelling discharge.'],
+    teach: { treat: ['ceftriaxone', 'doxycycline', 'metronidazole'], helps: ['paracetamol'], harms: [], refer: 'Very ill, a hard belly, or no better in 2 days: refer.' },
+    learn: 'Fever, pain low in the belly and on moving the cervix, a discharge, pain during sex: the infection has climbed to the womb and tubes. Ceftriaxone, then doxycycline and metronidazole for 2 weeks; treat the partner. It can leave a woman unable to have children.',
+    ref: 'WTND pp.237, 243', icon: 'thermometer-hot', color: '#b07050',
+  },
+  {
+    id: 'syphilis', name: 'Syphilis', local: ['the bad blood'], model: 'bacterial',
+    epi: { w: 0.8, age: [[0, 15, 0], [15, 45, 1.4], [45, 99, 0.4]], sex: { m: 1, f: 1 }, pregnant: 1.5, season: { cool_dry: 1, hot_dry: 1, rains: 1, late_rains: 1 } },
+    // Chronic, so on the game calendar. A painless sore 2–5 weeks after sex, gone in weeks; a rash for months; then it
+    // hides for years. It has never resisted penicillin. In pregnancy it kills many babies (people.js).
+    params: { org: 't_pallidum', pace: COMPRESS, since: [14 * 24 / COMPRESS, 70 * 24 / COMPRESS], L0: [5.5, 6.5], r: 0.01, Lsym: 3, Lmax: 9, imm: 0.004, onset: 2000, hazard: 0, sti: 'chancre',
+      reinfect: { instr: 'treat_partner', odds: 0.4, days: [5, 25] } },
+    complaint: ['There is a sore on my private parts. It does not hurt.', 'A rash all over, even on the palms and soles, and a sore throat. Some weeks ago there was a sore down below that went away.'],
+    teach: { treat: ['benzylpenicillin'], helps: ['doxycycline', 'erythromycin'], harms: [], refer: 'Signs for more than a year: three weekly injections. Pregnant women need treatment at once.' },
+    learn: 'A painless sore on the genitals (or lips, anus) 2–5 weeks after sex; it goes by itself but the disease does not. Weeks or months later a rash (often on palms and soles), sore throat, mild fever, mouth sores. Then years of nothing, until heart, brain or nerves fail. In pregnancy it kills or damages the baby. One injection of 2.4 million units benzathine penicillin cures early syphilis; doxycycline or erythromycin for 15 days if allergic. Treat the partner.',
+    ref: 'WTND pp.237–238, 351', icon: 'spider-web', color: '#a05070',
+  },
+  {
+    id: 'trichomonas', name: 'Trichomonas (vaginal discharge)', local: ['the itching discharge'], model: 'bacterial',
+    epi: { w: 1.5, age: [[0, 15, 0], [15, 50, 1], [50, 99, 0.2]], sex: { f: 1, m: 0.08 }, pregnant: 1.3, season: { cool_dry: 1, hot_dry: 1, rains: 1, late_rains: 1 } },
+    params: { org: 't_vaginalis', since: [96, 400], L0: [5, 6.5], r: 0.03, Lsym: 4, Lmax: 9, imm: 0.0015, onset: 600, hazard: 0, sti: 'froth',
+      reinfect: { instr: 'treat_partner', odds: 0.6, days: [5, 25] } },
+    complaint: ['A foamy, yellow-green discharge that smells bad and itches, {when}.', 'It itches down below and there is a bad-smelling discharge, {when}.'],
+    teach: { treat: ['metronidazole'], helps: [], harms: [], refer: null },
+    learn: 'A thin, foamy, greenish-yellow or white discharge with a bad smell and itching, sometimes burning on passing urine. Keep clean; vinegar-water washes help. Metronidazole cures it, and the husband must take it at the same time, even without signs.',
+    ref: 'WTND pp.241–242, 368', icon: 'water-drop', color: '#b0d080',
+  },
+  {
+    id: 'chancroid', name: 'Chancroid (painful genital sores)', local: ['the soft sores'], model: 'bacterial',
+    epi: { w: 0.4, age: [[0, 15, 0], [15, 45, 1], [45, 99, 0.2]], sex: { m: 1.6, f: 0.6 }, season: { cool_dry: 1, hot_dry: 1, rains: 1, late_rains: 1 } },
+    params: { org: 'h_ducreyi', since: [72, 300], L0: [5.5, 7], r: 0.04, Lsym: 4, Lmax: 9, imm: 0.004, onset: 400, hazard: 0, sti: 'ulcer',
+      reinfect: { instr: 'treat_partner', odds: 0.4, days: [5, 25] } },
+    complaint: ['Soft, painful sores on my private parts {when}, and a swelling in the groin.'],
+    teach: { treat: ['ciprofloxacin', 'erythromycin', 'ceftriaxone'], helps: ['benzylpenicillin'], harms: [], refer: null },
+    learn: 'Soft, painful sores on the genitals or anus, often with a swollen, bursting lymph node (bubo) in the groin. Several painful sores: chancroid (or herpes); one painless sore: syphilis. Erythromycin for 7 days, ciprofloxacin for 3, or one injection of ceftriaxone; treat for syphilis too. Sores let HIV in.',
+    ref: 'WTND pp.238, 402–403', icon: 'spider-web', color: '#c06060',
+  },
+  {
+    id: 'hiv', name: 'HIV and AIDS', local: ['slim disease'], model: 'hiv',
+    epi: { w: 0.6, age: [[0, 15, 0.05], [15, 25, 0.8], [25, 50, 1.4], [50, 99, 0.5]], sex: { f: 1.2, m: 1 }, season: { cool_dry: 1, hot_dry: 1, rains: 1, late_rains: 1 } },
+    // Years, on the game calendar. CD4 falls ~60/µL a year; with AIDS (CD4 < 200) untreated median survival ~1 year in
+    // Africa (Morgan D et al. AIDS 2002;16:597), ~10%/year get TB (Lawn SD, Zumla AI. Lancet 2011;378:57). Per real hour.
+    params: { pace: COMPRESS, since: [60 * 24 / COMPRESS, 200 * 24 / COMPRESS], cd4: [40, 380], decline: 60 / 8760, hazard: 7e-5, tb: 1.5e-5, waste: 3e-5,
+      stool: { perDay: 4, mlKg: [12, 10, 6, 4] }, aids: true, fever: [0.4, 1.4] },
+    complaint: ['I keep getting thinner, the diarrhoea has not stopped for over a month, and I have fevers.', 'I am always tired and losing weight; my mouth is full of white patches.'],
+    teach: { treat: [], helps: ['oral_fluid'], harms: [], refer: 'An HIV test and the antiretroviral programme at the health centre; test for TB too.' },
+    learn: 'HIV spreads by sex, blood, unboiled needles, and from mother to baby; years later AIDS: weight loss, diarrhoea or fever for more than a month, a long cough, thrush in the mouth, swollen glands, shingles, TB. No cure; antiretroviral medicines from the HIV programme keep people well for years. Daily cotrimoxazole prevents many infections. Treat each illness as it comes; condoms and boiled needles prevent it.',
+    ref: 'WTND pp.399–401', icon: 'heart-plus', color: '#a06080',
+  },
+  {
+    id: 'impetigo', name: 'Impetigo', local: ['the crusty sores'], model: 'wound',
+    epi: { w: 2, age: [[0, 2, 0.8], [2, 12, 2.5], [12, 99, 0.4]], season: { cool_dry: 0.8, hot_dry: 1, rains: 1.4, late_rains: 1.3 }, crowd: 1.5 },
+    // A wound-like skin infection: washing, gentian violet and (if widespread) dicloxacillin. Many clear in 2–3 weeks alone.
+    params: { org: 's_aureus', size: [1, 4], dirt: [0.4, 0.9], I0: [2.5, 3.5], days: 5, impetigo: true },
+    complaint: ['{who} has spreading sores with yellow crusts around the mouth, {when}.', 'Sores with shiny yellow crusts on {poss} face and arms, {when}. They itch.'],
+    teach: { treat: ['gentian_violet'], helps: ['dicloxacillin', 'hygiene', 'honey'], harms: [], refer: null },
+    learn: 'Spreading sores with shiny yellow crusts, often around a child\'s mouth and nose. Wash with soap and boiled water 3–4 times a day, soaking off the crusts, then paint with gentian violet. If it covers a large area or brings fever, dicloxacillin. Keep the child from sleeping with others.',
+    ref: 'WTND p.202', icon: 'bandage-roll', color: '#e0b040',
+  },
+  {
+    id: 'cellulitis', name: 'Cellulitis or erysipelas', local: ['St Anthony\'s fire'], model: 'bacterial',
+    epi: { w: 1, age: [[0, 5, 0.6], [5, 40, 0.8], [40, 99, 1.6]], season: { cool_dry: 0.9, hot_dry: 1, rains: 1.2, late_rains: 1.2 } },
+    // spreads to the blood now and then (hazard an estimate)
+    params: { org: 's_pyogenes', since: [24, 72], L0: [6, 7], r: 0.05, Lsym: 4, Lmax: 9.5, imm: 0.035, onset: 96, hazard: 0.002, cellulitis: true, fever: [1, 2.3] },
+    complaint: ['A hot, bright red, swollen patch on {poss} leg that spreads every day, with fever and chills.', 'The skin of my face by the nose is red, hot and very painful, spreading, since {ago}.'],
+    teach: { treat: ['penicillin_v', 'benzylpenicillin'], helps: ['hot_compress', 'aspirin'], harms: [], refer: 'Very ill, the patch turning dark or blistering, or no better after 2 days: refer.' },
+    learn: 'A painful, hot, bright red, swollen patch that spreads fast (with a sharp border in erysipelas), with fever, chills and swollen glands; often after a break in the skin. Penicillin until 2 days after the signs are gone, hot compresses, aspirin for the pain.',
+    ref: 'WTND p.212', icon: 'fire-bowl', color: '#e05040',
+  },
+  {
+    id: 'tinea', name: 'Ringworm (tinea)', local: ['ringworm'], model: 'scabies',
+    epi: { w: 2.5, age: [[0, 5, 0.8], [5, 15, 2.5], [15, 99, 0.6]], season: { cool_dry: 0.8, hot_dry: 1, rains: 1.3, late_rains: 1.2 }, crowd: 1.3 },
+    // The scabies model on another target: fungus (M, patches' worth) spreads slowly; antifungals on the skin kill a share
+    // per application; children pass it to each other. Rates are estimates; untreated it lingers for months.
+    params: { on: 'tinea', mites: [10, 40], growth: 0.0012, sens: [0.3, 0.7], spread: 0.0005, tinea: true },
+    complaint: ['Round, itchy, scaly rings on {poss} skin, growing {when}.', 'Round patches on {poss} head where the hair falls out, {when}.'],
+    teach: { treat: ['whitfield', 'sulfur'], helps: ['gentian_violet', 'hygiene'], harms: [], refer: null },
+    learn: 'Itchy rings that grow outward, on the body, scalp (scaly patches with hair loss), between the toes or in the groin. Wash daily with soap, keep the skin dry and in the sun. Sulfur in lard (1 to 10), or creams with salicylic or benzoic acid (Whitfield\'s) for weeks. Bad scalp ringworm needs griseofulvin. Do not share combs or towels.',
+    ref: 'WTND pp.205–206, 371', icon: 'spider-web', color: '#c0a060',
+  },
+  {
+    id: 'conjunctivitis', name: 'Pink eye (conjunctivitis)', local: ['red eye', 'sticky eyes'], model: 'bacterial',
+    epi: { w: 2.5, age: [[0, 5, 2], [5, 15, 1.2], [15, 99, 0.6]], season: { cool_dry: 1, hot_dry: 1.3, rains: 1, late_rains: 1 }, crowd: 1.4 },
+    // Clears by itself in ~1 week in most; antibiotic ointment clears it sooner (cure by day 2–5: ~64% vs 41% on placebo;
+    // Sheikh A et al. Cochrane 2012;CD001211). The ointment acts on the eye surface (`site`).
+    params: { org: 'h_influenzae', site: 'eye', since: [12, 60], L0: [5, 6.5], r: 0.04, Lsym: 4, Lmax: 8, imm: 0.06, onset: 72, hazard: 0, pinkeye: true },
+    complaint: ['{poss} eyes are red with pus, and the lids are stuck together in the morning, {when}.', 'Both eyes red and burning, with yellow crusts, {when}.'],
+    teach: { treat: ['tetracycline_eye'], helps: [], harms: [], refer: 'Great pain, a grey spot on the cornea, or no better after 5–6 days of ointment: refer.' },
+    learn: 'Red eyes with pus, burning, lids stuck together after sleep; common in children and very catching. Clean the pus with a cloth and boiled water, then put antibiotic eye ointment inside the lower lid 3–4 times a day. Do not share towels; wash hands.',
+    ref: 'WTND pp.219, 378', icon: 'eye-target', color: '#e07070',
+  },
+  {
+    id: 'trachoma', name: 'Trachoma', local: ['the rough eyelids'], model: 'bacterial',
+    epi: { w: 0.8, age: [[0, 10, 2], [10, 99, 0.6]], season: { cool_dry: 1, hot_dry: 1.4, rains: 0.8, late_rains: 0.9 }, crowd: 2, water: 1.3 },
+    // Chronic (months to years), on the game calendar; flies and fingers carry it round the household. Years of repeated
+    // infection scar the lids and turn the lashes in (blindness): not modelled here. Clearance an estimate.
+    params: { org: 'c_trachomatis', site: 'eye', pace: COMPRESS, since: [30 * 24 / COMPRESS, 150 * 24 / COMPRESS], L0: [5, 6.5], r: 0.01, Lsym: 3.5, Lmax: 7, imm: 0.0009, onset: 2000, hazard: 0, trachoma: true,
+      reinfect: { instr: 'treat_family', odds: 0.5, days: [3, 15] } },
+    complaint: ['{poss} eyes have been red and watery for months, and the lids feel rough.', 'My eyes are always red and itchy, and the light hurts them.'],
+    teach: { treat: ['tetracycline_eye', 'doxycycline', 'erythromycin'], helps: ['hygiene'], harms: [], refer: 'Lashes turning in against the eye: an operation saves the sight.' },
+    learn: 'Starts like pink eye; after a month or more, pinkish-grey lumps (follicles) inside the upper lid, and grey new vessels at the top of the cornea. After years, scars that thicken the lids and turn the lashes in to scratch the eye blind. Tetracycline eye ointment for 30 days, with tetracycline or erythromycin by mouth for 2–3 weeks. Wash faces daily; treat the whole household.',
+    ref: 'WTND pp.220, 378', icon: 'eye-target', color: '#c08080',
+  },
+  {
+    id: 'eye_injury', name: 'Eye injury (scratched cornea)', local: ['a hurt eye'], model: 'wound',
+    epi: { w: 1, age: [[0, 5, 0.6], [5, 60, 1.2], [60, 99, 0.6]], season: { cool_dry: 1, hot_dry: 1.3, rains: 1, late_rains: 1 } },
+    // A small scratch heals in a day or two if it stays clean; infected, it becomes a corneal ulcer that can blind
+    // (WTND p.218). Antibiotic ointment acts on the eye surface (`site`).
+    params: { org: 's_aureus', site: 'eye', since: [2, 30], size: [0.1, 0.5], dirt: [0.2, 0.7], I0: [0, 1.5], days: 2, eyeInjury: true },
+    complaint: ['A thorn scratched {poss} eye {ago}. It waters and hurts in the light.', 'Something flew into my eye while cutting wood {ago}; it is red and paining.'],
+    teach: { treat: ['tetracycline_eye'], helps: [], harms: [], refer: 'Cannot see well, a deep wound, blood behind the cornea, or no better in a day or two: refer at once.' },
+    learn: 'Pain, watering, redness and fear of light after something hit or scratched the eye. If the person still sees well: antibiotic ointment inside the lid and a soft thick pad. A painful grey spot on the cornea is an ulcer; failing sight, a deep wound or blood inside the eye need help at once. Do not pull out things stuck in the eyeball.',
+    ref: 'WTND pp.217–218, 224, 378', icon: 'eye-target', color: '#d08080',
+  },
+  {
+    id: 'chickenpox', name: 'Chickenpox', local: ['the water blisters'], model: 'viral',
+    epi: { w: 1.5, age: [[0, 1, 0.5], [1, 12, 3], [12, 99, 0.3]], season: { cool_dry: 1.2, hot_dry: 1.4, rains: 0.8, late_rains: 0.8 }, crowd: 1.5 },
+    // mild in children; adults far more often get pneumonia (vuln by age band; hazard an estimate)
+    params: { since: [24, 72], days: [8, 2], peak: 3, pox: true, fever: [0.5, 1.5], hazard: 0.00001, vuln: [0.5, 0.2, 0.2, 4] },
+    complaint: ['{who} has little itchy water blisters all over, with a fever, {when}.'],
+    teach: { treat: [], helps: ['paracetamol'], harms: ['aspirin'], refer: 'Fast breathing, or a blister that turns red, hot and swollen: refer.' },
+    learn: 'Small itchy blisters like drops of water, first on the body, then the face and limbs, crusting over a week, with a mild fever. It passes by itself. Keep nails short and the skin clean so scratched blisters do not get infected. No aspirin for children with chickenpox (Reye syndrome).',
+    ref: 'WTND p.311', icon: 'spider-web', color: '#e0a0a0',
+  },
+  {
+    id: 'mumps', name: 'Mumps', local: ['the swollen jaw'], model: 'viral',
+    epi: { w: 1, age: [[0, 2, 0.3], [2, 15, 2.5], [15, 99, 0.4]], season: { cool_dry: 1.2, hot_dry: 1.2, rains: 0.9, late_rains: 0.9 }, crowd: 1.4 },
+    params: { since: [24, 72], days: [9, 2], peak: 3, mumps: true, fever: [0.5, 1.4] },
+    complaint: ['{poss} face is swollen below the ears and it hurts to chew, {when}.'],
+    teach: { treat: [], helps: ['paracetamol'], harms: [], refer: 'A stiff neck, severe headache or drowsiness (meningitis), or belly pain: refer.' },
+    learn: 'Fever, then a painful swelling below and in front of one or both ears, at the angle of the jaw; it goes in about 10 days. Soft food, plenty to drink, paracetamol. In adults it sometimes swells the testicles or breasts.',
+    ref: 'WTND p.312', icon: 'person', color: '#d0b080',
   },
 ];
 

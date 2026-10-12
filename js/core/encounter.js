@@ -7,7 +7,8 @@ import { ACTIVE } from './content/actives.js';
 import { ORGANISMS } from './content/organisms.js';
 import { signs } from './signs.js';
 import { count, remove, countSpec } from './inventory.js';
-import { HOUR, DAY } from './time.js';
+import { HOUR, DAY, COMPRESS } from './time.js';
+import { allergicTo } from './disease.js';
 import { payment, collect, scheduleReturn, who, selectPressure } from './clinic.js';
 import { gainXp } from './crafting.js';
 import { stackPotency } from './crafting.js';
@@ -22,6 +23,8 @@ export const INSTRUCTIONS = [
   { id: 'rest_move', label: 'Keep moving gently; lift with the legs', min: 1 },
   { id: 'hot_compress', label: 'Hot compresses 20 minutes, 4 times a day; raise the limb', min: 2 },
   { id: 'dressing', label: 'Keep it covered with a clean cloth, change daily', min: 1, needs: [['cloth', 2]] },
+  // ——— infections (WTND p.239)
+  { id: 'treat_partner', label: 'Bring your partner for the same medicine; no sex until both are cured', min: 2 },
 ];
 export const PROCEDURES = [
   { id: 'clean', label: 'Clean the wound with soap and boiled water, remove dirt', min: 12, needs: [['soap', 1], ['cloth', 1]], station: 'hearth',
@@ -173,9 +176,15 @@ export function injectNow(G, enc, itemId, amount) {
   for (const a of Object.keys(it.actives || {})) { const m = ACTIVE.get(a).abxAs || a; if (ORGANISMS.some((o) => m in o.mic)) selectPressure(G.meta.clinic, m); }
   const boiled = G.stations.has('hearth');
   if (makeRng(p.seed, 'abscess', now)() < (boiled ? 0.001 : 0.02)) (p.pending ||= []).push({ id: 'wound_infected', t: now + 48 * HOUR });
-  if (!boiled) p.flags.dirtyNeedle = now; // for blood-borne infections later (hepatitis B)
+  if (!boiled) {
+    p.flags.dirtyNeedle = now;
+    // hepatitis B from a syringe last used on a carrier (~8% of adults in East Africa carry it, ~30% of exposures to
+    // an e-antigen carrier infect; ~1% overall, an estimate), 2–5 months later on the game calendar (WTND p.172)
+    const r = makeRng(p.seed, 'hbv', now);
+    if (r() < 0.01) (p.pending ||= []).push({ id: 'hepatitis', t: now + (60 + r() * 90) * DAY / COMPRESS });
+  }
   let text = `Injected ${it.name.toLowerCase()}.`;
-  const al = Object.keys(it.actives || {}).find((id) => p.allergy && ACTIVE.get(id).allergen === p.allergy);
+  const al = Object.keys(it.actives || {}).find((id) => allergicTo(p, ACTIVE.get(id)));
   // same draw as disease.js, so what you see now is what the body does
   if (al) text += makeRng(p.seed, 'ana', itemId, now, 0)() < 0.1 ? ' Within minutes: cold grey sweat, a weak fast pulse, wheezing, the lips swelling — allergic shock!' : ' Soon itchy welts rise on the skin.';
   enc.log.push({ who: 'You', text });

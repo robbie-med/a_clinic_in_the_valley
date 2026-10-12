@@ -411,7 +411,11 @@ export function makeUI(G) {
   const regionOf = (k) => ({ temp: 'head', feels_hot: 'head', fontanel: 'head', alert: 'head', flushed: 'face', pupils: 'face', yellow_vision: 'face', sunken_eyes: 'face', dry_mouth: 'face', tears: 'face', pallor: 'face', thin: 'head',
     rr: 'chest', indrawing: 'chest', grunting: 'chest', crackles: 'chest', spleen: 'belly', pot_belly: 'belly', tender: 'belly', skin_pinch: 'belly', muac: 'arm', bp: 'arm', hr: 'wrist', pulse_regular: 'wrist',
     burrows: 'hands', skin_sores: 'hands', rash: 'hands', measles_rash: 'hands', ear_pus: 'head', neck_glands: 'head', tonsils: 'face', koplik: 'face', red_eyes: 'face',
-    suprapubic: 'belly', rose_spots: 'belly', bloating: 'belly', loin_pain: 'back', edema: 'legs', back_exam: 'back', pus: 'wound', redness: 'wound', red_streaks: 'wound', glands: 'wound', wound_size: 'wound', burn_area: 'wound', blisters: 'wound', burn_deep: 'wound', joints: 'hands', mastoid: 'head' }[k]);
+    suprapubic: 'belly', rose_spots: 'belly', bloating: 'belly', loin_pain: 'back', edema: 'legs', back_exam: 'back', pus: 'wound', redness: 'wound', red_streaks: 'wound', glands: 'wound', wound_size: 'wound', burn_area: 'wound', blisters: 'wound', burn_deep: 'wound', joints: 'hands', mastoid: 'head',
+    // ——— infections (WTND chapters 13–18, 21)
+    stiff_neck: 'head', spasms: 'head', parotid: 'head', lockjaw: 'face', thrush: 'face', jaundice: 'face', follicles: 'face', eye_scratch: 'face', knee_jerk: 'legs',
+    skin_patch: 'hands', patch_feeling: 'hands', thick_nerves: 'hands', claw: 'hands', nodules: 'hands', petechiae: 'hands', syph_rash: 'hands', crusts: 'hands', red_patch: 'hands', rings: 'hands', pox: 'hands',
+    liver_tender: 'belly', pelvic_pain: 'belly', discharge: 'belly', genital_sore: 'belly', bubo: 'belly' }[k]);
   function finish() {
     const enc = S.enc;
     const p = G.meta.clinic.patients[enc.pid];
