@@ -158,7 +158,8 @@ export const CONDITIONS = [
   {
     id: 'uti', name: 'Bladder infection (urinary tract infection)', local: ['burning water', 'hot urine'], model: 'bacterial',
     epi: { w: 3, age: [[0, 2, 0.4], [2, 15, 0.5], [15, 50, 1.6], [50, 99, 1.2]], sex: { f: 1, m: 0.12 }, pregnant: 2, season: { cool_dry: 1, hot_dry: 1.1, rains: 1, late_rains: 1 } },
-    params: { org: 'e_coli', L0: [5.5, 7], r: 0.05, Lsym: 4, Lmax: 9, imm: 0.05, onset: 96, hazard: 0.0006, urinary: true, fever: [0, 1.6] },
+    // ~1% of untreated bladder infections climb to the kidney (Ferry SA et al. Scand J Prim Health Care 2007;25:49: 3/288 on placebo); perH an estimate
+    params: { org: 'e_coli', L0: [5.5, 7], r: 0.05, Lsym: 4, Lmax: 9, imm: 0.05, onset: 96, hazard: 0.0006, urinary: true, fever: [0, 1.6], ascend: { to: 'pyelonephritis', perH: 0.0001, minS: 0.4 } },
     complaint: ['{who} has had burning when passing water {when}, again and again.', 'Passing urine burns, and {pron} must go again and again, {when}.', 'Pain low in the belly, and the urine burns, {when}.'],
     teach: { treat: ['cotrimoxazole', 'amoxicillin', 'ciprofloxacin'], helps: [], harms: [], refer: 'Fever with pain in the side of the back and vomiting: the kidneys are infected. Men and children with urine infections need to be checked for a cause.' },
     learn: 'Burning when passing urine, passing urine often, pain low in the belly, sometimes cloudy or bloody urine. Far more common in women. Drink plenty of water. The book suggests cotrimoxazole or amoxicillin; where the germ resists both, ciprofloxacin. Pain in the side of the back with fever means the kidneys.',
@@ -167,7 +168,8 @@ export const CONDITIONS = [
   {
     id: 'ear_infection', name: 'Ear infection (otitis media)', local: ['ear pain', 'a running ear'], model: 'bacterial',
     epi: { w: 3.5, age: [[0, 0.5, 0.5], [0.5, 5, 4], [5, 12, 1.5], [12, 99, 0.2]], season: { cool_dry: 1.5, hot_dry: 0.8, rains: 1, late_rains: 1.2 } },
-    params: { org: 's_pneumoniae', since: [6, 36], L0: [5, 6.5], r: 0.05, Lsym: 4, Lmax: 9, imm: 0.08, onset: 48, hazard: 0.0002, ear: true, fever: [0.6, 2] },
+    // mastoiditis follows ~1 in 1000 untreated ear infections (Van Zuijlen DA et al. Pediatrics 2001;107:1); perH an estimate
+    params: { org: 's_pneumoniae', since: [6, 36], L0: [5, 6.5], r: 0.05, Lsym: 4, Lmax: 9, imm: 0.08, onset: 48, hazard: 0.0002, ear: true, fever: [0.6, 2], ascend: { to: 'mastoiditis', perH: 0.00002, minS: 0.5 } },
     complaint: ['The ear is paining {when}, and {pron} is hot.', '{poss} ear has been paining {when}, worse at night.'],
     teach: { treat: ['amoxicillin'], helps: ['paracetamol'], harms: [], refer: 'A painful swelling behind the ear, a stiff neck, or very drowsy: refer at once.' },
     learn: 'Common in small children after a cold: fever, ear pain, crying, pulling at the ear; sometimes pus runs out when the eardrum bursts, and the pain eases. Most get better by themselves; the book gives amoxicillin, and something for the pain. Keep a running ear clean with a twist of clean cloth; never put grass or sticks in it.',
@@ -176,11 +178,48 @@ export const CONDITIONS = [
   {
     id: 'strep_throat', name: 'Strep throat (tonsillitis)', local: ['sore throat', 'the tonsils'], model: 'bacterial',
     epi: { w: 3, age: [[0, 3, 0.3], [3, 15, 3], [15, 40, 0.8], [40, 99, 0.3]], season: { cool_dry: 1.6, hot_dry: 0.8, rains: 1, late_rains: 1.2 }, crowd: 1.3 },
-    params: { org: 's_pyogenes', L0: [5.5, 7], r: 0.05, Lsym: 4, Lmax: 9, imm: 0.1, onset: 48, hazard: 0, strep: true, fever: [1, 2.2] },
+    // Rheumatic fever follows ~0.3–3% of untreated strep throats, 1–3 weeks later (Siegel AC et al. N Engl J Med 1961;265:559;
+    // 0.5% used). Penicillin started early and kept up for 10 days cuts it by ~70% (Robertson KA et al. BMC Cardiovasc
+    // Disord 2005;5:11): protection grows with the hours that free drug sits above the strain's MIC over the first 19 days;
+    // fullH is calibrated so 10 days of penicillin V four times a day (~40% of the time above MIC) gives the full effect.
+    params: { org: 's_pyogenes', L0: [5.5, 7], r: 0.05, Lsym: 4, Lmax: 9, imm: 0.1, onset: 48, hazard: 0, strep: true, fever: [1, 2.2],
+      sequel: { to: 'rheumatic_fever', odds: 0.005, within: 456, fullH: 100, protect: 0.7, days: [7, 21] } },
     complaint: ['{who} has a very sore throat and will not swallow, with fever, {when}.', '{poss} throat burns and it hurts to swallow, {when}.'],
     teach: { treat: ['penicillin_v', 'amoxicillin'], helps: ['paracetamol'], harms: [], refer: 'Cannot open the mouth or swallow spit, or a swelling pushes one tonsil across: an abscess — refer.' },
     learn: 'A sudden sore throat, pain on swallowing, fever, swollen tonsils with white spots of pus, tender lumps under the jaw, and usually no cough or runny nose. Most sore throats are colds; this one is strep. Penicillin for 10 full days guards against rheumatic fever, which can scar the heart for life.',
     ref: 'WTND pp.309–310', icon: 'thermometer-hot', color: '#e06060',
+  },
+  // ——— complications: they arise from the illnesses above (disease.js `ascend` / `sequel`), never walk in on their own
+  {
+    id: 'rheumatic_fever', name: 'Rheumatic fever', local: ['joint fever'], model: 'pain',
+    epi: { w: 0 },
+    // About 60% of attacks scar the heart valves; a share of those fail years later (heart failure; 1 game year = 40 days).
+    // Monthly benzathine penicillin would prevent the return attacks that add the damage; return attacks are not modelled yet.
+    params: { pain: [0.5, 0.9], halfDays: 10, fever: [0.6, 1.8], joints: true, sequel: { to: 'heart_failure', odds: 0.3, within: 0, fullH: 1, protect: 0, days: [200, 800] } },
+    complaint: ['{poss} wrists and ankles are swollen and hot, and the pain moves from joint to joint, with fever.'],
+    teach: { treat: ['penicillin_v', 'benzylpenicillin', 'aspirin'], helps: ['ibuprofen'], harms: [], refer: 'Breathless, chest pain or a fast weak pulse: the heart is involved — refer. Anyone who has had it needs penicillin at every sore throat, or monthly benzathine injections.' },
+    learn: 'Begins 1 to 3 weeks after a strep throat: fever, painful swollen hot joints (wrists and ankles, then knees and elbows), sometimes lumps under the skin or jerking movements. The danger is the heart. Penicillin, and aspirin in large doses for the joints. Prevent it by treating strep throat early with penicillin for 10 full days.',
+    ref: 'WTND p.310', icon: 'heart-beats', color: '#c05050',
+  },
+  {
+    id: 'pyelonephritis', name: 'Kidney infection (pyelonephritis)', local: ['kidney fever'], model: 'bacterial',
+    epi: { w: 0 },
+    // untreated it can spread to the blood; the hazard is an estimate
+    params: { org: 'e_coli', L0: [6, 7], r: 0.06, Lsym: 4, Lmax: 9, imm: 0.03, onset: 120, hazard: 0.003, kidney: true, fever: [1.5, 2.6] },
+    complaint: ['High fever with shaking, pain in the side of the back, and vomiting.'],
+    teach: { treat: ['ciprofloxacin', 'ceftriaxone', 'cotrimoxazole'], helps: ['paracetamol'], harms: [], refer: 'Vomiting everything, very weak or confused, or no better after 2 days of treatment: refer.' },
+    learn: 'When a bladder infection climbs to the kidneys: high fever and chills, pain in the side of the back (tap gently over the kidney), often vomiting. It needs an antibiotic that the germ does not resist, for 10–14 days, and plenty to drink.',
+    ref: 'WTND pp.234–235, 357', icon: 'water-drop', color: '#d0a040',
+  },
+  {
+    id: 'mastoiditis', name: 'Mastoiditis', local: ['the swelling behind the ear'], model: 'bacterial',
+    epi: { w: 0 },
+    // can spread inward to the brain (meningitis, abscess); the hazard is an estimate
+    params: { org: 's_pneumoniae', L0: [6, 7], r: 0.04, Lsym: 4, Lmax: 9, imm: 0.02, onset: 200, hazard: 0.002, mastoid: true, fever: [1, 2.2] },
+    complaint: ['A painful swelling has come up behind {poss} ear, with fever.'],
+    teach: { treat: ['ceftriaxone'], helps: ['paracetamol'], harms: [], refer: 'Refer at once: it needs injected antibiotics and often an operation.' },
+    learn: 'An ear infection that spreads into the bone behind the ear: a hot, painful swelling behind the ear that pushes the ear forward, fever, a very sick child. It can spread to the brain. Injected antibiotics and the hospital.',
+    ref: 'WTND p.309', icon: 'talk', color: '#c08060',
   },
   {
     id: 'typhoid', name: 'Typhoid fever', local: ['the slow fever'], model: 'bacterial',

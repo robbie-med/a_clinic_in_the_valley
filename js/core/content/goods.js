@@ -27,6 +27,7 @@ export const TOOLS = [
   { id: 'dropper', name: 'Glass dropper', price: 2, icon: 'vial', color: '#a0d0e0', note: '20 drops ≈ 1 ml. For tinctures and soaks.' },
   { id: 'muac_tape', name: 'Arm (MUAC) tape', price: 2, icon: 'rope-coil', color: '#e04040', note: 'Mid-upper-arm circumference in children 6 months to 5 years.' },
   { id: 'magnifier', name: 'Hand lens', price: 6, icon: 'magnifying-glass', color: '#a0c0e0', note: 'See scabies burrows and fine detail.' },
+  { id: 'syringe', name: 'Syringe and needles (glass, boilable)', price: 2, icon: 'syringe', color: '#d0e0f0', note: 'Boil 15 minutes before every injection (WTND p.67): a hearth in reach.' },
   { id: 'stethoscope', name: 'Stethoscope', price: 30, icon: 'stethoscope', color: '#3a3a3a', note: 'Hear crackles in the chest you would miss with an ear.' },
   { id: 'bp_cuff', name: 'Blood pressure cuff', price: 45, icon: 'heart-beats', color: '#4060a0', note: 'High blood pressure in pregnancy is pre-eclampsia until proved otherwise.' },
   { id: 'mortar', name: 'Mortar and pestle', price: 5, icon: 'pestle-mortar', color: '#a09080', note: 'Grind dried herbs to powder, crush garlic and neem.' },

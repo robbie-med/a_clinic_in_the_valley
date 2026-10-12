@@ -26,6 +26,11 @@ independent.
   compound never reshuffles who walks in. Keep new per-patient randomness on its own stream too.
 - Bacterial (and parasite) strains come from `content/organisms.js` and the valley's resistance
   index (`clinic.js`). Antibiotics act only through MIC there, never by naming an illness.
+- Harms are data on the active, not code: `toxic` (`at` mg/L, or `atMgKg` swallowed in 24 h; `dry` = only when
+  dehydrated), `idio` (rare reactions per course), `dependence`, `allergen`. Complications are data on the condition:
+  `ascend` (spreads to the next organ, keeping its strain) and `sequel` (decided when its window closes).
+- `abxAs` lets an active share another's MIC (benzylpenicillin uses penicillin V's); an organism's `link` makes one
+  drug's resistance draw follow another's (MRSA resists ceftriaxone too).
 - New game-icon name: rebuild icons (`node tools/used-icons.mjs | python3 tools/build_icons.py <game-icons repo>`;
   a clone was used from the session scratchpad, so `git clone --depth 1 https://github.com/game-icons/icons`).
 - After gameplay changes, run `npm test` and `node tools/playtest.mjs <scratch dir>` (and `--mobile`).

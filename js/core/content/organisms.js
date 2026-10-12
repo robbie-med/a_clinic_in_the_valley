@@ -13,47 +13,50 @@
 export const ORGANISMS = [
   {
     id: 's_pneumoniae', name: 'Pneumococcus (Streptococcus pneumoniae)',
-    mic: { amoxicillin: 0.016, penicillin_v: 0.016, dicloxacillin: 0.12, cotrimoxazole: 0.25, erythromycin: 0.06, doxycycline: 0.12, chloramphenicol: 2, ciprofloxacin: 1 },
-    fold: { amoxicillin: 64, penicillin_v: 128, cotrimoxazole: 16, erythromycin: 256, doxycycline: 64, chloramphenicol: 8, ciprofloxacin: 8, dicloxacillin: 64 },
-    resist0: { penicillin_v: 0.25, amoxicillin: 0.08, dicloxacillin: 0.25, cotrimoxazole: 0.6, erythromycin: 0.12, doxycycline: 0.3, chloramphenicol: 0.15, ciprofloxacin: 0.03 },
+    mic: { amoxicillin: 0.016, penicillin_v: 0.016, dicloxacillin: 0.12, cotrimoxazole: 0.25, erythromycin: 0.06, doxycycline: 0.12, chloramphenicol: 2, ciprofloxacin: 1, ceftriaxone: 0.016 },
+    fold: { amoxicillin: 64, penicillin_v: 128, cotrimoxazole: 16, erythromycin: 256, doxycycline: 64, chloramphenicol: 8, ciprofloxacin: 8, dicloxacillin: 64, ceftriaxone: 64 },
+    resist0: { ceftriaxone: 0.02, penicillin_v: 0.25, amoxicillin: 0.08, dicloxacillin: 0.25, cotrimoxazole: 0.6, erythromycin: 0.12, doxycycline: 0.3, chloramphenicol: 0.15, ciprofloxacin: 0.03 },
     ref: 'EUCAST MIC distributions (S. pneumoniae); Iroh Tam PY et al. Pneumonia 2017;9:4; Tadesse BT et al. BMC Infect Dis 2017;17:616',
   },
   {
     id: 'shigella', name: 'Shigella',
-    mic: { ciprofloxacin: 0.016, cotrimoxazole: 0.25, amoxicillin: 2, chloramphenicol: 4, doxycycline: 2 },
-    fold: { ciprofloxacin: 64, cotrimoxazole: 64, amoxicillin: 64, chloramphenicol: 16, doxycycline: 16 },
-    resist0: { ciprofloxacin: 0.08, cotrimoxazole: 0.8, amoxicillin: 0.7, chloramphenicol: 0.5, doxycycline: 0.65 },
+    mic: { ciprofloxacin: 0.016, cotrimoxazole: 0.25, amoxicillin: 2, chloramphenicol: 4, doxycycline: 2, ceftriaxone: 0.03 },
+    fold: { ciprofloxacin: 64, cotrimoxazole: 64, amoxicillin: 64, chloramphenicol: 16, doxycycline: 16, ceftriaxone: 256 },
+    resist0: { ceftriaxone: 0.05, ciprofloxacin: 0.08, cotrimoxazole: 0.8, amoxicillin: 0.7, chloramphenicol: 0.5, doxycycline: 0.65 },
     ref: 'EUCAST MIC distributions (Shigella spp., E. coli as proxy); Tadesse BT et al. BMC Infect Dis 2017;17:616; WHO Guidelines for the control of shigellosis 2005',
   },
   {
     id: 's_aureus', name: 'Staphylococcus aureus',
-    mic: { dicloxacillin: 0.25, penicillin_v: 0.03, amoxicillin: 0.25, cotrimoxazole: 0.06, erythromycin: 0.25, doxycycline: 0.12, chloramphenicol: 4, ciprofloxacin: 0.25 },
-    fold: { dicloxacillin: 64, penicillin_v: 512, amoxicillin: 128, cotrimoxazole: 64, erythromycin: 256, doxycycline: 64, chloramphenicol: 8, ciprofloxacin: 32 },
+    mic: { dicloxacillin: 0.25, penicillin_v: 0.03, amoxicillin: 0.25, cotrimoxazole: 0.06, erythromycin: 0.25, doxycycline: 0.12, chloramphenicol: 4, ciprofloxacin: 0.25, ceftriaxone: 2 },
+    // MRSA resists every penicillin and cephalosporin at once: its ceftriaxone draw is the dicloxacillin one
+    link: { ceftriaxone: 'dicloxacillin' },
+    fold: { ceftriaxone: 32, dicloxacillin: 64, penicillin_v: 512, amoxicillin: 128, cotrimoxazole: 64, erythromycin: 256, doxycycline: 64, chloramphenicol: 8, ciprofloxacin: 32 },
     // penicillinase is near-universal; MRSA (dicloxacillin-resistant) is the one that matters.
-    resist0: { penicillin_v: 0.9, amoxicillin: 0.88, dicloxacillin: 0.15, cotrimoxazole: 0.3, erythromycin: 0.2, doxycycline: 0.35, chloramphenicol: 0.2, ciprofloxacin: 0.15 },
+    resist0: { ceftriaxone: 0.15, penicillin_v: 0.9, amoxicillin: 0.88, dicloxacillin: 0.15, cotrimoxazole: 0.3, erythromycin: 0.2, doxycycline: 0.35, chloramphenicol: 0.2, ciprofloxacin: 0.15 },
     ref: 'EUCAST MIC distributions (S. aureus); Falagas ME et al. PLoS One 2013;8:e68024 (MRSA in Africa); Tadesse BT et al. BMC Infect Dis 2017;17:616',
   },
   {
     id: 'e_coli', name: 'Escherichia coli (urinary)',
-    mic: { amoxicillin: 4, cotrimoxazole: 0.06, ciprofloxacin: 0.016, doxycycline: 2, chloramphenicol: 4 },
-    fold: { amoxicillin: 64, cotrimoxazole: 128, ciprofloxacin: 64, doxycycline: 16, chloramphenicol: 8 },
-    resist0: { amoxicillin: 0.75, cotrimoxazole: 0.7, ciprofloxacin: 0.2, doxycycline: 0.6, chloramphenicol: 0.4 },
+    mic: { amoxicillin: 4, cotrimoxazole: 0.06, ciprofloxacin: 0.016, doxycycline: 2, chloramphenicol: 4, ceftriaxone: 0.06 },
+    // ESBL strains resist ceftriaxone
+    fold: { amoxicillin: 64, cotrimoxazole: 128, ciprofloxacin: 64, doxycycline: 16, chloramphenicol: 8, ceftriaxone: 512 },
+    resist0: { ceftriaxone: 0.25, amoxicillin: 0.75, cotrimoxazole: 0.7, ciprofloxacin: 0.2, doxycycline: 0.6, chloramphenicol: 0.4 },
     ref: 'EUCAST MIC distributions (E. coli); Tadesse BT et al. BMC Infect Dis 2017;17:616; Odongo I et al. Infect Drug Resist 2020;13:2185 (UTI, Uganda)',
   },
   {
     id: 's_pyogenes', name: 'Group A Streptococcus (S. pyogenes)',
     // Has never become resistant to penicillin.
-    mic: { penicillin_v: 0.016, amoxicillin: 0.016, dicloxacillin: 0.03, erythromycin: 0.03, doxycycline: 0.25, cotrimoxazole: 0.25, chloramphenicol: 2, ciprofloxacin: 0.5 },
+    mic: { penicillin_v: 0.016, amoxicillin: 0.016, dicloxacillin: 0.03, erythromycin: 0.03, doxycycline: 0.25, cotrimoxazole: 0.25, chloramphenicol: 2, ciprofloxacin: 0.5, ceftriaxone: 0.016 },
     fold: { erythromycin: 256, doxycycline: 64, cotrimoxazole: 16, chloramphenicol: 8, ciprofloxacin: 8 },
     resist0: { erythromycin: 0.1, doxycycline: 0.4, cotrimoxazole: 0.3, chloramphenicol: 0.1, ciprofloxacin: 0.05 },
     ref: 'EUCAST MIC distributions (S. pyogenes); Shulman ST et al. Clin Infect Dis 2012;55:1279',
   },
   {
     id: 's_typhi', name: 'Salmonella Typhi',
-    mic: { ciprofloxacin: 0.016, chloramphenicol: 4, amoxicillin: 1, cotrimoxazole: 0.06 },
-    fold: { ciprofloxacin: 32, chloramphenicol: 16, amoxicillin: 64, cotrimoxazole: 128 },
+    mic: { ciprofloxacin: 0.016, chloramphenicol: 4, amoxicillin: 1, cotrimoxazole: 0.06, ceftriaxone: 0.12 },
+    fold: { ciprofloxacin: 32, chloramphenicol: 16, amoxicillin: 64, cotrimoxazole: 128, ceftriaxone: 256 },
     // multidrug-resistant typhoid (chloramphenicol + ampicillin + cotrimoxazole) and falling ciprofloxacin susceptibility
-    resist0: { ciprofloxacin: 0.3, chloramphenicol: 0.4, amoxicillin: 0.45, cotrimoxazole: 0.45 },
+    resist0: { ciprofloxacin: 0.3, chloramphenicol: 0.4, amoxicillin: 0.45, cotrimoxazole: 0.45, ceftriaxone: 0.02 },
     ref: 'EUCAST MIC distributions (Salmonella); Britto CD et al. PLoS Negl Trop Dis 2018;12:e0006779 (typhoid resistance, Africa)',
   },
   {

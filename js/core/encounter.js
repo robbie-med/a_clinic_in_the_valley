@@ -131,7 +131,7 @@ export function rxLine(G, itemId, amount, perDay, days, route) {
 export function doseInfo(G, p, line, weight = p.weight) {
   const it = G.C.items.get(line.item);
   const out = [];
-  if (line.route === 'oral') for (const [id, mg] of Object.entries(it.actives || {})) {
+  if (line.route === 'oral' || line.route === 'inj') for (const [id, mg] of Object.entries(it.actives || {})) {
     const a = ACTIVE.get(id);
     const per = mg * line.amount;
     out.push({ id, name: a.name, mg: per, mgkg: per / weight, perDayKg: (per * line.perDay) / weight });
@@ -156,6 +156,32 @@ function dispense(G, id, qty) {
   return { q: got ? qSum / got : 1, got };
 }
 
+/**
+ * Give an injection now, by your hand: one dose into the muscle. Needs a syringe. Boiled (a hearth in reach) it is
+ * clean; otherwise skin germs ride in and an abscess may follow days later (WTND pp.65–67; odds are estimates).
+ * An allergic reaction shows within minutes, while they are still with you (WTND pp.70–71).
+ */
+export function injectNow(G, enc, itemId, amount) {
+  const p = G.meta.clinic.patients[enc.pid], it = G.C.items.get(itemId);
+  if (!toolsAt(G).has('syringe')) return { ok: false, text: 'You need a syringe.' };
+  if (stockOf(G, itemId) < amount) return { ok: false, text: `Not enough ${it.name.toLowerCase()}.` };
+  const { q } = dispense(G, itemId, amount);
+  G.meta.time += 3;
+  const now = G.W.time;
+  p.rx.push({ item: itemId, name: it.name, q, left: amount, amount, perDay: 1, days: 1, start: now, route: 'inj', actives: it.actives, inj: it.inj, counselled: true });
+  enc.rx.push({ item: itemId, name: it.name, amount, perDay: 1, days: 1, route: 'inj', qty: amount, given: now });
+  for (const a of Object.keys(it.actives || {})) { const m = ACTIVE.get(a).abxAs || a; if (ORGANISMS.some((o) => m in o.mic)) selectPressure(G.meta.clinic, m); }
+  const boiled = G.stations.has('hearth');
+  if (makeRng(p.seed, 'abscess', now)() < (boiled ? 0.001 : 0.02)) (p.pending ||= []).push({ id: 'wound_infected', t: now + 48 * HOUR });
+  if (!boiled) p.flags.dirtyNeedle = now; // for blood-borne infections later (hepatitis B)
+  let text = `Injected ${it.name.toLowerCase()}.`;
+  const al = Object.keys(it.actives || {}).find((id) => p.allergy && ACTIVE.get(id).allergen === p.allergy);
+  // same draw as disease.js, so what you see now is what the body does
+  if (al) text += makeRng(p.seed, 'ana', itemId, now, 0)() < 0.1 ? ' Within minutes: cold grey sweat, a weak fast pulse, wheezing, the lips swelling — allergic shock!' : ' Soon itchy welts rise on the skin.';
+  enc.log.push({ who: 'You', text });
+  return { ok: true, text };
+}
+
 export function doProcedure(G, enc, procId) {
   const p = G.meta.clinic.patients[enc.pid];
   const pr = PROCEDURES.find((x) => x.id === procId);
@@ -178,6 +204,7 @@ export function finishEncounter(G, enc) {
   const counselled = enc.instr.has('finish');
   for (const line of enc.rx) {
     const it = C.items.get(line.item);
+    if (line.given) { charges += line.qty * it.price; continue; } // injected during the visit
     const have = stockOf(G, line.item);
     const qty = Math.min(line.qty, have);
     if (qty <= 0) continue;
@@ -227,7 +254,7 @@ export function judge(G, p, enc) {
   const given = new Set();
   for (const r of enc.rx) {
     const it = G.C.items.get(r.item);
-    for (const a of Object.keys((r.route === 'oral' ? it.actives : it.topical) || {})) given.add(a);
+    for (const a of Object.keys((r.route === 'topical' ? it.topical : it.actives) || {})) given.add(a);
     if (it.fluid) given.add('oral_fluid');
   }
   for (const pr of enc.proc) given.add(pr);

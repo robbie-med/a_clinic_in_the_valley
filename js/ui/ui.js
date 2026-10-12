@@ -15,7 +15,7 @@ import { METHODS } from '../core/content/preparations.js';
 import { PLACEABLES } from '../core/content/build.js';
 import { VENDORS } from '../core/content/vendors.js';
 import { stock, buy, sell, offer, LOT, lotPrice, nextVisit, CATALOGUE, catalogueItems, orderTotal, placeOrder } from '../core/economy.js';
-import { startEncounter, ask, examine, differential, questionsFor, examsFor, remedies, rxLine, doseInfo, stockOf, finishEncounter, doProcedure, toolsAt, INSTRUCTIONS, PROCEDURES } from '../core/encounter.js';
+import { startEncounter, ask, examine, differential, questionsFor, examsFor, remedies, rxLine, doseInfo, stockOf, finishEncounter, doProcedure, injectNow, toolsAt, INSTRUCTIONS, PROCEDURES } from '../core/encounter.js';
 import { EXAMS } from '../core/content/findings.js';
 import { who, hamletOf, ageWords, OPEN, CLOSE, healthReport } from '../core/clinic.js';
 import { medianWeight } from '../core/patient.js';
@@ -384,16 +384,18 @@ export function makeUI(G) {
     treat.append(h('h4', {}, 'Prescribe'),
       rems.length ? h('div', { class: 'rxform' },
         h('select', { onchange: (e) => { R.item = e.target.value; R.amount = 1; render(); } }, rems.map((r) => h('option', { value: r.id, selected: r.id === R.item }, `${r.name} — ${amt(r, stockOf(G, r.id))} in stock`))),
-        it.route.length > 1 ? h('div', { class: 'chips' }, it.route.map((rt) => h('button', { class: R.route === rt ? 'on' : '', onclick: () => { R.route = rt; render(); } }, rt === 'oral' ? 'by mouth' : 'on the skin'))) : null,
+        it.route.length > 1 ? h('div', { class: 'chips' }, it.route.map((rt) => h('button', { class: R.route === rt ? 'on' : '', onclick: () => { R.route = rt; render(); } }, ({ oral: 'by mouth', topical: 'on the skin', inj: 'injection' })[rt]))) : null,
         h('div', { class: 'row' }, h('span', {}, 'Each dose:'), h('input', { type: 'number', step: 'any', min: 0, value: R.amount, style: 'width:80px', onfocus: () => { S.typing = true; }, onblur: () => { S.typing = false; }, onchange: (e) => { R.amount = Math.max(0, +e.target.value || 0); render(); } }), h('span', {}, it.unit || 'each'),
           h('span', { class: 'chips' }, presets.map(([l, v]) => h('button', { class: R.amount === v ? 'on' : '', onclick: () => { R.amount = v; render(); } }, l)))),
-        h('div', { class: 'row' }, h('span', {}, 'Times a day:'), h('span', { class: 'chips' }, [1, 2, 3, 4, 6].map((n) => h('button', { class: R.perDay === n ? 'on' : '', onclick: () => { R.perDay = n; render(); } }, n)))),
-        h('div', { class: 'row' }, h('span', {}, 'For days:'), h('span', { class: 'chips' }, [1, 2, 3, 5, 7, 10, 14, 21].map((n) => h('button', { class: R.days === n ? 'on' : '', onclick: () => { R.days = n; render(); } }, n)))),
+        R.route === 'inj' ? null : h('div', { class: 'row' }, h('span', {}, 'Times a day:'), h('span', { class: 'chips' }, [1, 2, 3, 4, 6].map((n) => h('button', { class: R.perDay === n ? 'on' : '', onclick: () => { R.perDay = n; render(); } }, n)))),
+        R.route === 'inj' ? null : h('div', { class: 'row' }, h('span', {}, 'For days:'), h('span', { class: 'chips' }, [1, 2, 3, 5, 7, 10, 14, 21].map((n) => h('button', { class: R.days === n ? 'on' : '', onclick: () => { R.days = n; render(); } }, n)))),
         dinfo.length ? h('div', { class: 'doseinfo' }, dinfo.map((d) => h('div', {}, `${d.name.split(' (')[0]}: ${fmt(d.mg)} mg a dose = ${fmt(d.mgkg)} mg/kg (${fmt(d.perDayKg)} mg/kg/day)`)),
           h('small', {}, `${weighed ? 'Weighed' : 'Guessed by age'}: ${estW} kg. ${it.cat === 'medicine' ? 'Strength as labelled.' : 'Nominal strength — this batch has not been assayed.'}`)) : null,
         h('div', { class: 'row' }, h('span', { class: 'hint' }, `Dispense ${amt(it, line.qty)} (in stock ${amt(it, stockOf(G, it.id))})`),
-          h('button', { disabled: !R.amount || line.qty > stockOf(G, it.id), onclick: () => { enc.rx.push(line); render(); } }, 'Add'))) : h('p', { class: 'hint' }, 'No remedies in your bag or on the shelves.'),
-      enc.rx.length ? h('ul', { class: 'rxlist' }, enc.rx.map((l, i) => h('li', {}, `${l.name}: ${amt(G.C.items.get(l.item), l.amount)} ${l.route === 'topical' ? 'applied' : ''} ${l.perDay}× a day for ${l.days} days`, h('button', { class: 'link', onclick: () => { enc.rx.splice(i, 1); render(); } }, ' remove')))) : '');
+          R.route === 'inj'
+            ? h('button', { disabled: !R.amount || R.amount > stockOf(G, it.id), onclick: () => { const r = injectNow(G, enc, R.item, R.amount); ui.toast(r.text); render(); } }, 'Inject now')
+            : h('button', { disabled: !R.amount || line.qty > stockOf(G, it.id), onclick: () => { enc.rx.push(line); render(); } }, 'Add'))) : h('p', { class: 'hint' }, 'No remedies in your bag or on the shelves.'),
+      enc.rx.length ? h('ul', { class: 'rxlist' }, enc.rx.map((l, i) => h('li', {}, l.given ? `${l.name}: ${amt(G.C.items.get(l.item), l.amount)} injected` : `${l.name}: ${amt(G.C.items.get(l.item), l.amount)} ${l.route === 'topical' ? 'applied' : ''} ${l.perDay}× a day for ${l.days} days`, l.given ? null : h('button', { class: 'link', onclick: () => { enc.rx.splice(i, 1); render(); } }, ' remove')))) : '');
     treat.append(h('h4', {}, 'In the clinic'), h('div', { class: 'chips' }, PROCEDURES.filter((pr) => pr.applies(p)).map((pr) => h('button', { class: enc.proc.has(pr.id) ? 'on' : '', onclick: () => { const r = doProcedure(G, enc, pr.id); ui.toast(r.text); render(); } }, pr.label))));
     treat.append(h('h4', {}, 'Advice'), h('div', { class: 'checks' }, INSTRUCTIONS.map((ins) => h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: enc.instr.has(ins.id), onchange: (e) => { if (e.target.checked) enc.instr.add(ins.id); else enc.instr.delete(ins.id); } }), ins.label))));
     treat.append(h('div', { class: 'row' }, h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: enc.refer, onchange: (e) => { enc.refer = e.target.checked; } }), 'Refer to the health centre (two days\' walk)')),
@@ -409,7 +411,7 @@ export function makeUI(G) {
   const regionOf = (k) => ({ temp: 'head', feels_hot: 'head', fontanel: 'head', alert: 'head', flushed: 'face', pupils: 'face', yellow_vision: 'face', sunken_eyes: 'face', dry_mouth: 'face', tears: 'face', pallor: 'face', thin: 'head',
     rr: 'chest', indrawing: 'chest', grunting: 'chest', crackles: 'chest', spleen: 'belly', pot_belly: 'belly', tender: 'belly', skin_pinch: 'belly', muac: 'arm', bp: 'arm', hr: 'wrist', pulse_regular: 'wrist',
     burrows: 'hands', skin_sores: 'hands', rash: 'hands', measles_rash: 'hands', ear_pus: 'head', neck_glands: 'head', tonsils: 'face', koplik: 'face', red_eyes: 'face',
-    suprapubic: 'belly', rose_spots: 'belly', bloating: 'belly', loin_pain: 'back', edema: 'legs', back_exam: 'back', pus: 'wound', redness: 'wound', red_streaks: 'wound', glands: 'wound', wound_size: 'wound', burn_area: 'wound', blisters: 'wound', burn_deep: 'wound' }[k]);
+    suprapubic: 'belly', rose_spots: 'belly', bloating: 'belly', loin_pain: 'back', edema: 'legs', back_exam: 'back', pus: 'wound', redness: 'wound', red_streaks: 'wound', glands: 'wound', wound_size: 'wound', burn_area: 'wound', blisters: 'wound', burn_deep: 'wound', joints: 'hands', mastoid: 'head' }[k]);
   function finish() {
     const enc = S.enc;
     const p = G.meta.clinic.patients[enc.pid];
@@ -452,7 +454,7 @@ export function makeUI(G) {
           h('ul', {}, hits.map((o) => h('li', {}, `${o.name}: MIC ${o.mic[a.id]} mg/L; resistant strains ×${o.fold[a.id]}.`)), miss.map((o) => h('li', { class: 'dim' }, `${o.name}: no effect.`))));
       }
       for (const e of a.effects || []) detail.append(h('p', {}, e.prr ? `Kills malaria parasites while in the blood: at full strength about ${fmt(e.prr / 48)} log₁₀ (a ${fmt(10 ** (e.prr / 48))}-fold fall) an hour; half-effect at ${e.ec50} mg/L.` : `${e.on}: half its effect at ${e.ec50} mg/L.`));
-      for (const tx of a.toxic || []) detail.append(h('p', { class: 'bad' }, `Above ${tx.at} mg/L: ${tx.text}.`));
+      for (const tx of a.toxic || []) detail.append(h('p', { class: 'bad' }, `${tx.atMgKg !== undefined ? `Over ${tx.atMgKg} mg/kg in a day` : `Above ${tx.at} mg/L`}${tx.dry ? ' in someone dehydrated' : ''}: ${tx.text}.`));
       for (const c of a.cautions || []) detail.append(h('p', { class: 'bad' }, c));
       if (a.note) detail.append(h('p', { class: 'note' }, a.note));
       detail.append(h('p', { class: 'hint' }, a.ref));

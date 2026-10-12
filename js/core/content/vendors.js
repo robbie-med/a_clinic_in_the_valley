@@ -33,7 +33,7 @@ export const VENDORS = [
     greet: 'Tools from the town! Thermometers, scales, spoons — real ones.',
     sells: [['thermometer', [1, 2], 1.2], ['watch', [0, 1], 1.2], ['scale', [0, 1], 1.2], ['spoons', [1, 3], 1.2], ['dropper', [1, 4], 1.2], ['muac_tape', [1, 4], 1.2],
       ['magnifier', [0, 2], 1.2], ['mortar', [1, 2], 1.2], ['cooking_pot', [1, 2], 1.2], ['knife', [1, 2], 1.2], ['sulfur', [100, 500], 1.3], ['clay_jar', [2, 8], 1.2],
-      ['stethoscope', [0, 1], 1.25], ['bp_cuff', [0, 1], 1.25], ['balance', [0, 1], 1.25]],
+      ['stethoscope', [0, 1], 1.25], ['syringe', [1, 3], 1.25], ['bp_cuff', [0, 1], 1.25], ['balance', [0, 1], 1.25]],
     buys: [],
   },
   {
@@ -44,7 +44,8 @@ export const VENDORS = [
       ['para_500', [100, 500], 1.15], ['para_syrup', [100, 500], 1.15], ['ibu_200', [100, 300], 1.15], ['codeine_30', [0, 200], 1.2],
       ['al_20_120', [100, 600], 1.15], ['as_50', [0, 200], 1.2], ['qn_300', [100, 300], 1.15], ['cq_150', [100, 300], 1.15],
       ['meb_100', [100, 300], 1.15], ['alb_400', [100, 200], 1.15], ['permethrin_cream', [10, 30], 1.15], ['bb_lotion', [10, 30], 1.15],
-      ['ors_packet', [50, 300], 1.15], ['zinc_20', [100, 300], 1.15], ['metro_250', [100, 300], 1.15], ['iron_200', [100, 500], 1.15], ['vita_200k', [100, 200], 1.15]],
+      ['ors_packet', [50, 300], 1.15], ['zinc_20', [100, 300], 1.15], ['metro_250', [100, 300], 1.15], ['iron_200', [100, 500], 1.15], ['vita_200k', [100, 200], 1.15],
+      ['benzathine_pen', [0, 20], 1.2], ['benzylpen_1mu', [0, 30], 1.2], ['ceftriaxone_1g', [0, 20], 1.2], ['adrenaline_1mg', [5, 20], 1.2], ['syringe', [1, 4], 1.2]],
     buys: [], fakes: 0.01,
   },
 ];

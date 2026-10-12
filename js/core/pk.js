@@ -29,12 +29,13 @@ export function conc(p, activeId, t) {
   let { ke } = pkParams(p, a);
   if (a.pk.induce) ke *= induction(doses, t, a.pk.induce);
   let c = 0;
-  for (const [td, mg] of doses) {
+  // a dose may carry its own absorption (injections: [td, mg, ka, F]; a depot such as benzathine absorbs over weeks)
+  for (const [td, mg, kaD = ka, FD = F] of doses) {
     const tau = (t - td) / HOUR;
     if (tau < 0) continue;
-    if (tau > (LN2 / ke) * 12) continue; // < 0.03% left
-    const ka2 = Math.abs(ka - ke) < 1e-6 ? ka * 1.0001 : ka;
-    c += (F * mg * ka2) / (V * (ka2 - ke)) * (Math.exp(-ke * tau) - Math.exp(-ka2 * tau));
+    if (tau > (LN2 / Math.min(ke, kaD)) * 12) continue; // < 0.03% left
+    const ka2 = Math.abs(kaD - ke) < 1e-6 ? kaD * 1.0001 : kaD;
+    c += (FD * mg * ka2) / (V * (ka2 - ke)) * (Math.exp(-ke * tau) - Math.exp(-ka2 * tau));
   }
   return Math.max(0, c);
 }
@@ -76,8 +77,9 @@ export function drugState(p, t) {
     const c = conc(p, id, t);
     out.conc[id] = c;
     if (c <= 0) continue;
+    const tol = tolerance(p, a);
     for (const e of a.effects || []) {
-      const f = hill(c, e.ec50 * (e.prr ? strain?.[id] ?? 1 : 1), e.hill || 1);
+      const f = hill(c, e.ec50 * (e.prr ? strain?.[id] ?? 1 : tol), e.hill || 1);
       if (e.prr) out.prr[e.on] = (out.prr[e.on] || 0) + e.prr * f;
       else if (e.on === 'heart') out.heart = Math.max(out.heart, (e.emax || 1) * f);
       else relieve(e.on, (e.emax || 1) * f);
@@ -97,12 +99,26 @@ export function drugState(p, t) {
   return out;
 }
 
-/** Toxic signs present at time t: [{ active, sign, text, harm }]. */
+/** Tolerance (dependence.js-style data on the active): with steady use an opioid needs more for the same effect,
+ *  and the breathing centre tolerates more too. 1 = none. */
+export const tolerance = (p, a) => 1 + (p.dep?.[a.id] || 0) * (a.dependence?.tolerance || 0);
+
+/**
+ * Toxic signs present at time t: [{ active, sign, text, harm }]. Systemic thresholds (`at`, mg/L) are on the
+ * plasma level; gut-acting ones (`atMgKg`) on what was swallowed in the last 24 h. `dry` (water deficit, share
+ * of body weight) makes a sign appear only in someone that dehydrated (NSAIDs and the kidneys).
+ */
 export function toxSigns(p, t, ds = drugState(p, t)) {
   const out = [];
+  const dry = (p.hyd || 0) / p.weight;
   for (const [id, c] of Object.entries(ds.conc)) {
-    const a = ACTIVE.get(id);
-    for (const x of a.toxic || []) if (c >= x.at) out.push({ active: id, ...x, c });
+    const a = ACTIVE.get(id), tol = tolerance(p, a);
+    for (const x of a.toxic || []) if (x.at !== undefined && c >= x.at * tol && dry >= (x.dry || 0)) out.push({ active: id, ...x, c });
+  }
+  const mg = {};
+  for (const [td, id, m] of p.doses?.gut || []) if (td <= t && t - td < 24 * HOUR) mg[id] = (mg[id] || 0) + m;
+  for (const [id, m] of Object.entries(mg)) {
+    for (const x of ACTIVE.get(id)?.toxic || []) if (x.atMgKg !== undefined && m / p.weight >= x.atMgKg) out.push({ active: id, ...x, c: m / p.weight });
   }
   return out;
 }

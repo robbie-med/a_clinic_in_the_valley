@@ -193,8 +193,11 @@ export const ACTIVES = [
     // Dosed by its trimethoprim content: a 480 mg tablet has 80 mg trimethoprim + 400 mg sulfamethoxazole.
     pk: { F: 0.95, ka: 1, half: 10, vd: 1.6, fu: 0.56, spread: 0.3 },
     abx: { kmax: 0.15, ec50: 1, hill: 2, window: 8, calibrated: true },
+    // Stevens–Johnson / toxic epidermal necrolysis: a few per 100 000 courses, mostly in the first 3 weeks; ~10–30% die
+    // (Roujeau JC et al. N Engl J Med 1995;333:1600; per-course odds an estimate). harm 0.03 ≈ 1 in 10 die over 2 weeks.
+    idio: [{ per: 3e-5, days: [5, 21], hours: 336, sign: 'sjs', text: 'blisters and peeling skin, sores in the mouth and eyes (severe reaction to the sulfa)', harm: 0.03 }],
     cautions: ['Not for babies under 2 months or in the last month of pregnancy (jaundice).', 'Rarely a severe blistering rash: stop at once.'],
-    ref: 'WTND p.357; Goodman & Gilman 13e ch.56',
+    ref: 'WTND p.357; Goodman & Gilman 13e ch.56; Roujeau JC et al. N Engl J Med 1995;333:1600',
   },
   {
     id: 'erythromycin', name: 'Erythromycin', channel: 'systemic', class: 'antibiotic (macrolide)',
@@ -207,8 +210,10 @@ export const ACTIVES = [
     id: 'doxycycline', name: 'Doxycycline', channel: 'systemic', class: 'antibiotic (tetracycline)',
     pk: { F: 0.93, ka: 0.8, half: 18, vd: 0.8, fu: 0.12, spread: 0.25 },
     abx: { kmax: 0.15, ec50: 1, hill: 2, window: 8, calibrated: true },
-    cautions: ['Not for children under 8 or in pregnancy: it stains and weakens growing teeth and bones.', 'Do not take with milk or antacids.'],
-    ref: 'WTND p.355; Goodman & Gilman 13e ch.59',
+    // Short courses of doxycycline did not stain children's teeth (Todd SR et al. J Pediatr 2015;166:1246), unlike
+    // the old tetracycline the book warns about; so no harm is modelled for a child here. Pregnancy: see people.js.
+    cautions: ['Not in pregnancy after the 4th month: the baby\'s teeth and bones.', 'Do not take with milk or antacids.', 'The book warns against it under 8 years; that was learned from old tetracycline — short courses of doxycycline did not stain teeth in later studies.'],
+    ref: 'WTND p.355; Goodman & Gilman 13e ch.59; Todd SR et al. J Pediatr 2015;166:1246',
   },
   {
     id: 'chloramphenicol', name: 'Chloramphenicol', channel: 'systemic', class: 'antibiotic',
@@ -253,8 +258,11 @@ export const ACTIVES = [
       { on: 'pain', emax: 0.6, ec50: 10, hill: 1.5 },
       { on: 'fever', emax: 0.7, ec50: 6, hill: 1.5 },
     ],
+    // In a dehydrated child the kidney leans on prostaglandins; blocking them can tip it into failure (Misurac JM et
+    // al. J Pediatr 2013;162:1153). Threshold and harm are estimates.
+    toxic: [{ at: 5, dry: 0.05, sign: 'kidney_injury', text: 'passing almost no urine, even after drinking (kidney injury)', harm: 0.05 }],
     cautions: ['Not for someone who is dehydrated (the kidneys), has a stomach ulcer, or is in the last months of pregnancy.'],
-    ref: 'WTND p.379; Goodman & Gilman 13e ch.34',
+    ref: 'WTND p.379; Goodman & Gilman 13e ch.34; Misurac JM et al. J Pediatr 2013;162:1153',
   },
   {
     id: 'aspirin', name: 'Aspirin (as salicylate)', channel: 'systemic', class: 'analgesic · antipyretic', allergen: 'aspirin',
@@ -267,9 +275,13 @@ export const ACTIVES = [
     toxic: [
       { at: 200, sign: 'tinnitus', text: 'ringing in the ears (salicylate excess)', harm: 0.02 },
       { at: 400, sign: 'salicylism', text: 'deep fast breathing, vomiting, confusion (aspirin poisoning)', harm: 0.35 },
+      { at: 50, dry: 0.05, sign: 'kidney_injury', text: 'passing almost no urine, even after drinking (kidney injury)', harm: 0.05 },
     ],
+    // Reye syndrome: a child with a viral illness given aspirin; rare, ~30% die (Belay ED et al. N Engl J Med
+    // 1999;340:1377; per-course odds an estimate). harm 0.5 ≈ 3 in 10 die over 3 days.
+    idio: [{ per: 1e-4, ageMax: 16, withModel: 'viral', days: [3, 6], hours: 72, sign: 'reye', text: 'vomiting again and again, then confused and drowsy (Reye syndrome)', harm: 0.5 }],
     cautions: ['Not for children with flu or chickenpox (Reye syndrome).', 'Not with stomach ulcers or in late pregnancy.'],
-    ref: 'WTND p.378; Goodman & Gilman 13e ch.34',
+    ref: 'WTND p.378; Goodman & Gilman 13e ch.34; Belay ED et al. N Engl J Med 1999;340:1377',
   },
   {
     id: 'codeine', name: 'Codeine', channel: 'systemic', class: 'opioid · cough suppressant',
@@ -283,6 +295,10 @@ export const ACTIVES = [
       { at: 0.35, sign: 'opioid_drowsy', text: 'very sleepy, small pupils, constipated', harm: 0 },
       { at: 0.7, sign: 'opioid_resp', text: 'slow shallow breathing, pinpoint pupils, cannot be woken (opioid poisoning)', harm: 0.5 },
     ],
+    // Daily use for ~2 weeks brings dependence and tolerance (needs twice the dose for the same effect, and tolerates
+    // twice the level before breathing slows); stopping then brings withdrawal (Goodman & Gilman 13e ch.20; WHO
+    // Guidelines for the psychosocially assisted pharmacological treatment of opioid dependence 2009). Estimates.
+    dependence: { ec: 0.05, days: 14, tolerance: 1, sign: 'opioid_withdrawal', text: 'aching all over, yawning, runny nose, loose stools, cannot sleep (opioid withdrawal)' },
     cautions: ['Children have died of ordinary doses (fast converters). Not for children under 12.', 'Habit-forming.'],
     ref: 'WTND p.383; FDA Drug Safety Communication 2017 (codeine in children); Goodman & Gilman 13e ch.18',
   },
@@ -371,6 +387,7 @@ export const ACTIVES = [
     id: 'zinc', name: 'Zinc', channel: 'gut', class: 'antidiarrhoeal (mucosal repair)',
     // 10–14 days of zinc shortens diarrhoea by about half a day and lessens stool output in children over 6 months.
     gut: { duration: 24, effects: [{ on: 'stool', per: 0.15, perMg: 1 / 10, calibrated: true }] },
+    toxic: [{ atMgKg: 15, sign: 'zinc_gi', text: 'vomiting and belly cramps (too much zinc)', harm: 0 }], // estimate; Fosmire GJ. Am J Clin Nutr 1990;51:225
     note: 'A help, not a cure: the rehydration drink still does the life-saving.',
     ref: 'WTND p.381; Lazzerini M, Wanzira H. Cochrane 2016;CD005436',
   },
@@ -380,13 +397,22 @@ export const ACTIVES = [
     id: 'metronidazole', name: 'Metronidazole', channel: 'systemic', class: 'anti-amoebic · anti-giardia · anaerobes',
     pk: { F: 1, ka: 1.5, half: 8, vd: 0.8, fu: 0.9, spread: 0.25 },
     abx: { kmax: 0.3, ec50: 1, hill: 1.5, window: 8, calibrated: true },
-    cautions: ['No alcohol while taking it, or for 2 days after: violent vomiting.', 'Avoid in the first 3 months of pregnancy if it can wait.'],
-    ref: 'WTND p.368; Goodman & Gilman 13e ch.50',
+    // The book's alcohol warning: a controlled trial found no reaction (Visapää JP et al. Ann Pharmacother 2002;36:971;
+    // Williams CS, Woodcock KR. Ann Pharmacother 2000;34:255), so none is modelled.
+    cautions: ['Avoid in the first 3 months of pregnancy if it can wait.', 'The book says no alcohol with it; trials found no reaction.'],
+    ref: 'WTND p.368; Goodman & Gilman 13e ch.50; Visapää JP et al. Ann Pharmacother 2002;36:971',
   },
   {
     id: 'iron', name: 'Iron (ferrous sulfate)', channel: 'gut', class: 'for anaemia',
     // Taken daily, iron lets the marrow rebuild blood: Hb rises ~1–2 g/dL in 3 weeks (disease.js).
     gut: { duration: 24, effects: [{ on: 'iron', per: 1, perMg: 1 / 30 }] },
+    // Elemental iron swallowed in a day: >20 mg/kg vomiting; >60 mg/kg shock, bleeding, liver failure; >150 mg/kg often
+    // fatal (Manoguerra AS et al. Clin Toxicol 2005;43:553). Harms calibrated roughly to those bands.
+    toxic: [
+      { atMgKg: 20, sign: 'iron_gi', text: 'vomiting and belly pain, grey-black stools (too much iron)', harm: 0 },
+      { atMgKg: 60, sign: 'iron_severe', text: 'vomiting blood, drowsy, cold and grey (iron poisoning)', harm: 0.6 },
+      { atMgKg: 150, sign: 'iron_lethal', text: 'cannot be woken, barely breathing (iron poisoning)', harm: 3 },
+    ],
     cautions: ['Turns the stool black. Can upset the stomach.', 'An overdose of iron tablets kills small children: keep them out of reach.'],
     ref: 'WTND pp.124, 392; WHO Guideline: daily iron supplementation in children 2016',
   },
@@ -394,8 +420,35 @@ export const ACTIVES = [
     id: 'vitamin_a', name: 'Vitamin A (retinol)', channel: 'gut', class: 'vitamin',
     // 200 000 IU (60 mg retinol) restores the liver store for weeks; in measles it cuts deaths in young children.
     gut: { duration: 14 * 24, effects: [{ on: 'vita', per: 1, perMg: 1 / 10 }] },
+    // Acute excess: >~25 000 IU/kg (7.5 mg/kg) raises the pressure in the head — headache, vomiting, a bulging soft spot
+    // in babies — and passes (Penniston KL, Tanumihardjo SA. Am J Clin Nutr 2006;83:191).
+    toxic: [{ atMgKg: 7.5, sign: 'vita_acute', text: 'headache and vomiting; in a baby, a bulging soft spot (too much vitamin A)', harm: 0.02 }],
     cautions: ['Too much in early pregnancy harms the baby: not the big capsules for pregnant women.'],
     ref: 'WTND pp.226, 311, 391; Huiming Y et al. Cochrane 2005;CD001479',
+  },
+
+  // ——— injections (route 'inj': the item gives absorption, see medicines.js `inj`; by mouth these are destroyed or useless)
+  {
+    id: 'benzylpenicillin', name: 'Benzylpenicillin (penicillin G)', channel: 'systemic', class: 'antibiotic (penicillin, injected)', allergen: 'penicillin',
+    abxAs: 'penicillin_v', // the same molecule's family: a strain's penicillin MIC (organisms.js) is shared
+    pk: { F: 0.2, ka: 2, half: 0.5, vd: 0.3, fu: 0.4, spread: 0.3 },
+    abx: { kmax: 0.35, ec50: 1, hill: 3, window: 4, calibrated: true },
+    cautions: ['Penicillin allergy: an injection can bring on allergic shock within minutes. Have adrenaline ready (WTND p.70).'],
+    ref: 'WTND pp.350–351; Goodman & Gilman 13e ch.57',
+  },
+  {
+    id: 'ceftriaxone', name: 'Ceftriaxone', channel: 'systemic', class: 'antibiotic (cephalosporin, injected)',
+    pk: { F: 0.01, ka: 1.5, half: 8, vd: 0.15, fu: 0.1, spread: 0.3 },
+    abx: { kmax: 0.35, ec50: 1, hill: 3, window: 4, calibrated: true },
+    cautions: ['Into a big muscle; it stings (the book mixes it with lidocaine).', 'Rarely allergic shock.'],
+    ref: 'WTND p.359; Goodman & Gilman 13e ch.57; Patel IH, Kaplan SA. Am J Med 1984;77:17',
+  },
+  {
+    id: 'adrenaline', name: 'Adrenaline (epinephrine)', channel: 'systemic', class: 'for allergic shock',
+    // Given into the muscle within ~30 minutes of the reaction it mostly stops anaphylaxis killing (disease.js).
+    pk: { F: 0, ka: 3, half: 0.05, vd: 2, spread: 0.3 },
+    cautions: ['Into the muscle of the thigh or upper arm: ½ ml of 1:1000 for an adult, ¼ ml for a child 6–12, less for a baby. Repeat in 10 minutes if needed.'],
+    ref: 'WTND pp.70, 385; Simons FE et al. J Allergy Clin Immunol 1998;101:33',
   },
 ];
 

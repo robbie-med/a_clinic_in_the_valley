@@ -5,7 +5,7 @@
 // Models (conditions.js `model`): viral, bacterial, malaria, wound, burn, scabies, worms, pain, heart,
 // pregnancy, preeclampsia. State lives on the condition record so it saves as plain JSON.
 import { COND } from './content/conditions.js';
-import { ACTIVE } from './content/actives.js';
+import { ACTIVE, ACTIVES } from './content/actives.js';
 import { ORG } from './content/organisms.js';
 import { drugState, toxSigns, gutExposure, hill } from './pk.js';
 import { makeRng } from './rng.js';
@@ -68,6 +68,9 @@ const MODELS = {
       const ab = abx(c, x, dt, c.L);
       c.L = Math.min(P.Lmax, c.L + dt * (P.r * (1 - c.L / P.Lmax) * (1 - ab.inhib) - imm - hosp - ab.kill));
       c.s = clamp((c.L - P.Lsym) / (P.Lmax - P.Lsym), 0, 1) * c.sev;
+      if (P.sequel && ab.kill > 0.05) c.abxH = (c.abxH || 0) + dt;
+      // the infection climbs to the next organ (bladder -> kidney, middle ear -> mastoid), carrying its strain
+      if (P.ascend && !c.ascended && c.s > P.ascend.minS && x.rng() < P.ascend.perH * dt) { c.ascended = true; (p.pending ||= []).push({ id: P.ascend.to, t: x.t, org: c.org, mic: { ...c.mic } }); }
       let loss = 0;
       if (P.stool) loss += stoolLoss(p, P.stool, c.s * 1.4, x);
       const vuln = p.age < 5 ? 1.6 : p.age >= 65 ? 1.6 : 0.5;
@@ -98,6 +101,7 @@ const MODELS = {
       c.P += dt * (grow * (1 - f) - clear - prr / 48);
       const para = 10 ** (c.P - blood);                                   // parasites per µL
       c.para = para;
+      selectParasite(c, x, dt);
       // anaemia: haemolysis with parasitaemia, slow recovery when low
       c.hb += dt * ((-P.hbDrop / 24) * clamp(para / 1e5, 0, 3) ** 0.8 + (para < 500 ? 0.0012 * (p.hb - c.hb) : 0));
       c.hb = clamp(c.hb, 2, p.hb + 0.5);
@@ -289,25 +293,41 @@ function abx(c, x, dt, pop) {
   if (!c.mic) return out;
   for (const [id, C] of Object.entries(x.ds.conc)) {
     const a = ACTIVE.get(id);
-    if (!a.abx || !(id in c.mic) || C <= 0) continue;
-    const r = (C * (a.pk.fu ?? 1)) / c.mic[id];
+    const m = a.abxAs || id; // benzylpenicillin is judged by the strain's penicillin MIC
+    if (!a.abx || !(m in c.mic) || C <= 0) continue;
+    const r = (C * (a.pk.fu ?? 1)) / c.mic[m];
     const f = hill(r, a.abx.ec50, a.abx.hill);
     out.kill = Math.max(out.kill, a.abx.kmax * f);
     out.inhib = Math.max(out.inhib, f);
-    if (r > 1 && r < a.abx.window && pop > 5 && !c.res?.[id] && x.rng() < 0.0004 * dt * (pop - 5)) {
-      c.mic[id] *= ORG.get(c.org).fold[id] || 16;
-      (c.res ||= {})[id] = x.t;
+    if (r > 1 && r < a.abx.window && pop > 5 && !c.res?.[m] && x.rng() < 0.0004 * dt * (pop - 5)) {
+      c.mic[m] *= ORG.get(c.org).fold[m] || 16;
+      (c.res ||= {})[m] = x.t;
     }
   }
   return out;
+}
+/**
+ * Malaria: a large parasite biomass (>10^11, hyperparasitaemia) under a drug level that only partly suppresses it
+ * can select a resistant parasite, as a lone partner drug or artemisinin alone does (White NJ. J Clin Invest
+ * 2004;113:1084). The per-hour odds are an estimate. The strain's EC50 multiplier jumps by the organism's fold.
+ */
+function selectParasite(c, x, dt) {
+  if (!c.mic || c.P < 11) return;
+  for (const [id, C] of Object.entries(x.ds.conc)) {
+    const e = ACTIVE.get(id).effects?.find((f) => f.prr);
+    if (!e || !(id in c.mic) || C <= 0 || c.res?.[id]) continue;
+    const f = hill(C, e.ec50 * c.mic[id], e.hill || 1);
+    if (f > 0.1 && f < 0.9 && x.rng() < 0.0005 * dt * (c.P - 11)) { c.mic[id] *= ORG.get(c.org).fold[id] || 3; (c.res ||= {})[id] = x.t; }
+  }
 }
 /** The strain an infection is caught from: each drug's MIC, resistant with the valley's odds. */
 export function pickStrain(c, orgId, rng, resist) {
   const o = ORG.get(orgId);
   const R = resist?.[orgId] || o.resist0;
   c.org = orgId; c.mic = {};
+  const res0 = {};
   for (const [d, m] of Object.entries(o.mic)) {
-    const res = rng() < (R[d] ?? 0);
+    const res = res0[d] = o.link?.[d] && o.link[d] in res0 ? res0[o.link[d]] : rng() < (R[d] ?? 0);
     c.mic[d] = m * (res ? o.fold[d] : 1) * (o.scatter === false ? 1 : 2 ** Math.round((rng() - 0.5) * 2)); // ± one doubling dilution
   }
 }
@@ -360,21 +380,38 @@ export function simulate(p, toT, C) {
     const topical = {};
     const wormKills = {};
     const instr = new Set((p.rx || []).filter((r) => r.instr && !r.stopped && (r.until ?? Infinity) > t0 && rng() < (p.adh ?? 0.8) + 0.15).map((r) => r.instr));
-    let fluidIn = 0, naLoad = 0, allergic = 0;
+    let fluidIn = 0, naLoad = 0;
+    // complications and late sequels set in motion earlier (rheumatic fever, a kidney infection, an abscess)
+    for (const q of [...(p.pending || [])]) {
+      if (q.t >= t1) continue;
+      p.pending.splice(p.pending.indexOf(q), 1);
+      if (q.roll) {
+        const sq = COND.get(q.roll).params.sequel;
+        if (makeRng(p.seed, 'sequel', q.roll)() < sq.odds * (1 - sq.protect * Math.min(1, q.abxH / sq.fullH))) p.pending.push({ id: sq.to, t: q.t + lerp(sq.days[0], sq.days[1], rng()) * 24 * HOUR });
+        continue;
+      }
+      const c = addCondition(p, q.id, rng, 0);
+      if (q.mic) { c.org = q.org; c.mic = { ...q.mic }; }
+      ev.push({ t: q.t, kind: 'onset', id: q.id, text: `${COND.get(q.id).name} began` });
+    }
     for (const rx of p.rx || []) {
       for (const [td, k] of dosesDue(rx, t0, t1)) {
         if (rx.left <= 0) { if (!rx.ranOut) { rx.ranOut = true; ev.push({ t: td, kind: 'ranout', text: `ran out of ${rx.name}` }); } continue; }
-        if (makeRng(p.seed, 'dose', rx.item, rx.start, k)() > takeChance(p, rx)) { rx.missed = (rx.missed || 0) + 1; continue; }
+        // an injection is given by your hand, so it is never missed
+        if (rx.route !== 'inj' && makeRng(p.seed, 'dose', rx.item, rx.start, k)() > takeChance(p, rx)) { rx.missed = (rx.missed || 0) + 1; continue; }
         const amt = Math.min(rx.amount, rx.left);
         rx.left -= amt; rx.taken = (rx.taken || 0) + 1;
         applyDose(p, rx, amt, td, topical, wormKills);
-        // allergy: hives within the hour; now and then the throat swells (anaphylaxis). Most stop the medicine.
+        if (k === 0) idiosyncrasy(p, rx, td);
+        // allergy: hives within the hour; now and then the throat swells (anaphylaxis): ~1 in 100 allergic exposures
+        // by mouth, far more often by injection (estimates; Jerschow E et al. J Allergy Clin Immunol 2014;134:1318).
+        // Most stop a medicine they take at home.
         const al = Object.keys(rx.actives || {}).find((id) => p.allergy && ACTIVE.get(id).allergen === p.allergy);
         if (al) {
-          allergic += 1;
           if (!p.toxSeen.allergy) { p.toxSeen.allergy = td; ev.push({ t: td, kind: 'tox', text: `an itchy raised rash and swollen lips (allergic to ${ACTIVE.get(al).name.toLowerCase()})`, active: al }); }
           p.allergicUntil = td + 48 * HOUR;
-          if (rng() < 0.6) { rx.stopped = td; ev.push({ t: td, kind: 'stopped', text: `stopped ${rx.name} (the rash)` }); }
+          if (makeRng(p.seed, 'ana', rx.item, rx.start, k)() < (rx.route === 'inj' ? 0.1 : 0.01)) { p.ana = td; ev.push({ t: td, kind: 'tox', text: 'the throat swells, wheezing, faint and cold (anaphylaxis)', active: al }); }
+          if (rx.route !== 'inj' && rng() < 0.6) { rx.stopped = td; ev.push({ t: td, kind: 'stopped', text: `stopped ${rx.name} (the rash)` }); }
         }
         if (rx.fluid) { fluidIn += amt / 1000; naLoad += (amt / 1000) * rx.fluid.na; }
       }
@@ -388,14 +425,18 @@ export function simulate(p, toT, C) {
       if (p.pregnant >= 40) { p.pregnant = 0; p.delivered = t1; ev.push({ t: t1, kind: 'birth', text: 'gave birth' }); }
     }
     const ds = drugState(p, t1);
+    for (const q of p.pending || []) if (q.roll && q.mic && covers(ds, q.mic)) q.abxH++;
     const x = { ds, rng, t: t1, hosp: p.hospital && t1 >= p.hospital.from && t1 < p.hospital.until, instr, topical, wormKills };
-    // ~1 in 100 allergic exposures by mouth goes on to anaphylaxis; without adrenaline some of those die
-    let loss = 0, hazard = allergic * 0.002;
+    // anaphylaxis kills within the first hour or two; adrenaline within ~30 minutes mostly prevents that
+    // (untreated odds are an estimate; Turner PJ et al. J Allergy Clin Immunol Pract 2017;5:1169)
+    let loss = 0, hazard = p.ana !== undefined && t0 - p.ana < 2 * HOUR ? 0.1 * (rescued(p, p.ana) ? 0.1 : 1) : 0;
     for (const c of [...p.conds]) {
       const def = COND.get(c.id);
       const r = MODELS[def.model].step(p, c, 1, x);
       loss += r.loss; hazard += r.hazard;
       if (r.done) {
+        // a sequel is decided once its window closes; antibiotic hours keep counting until then (the 10-day course)
+        if (def.params.sequel) (p.pending ||= []).push({ roll: c.id, t: Math.max(t1, c.t0 + def.params.sequel.within * HOUR), abxH: c.abxH || 0, org: c.org, mic: c.mic });
         p.conds.splice(p.conds.indexOf(c), 1);
         p.healed.push({ id: c.id, t: t1 });
         ev.push({ t: t1, kind: 'healed', id: c.id, text: `${def.name} is gone` });
@@ -411,6 +452,8 @@ export function simulate(p, toT, C) {
     if (fluidIn > 0 && naLoad / fluidIn > 120) { hazard += 0.001 * (naLoad / fluidIn - 120) / 30; p.flags.hyperNa = t1; }
     // poisoning
     const tox = toxSigns(p, t1, ds);
+    for (const r of p.react || []) if (t1 >= r.t && t1 < r.t + r.hours * HOUR) tox.push(r);
+    dependence(p, ds, tox);
     for (const s of tox) {
       hazard += s.harm * 0.01;
       if (!p.toxSeen[s.sign]) { p.toxSeen[s.sign] = t1; ev.push({ t: t1, kind: 'tox', text: s.text, active: s.active }); }
@@ -432,6 +475,32 @@ export function simulate(p, toT, C) {
   return ev;
 }
 
+/** Is some antibiotic in the blood above this strain's MIC? */
+const covers = (ds, mic) => Object.entries(ds.conc).some(([id, C]) => { const a = ACTIVE.get(id), m = a.abxAs || id; return a.abx && m in mic && C * (a.pk.fu ?? 1) > mic[m]; });
+const rescued = (p, ta) => (p.doses.sys.adrenaline || []).some(([td]) => td >= ta - 10 && td <= ta + 30);
+const DEPENDENT = ACTIVES.filter((a) => a.dependence);
+/** Steady use of an opioid builds dependence over ~2 weeks (and tolerance, pk.js); it fades about half as fast once
+ *  stopped. Stopping while dependent brings withdrawal: miserable, rarely dangerous in adults. */
+function dependence(p, ds, tox) {
+  for (const a of DEPENDENT) {
+    const D = a.dependence, C = ds.conc[a.id] || 0;
+    let v = p.dep?.[a.id] || 0;
+    if (!v && C < D.ec) continue;
+    v = clamp(v + (C >= D.ec ? 1 : -0.5) / (D.days * 24), 0, 1);
+    (p.dep ||= {})[a.id] = v;
+    if (v > 0.5 && C < D.ec * 0.3) tox.push({ active: a.id, sign: D.sign, text: D.text, harm: 0 });
+  }
+}
+/** Rare reactions that do not depend on the dose (a blistering rash from a sulfa, Reye syndrome after aspirin in a
+ *  child with a virus): rolled once per course, at the first dose, from `idio` on the active. */
+function idiosyncrasy(p, rx, td) {
+  for (const id of Object.keys(rx.actives || {})) for (const r of ACTIVE.get(id).idio || []) {
+    if (r.ageMax && p.age >= r.ageMax) continue;
+    if (r.withModel && !p.conds.some((c) => COND.get(c.id).model === r.withModel)) continue;
+    const g = makeRng(p.seed, 'idio', id, rx.start);
+    if (g() < r.per) (p.react ||= []).push({ active: id, sign: r.sign, text: r.text, harm: r.harm, t: td + lerp(r.days[0], r.days[1], g()) * 24 * HOUR, hours: r.hours });
+  }
+}
 function takeChance(p, rx) {
   let a = p.adh ?? 0.8;
   if (rx.counselled) a += 0.1;
@@ -446,7 +515,7 @@ function applyDose(p, rx, amt, td, topical, wormKills) {
   for (const [id, perUnit] of Object.entries(rx.actives || {})) {
     const a = ACTIVE.get(id);
     const mg = perUnit * amt * (rx.q ?? 1);
-    if (a.channel === 'systemic') { (p.doses.sys[id] ||= []).push([td, mg]); trimDoses(p.doses.sys[id], td); }
+    if (a.channel === 'systemic') { (p.doses.sys[id] ||= []).push(rx.route === 'inj' ? [td, mg, rx.inj?.ka ?? 3, 1] : [td, mg]); trimDoses(p.doses.sys[id], td); }
     else if (a.channel === 'gut') {
       p.doses.gut.push([td, id, mg]);
       if (p.doses.gut.length > 60) p.doses.gut.splice(0, p.doses.gut.length - 60);
@@ -467,6 +536,7 @@ function applyDose(p, rx, amt, td, topical, wormKills) {
 function trimDoses(list, t) { while (list.length > 2 && t - list[0][0] > 40 * 24 * HOUR) list.shift(); }
 
 function causeOfDeath(p, tox, d) {
+  if (p.ana !== undefined && p.t - p.ana < 2 * HOUR) return 'anaphylaxis (allergic to ' + p.allergy + ')';
   if (tox.some((s) => s.harm >= 0.2)) return 'poisoned by ' + ACTIVE.get(tox.find((s) => s.harm >= 0.2).active).name.split(' (')[0].toLowerCase();
   if (d > 0.1) return 'dehydration';
   const worst = [...p.conds].sort((a, b) => (b.sev ?? b.s ?? 0) - (a.sev ?? a.s ?? 0))[0];

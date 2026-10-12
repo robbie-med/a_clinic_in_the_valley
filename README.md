@@ -82,6 +82,21 @@ compound, with sources.
 - **More of the book** (phase 2): urinary infection, ear infection, strep throat, typhoid, amoebic
   dysentery, giardia, hookworm with anaemia (iron rebuilds the blood), and measles (vitamin A
   cuts deaths).
+- **Injections** (`encounter.js` `injectNow`): benzathine and benzyl penicillin, ceftriaxone and adrenaline,
+  given by your hand in the clinic with a syringe. An unboiled syringe can leave an abscess. An allergic
+  patient reacts while you watch, and adrenaline within about half an hour mostly saves them from shock.
+- **Consequences, not warnings** (`disease.js`, `pk.js`, data on `actives.js` and `conditions.js`):
+  - untreated strep throat can bring rheumatic fever weeks later, and that can damage the heart years later;
+    a 10-day penicillin course mostly prevents it;
+  - bladder infections can climb to the kidneys, and ear infections into the mastoid;
+  - iron, vitamin A and zinc poison in quantity;
+  - ibuprofen or aspirin in a dehydrated child injures the kidneys;
+  - rare reactions: a blistering rash from cotrimoxazole, Reye syndrome from aspirin in a child with a virus;
+  - two weeks of daily codeine brings tolerance, and withdrawal on stopping;
+  - too little antimalarial against a heavy infection can breed a resistant parasite.
+
+  Where the evidence says a warning in the book is outdated, nothing happens: doxycycline in short courses does
+  not stain children's teeth, and metronidazole with alcohol gave no reaction in trials.
 - **Hindsight**: the ledger shows what it really was, what helped and what harmed, once the
   patient recovers or dies.
 

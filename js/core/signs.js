@@ -75,11 +75,11 @@ export function signs(p, t, tools = new Set()) {
   else set('stools', 'Stools are normal.', false);
   if (blood) set('blood_stool', 'Yes — blood and mucus in the stool.', true);
   const wd = cond('watery_diarrhea');
-  const vom = (wd && wd.age < 48 && wd.s > 0.3) || (cond('malaria')?.s > 0.6 && child) || cond('nausea_pregnancy')?.s > 0.3 || p.lastTox?.includes('digitalis_gi') || p.lastTox?.includes('cinchonism');
+  const vom = (cond('pyelonephritis')?.s || 0) > 0.4 || (wd && wd.age < 48 && wd.s > 0.3) || (cond('malaria')?.s > 0.6 && child) || cond('nausea_pregnancy')?.s > 0.3 || p.lastTox?.includes('digitalis_gi') || p.lastTox?.includes('cinchonism');
   set('vomiting', vom ? 'Yes, vomiting.' : 'No vomiting.', !!vom);
   set('drinking', d > 0.09 ? 'Too weak to drink.' : d > 0.04 ? 'Drinks eagerly, wants more.' : 'Drinking normally.', d > 0.04);
   set('thirst', d > 0.03 ? 'Very thirsty.' : 'Not especially thirsty.', d > 0.03);
-  set('urine', d > 0.09 ? 'No urine since yesterday.' : d > 0.04 ? 'Very little urine, dark yellow.' : 'Passing urine normally.', d > 0.04);
+  set('urine', p.lastTox?.includes('kidney_injury') ? 'Almost no urine, even after drinking.' : d > 0.09 ? 'No urine since yesterday.' : d > 0.04 ? 'Very little urine, dark yellow.' : 'Passing urine normally.', d > 0.04);
   set('sunken_eyes', d > 0.05 ? 'Eyes look sunken.' : 'Eyes normal.', d > 0.05);
   set('dry_mouth', d > 0.04 || p.lastTox?.some((s) => s.startsWith('anticholinergic')) ? 'Mouth and tongue are dry.' : 'Mouth moist.', d > 0.04);
   set('tears', d > 0.06 ? 'No tears when crying.' : 'Tears normal.', d > 0.06);
@@ -89,7 +89,7 @@ export function signs(p, t, tools = new Set()) {
   // ——— general
   const mal = cond('malaria'), pn = cond('pneumonia');
   const ty = cond('typhoid');
-  const sick = (ty?.s || 0) > 0.85 || (mal?.sev || 0) > 0.9 || (pn?.s || 0) > 0.85 || d > 0.09 || any((c) => c.I > 6.5) || p.lastTox?.includes('anticholinergic_severe');
+  const sick = p.lastTox?.some((s) => ['reye', 'iron_severe', 'iron_lethal', 'opioid_resp', 'sjs'].includes(s)) || (ty?.s || 0) > 0.85 || (mal?.sev || 0) > 0.9 || (pn?.s || 0) > 0.85 || d > 0.09 || any((c) => c.I > 6.5) || p.lastTox?.includes('anticholinergic_severe');
   set('alert', sick ? (p.lastTox?.includes('anticholinergic_severe') ? 'Confused, picking at the air, agitated.' : 'Very weak and drowsy, hard to wake.') : 'Awake and alert.', sick);
   set('pallor', V.hb < 6 ? 'Palms and inner eyelids very pale (white).' : V.hb < 8.5 ? 'Palms and eyelids pale.' : 'Good colour.', V.hb < 8.5);
   set('thin', p.nutrition < 0.7 ? 'Very thin, ribs and shoulder bones show.' : p.nutrition < 0.8 ? 'Thin.' : 'Well nourished.', p.nutrition < 0.8);
@@ -123,6 +123,8 @@ export function signs(p, t, tools = new Set()) {
   set('tonsils', (st?.s || 0) > 0.2 ? 'Tonsils swollen and red, with white spots of pus.' : (cold?.s || 0) > 0.4 ? 'The throat is a little red; no pus.' : 'Throat looks normal.', (st?.s || 0) > 0.2);
   set('neck_glands', (st?.s || 0) > 0.25 || (ear?.s || 0) > 0.5 ? 'Tender swollen lumps under the jaw.' : 'No swollen glands in the neck.', (st?.s || 0) > 0.25 || (ear?.s || 0) > 0.5);
   set('ear_pain', (ear?.s || 0) > 0.05 ? (p.age < 4 ? 'Cries, pulls and rubs at one ear, worse lying down.' : 'A deep throbbing pain in one ear.') : 'No ear pain.', (ear?.s || 0) > 0.05);
+  const mst = cond('mastoiditis');
+  set('mastoid', (mst?.s || 0) > 0.2 ? 'A hot, tender swelling behind the ear pushes the ear forward.' : 'Behind the ears normal.', (mst?.s || 0) > 0.2);
   const burst = (ear?.s || 0) > 0.35 && makeRng(p.seed, 'eardrum')() < 0.35;
   set('ear_pus', burst ? 'Yellow pus in the ear canal: the eardrum has burst.' : 'No pus in the ears.', burst);
   const eyes = (ms?.s || 0) > 0.3;
@@ -158,7 +160,8 @@ export function signs(p, t, tools = new Set()) {
   set('dysuria', (ut?.s || 0) > 0.15 ? (p.age < 5 ? 'Cries when passing urine.' : 'Yes — it burns like fire when passing urine.') : 'No burning.', (ut?.s || 0) > 0.15);
   set('frequency', (ut?.s || 0) > 0.2 ? 'Passes urine very often, a little each time.' : 'No.', (ut?.s || 0) > 0.2);
   set('cloudy_urine', (ut?.s || 0) > 0.35 ? 'The urine is cloudy and smells strong.' : 'Urine looks clear.', (ut?.s || 0) > 0.35);
-  set('loin_pain', (ut?.s || 0) > 0.75 ? 'Pain when the back over the kidney is tapped.' : 'No pain over the kidneys.', (ut?.s || 0) > 0.75);
+  const py = cond('pyelonephritis');
+  set('loin_pain', (py?.s || 0) > 0.2 ? 'Sharp pain when the back over the kidney is tapped.' : 'No pain over the kidneys.', (py?.s || 0) > 0.2);
   set('pot_belly', (asc?.W || 0) > 18 && p.age < 12 ? 'Swollen pot belly.' : 'Belly normal size.', (asc?.W || 0) > 18 && p.age < 12);
   const sawWorm = ((asc?.W || 0) > 4 && rng() < 0.6) || ((pin?.W || 0) > 10 && rng() < 0.45);
   set('worms_seen', sawWorm ? ((asc?.W || 0) > 4 ? 'Yes, a long white worm came out in the stool.' : 'Tiny white threads in the stool.') : 'No worms seen.', sawWorm);
@@ -191,9 +194,11 @@ export function signs(p, t, tools = new Set()) {
   set('injury_how', w || b ? (p.complaint || 'An accident at home.') : 'No injury.', !!(w || b));
 
   // ——— pain, swelling, pregnancy
+  const rf = cond('rheumatic_fever');
+  set('joints', (rf?.s || 0) > 0.15 ? 'Wrists and ankles swollen, hot and red; the pain has moved from joint to joint.' : 'Joints normal.', (rf?.s || 0) > 0.15);
   const bp = cond('back_pain');
   const relief = V.ds.relief.pain || 0;
-  set('pain_site', bp ? `Low back, ${bp.s * (1 - relief) > 0.4 ? 'bad' : 'aching'}, worse bending and lifting.` : wd || cond('dysentery') ? 'Cramps in the belly.' : w || b ? 'The wound/burn pains.' : 'No particular pain.', !!bp);
+  set('pain_site', rf && rf.s > 0.15 ? 'The joints — first the ankles, now the wrists.' : py && py.s > 0.2 ? 'In the side of the back, one side.' : bp ? `Low back, ${bp.s * (1 - relief) > 0.4 ? 'bad' : 'aching'}, worse bending and lifting.` : wd || cond('dysentery') ? 'Cramps in the belly.' : w || b ? 'The wound/burn pains.' : 'No particular pain.', !!bp);
   set('cramp', (cond('amoebiasis')?.s || 0) > 0.2 || (cond('dysentery')?.s || 0) > 0.2 || (wd?.s || 0) > 0.4 ? `Cramping belly pains${(V.ds.relief.cramp || 0) > 0.4 ? ' (eased by the remedy)' : ''}.` : 'No cramps.', (cond('dysentery')?.s || 0) > 0.2 || (wd?.s || 0) > 0.4);
   set('back_exam', bp ? 'Tender muscles beside the lower spine; legs strong, feeling normal.' : 'Back normal.', !!bp);
   const pe = cond('pre_eclampsia');
@@ -212,12 +217,12 @@ export function signs(p, t, tools = new Set()) {
   const thinks = p.allergy ? said < 0.7 : said < 0.05;
   set('allergy_hx', thinks ? (p.allergy === 'aspirin' ? 'Yes — aspirin once made it hard to breathe.' : 'Yes — penicillin gave a rash and swelling once.') : 'No allergies that I know of.', thinks);
   const hives = (p.allergicUntil || 0) > t;
-  set('rash', hives ? 'Raised, itchy pale welts over the body (hives); the lips are a little swollen.' : 'No rash.', hives);
+  set('rash', p.lastTox?.includes('sjs') ? 'Blisters and peeling skin over the body; raw sores in the mouth and red eyes.' : hives ? 'Raised, itchy pale welts over the body (hives); the lips are a little swollen.' : 'No rash.', hives);
   const taking = (p.rx || []).filter((r) => !r.instr && !r.stopped && r.left > 0).map((r) => r.name);
   set('meds_taken', taking.length ? 'Taking: ' + taking.join(', ') + '.' : 'Nothing yet.', false);
   const tox = [];
   if (hives) tox.push('an itchy rash all over');
-  for (const s of p.lastTox || []) tox.push({ tinnitus: 'ears ringing', cinchonism: 'ears ringing, dizzy, sick', quinine_toxic: 'cannot see well', digitalis_gi: 'nausea, sees yellow', digitalis_arrhythmia: 'heart stumbling', anticholinergic: 'mouth dry as dust, heart racing', anticholinergic_severe: 'seeing things that are not there', marrow: 'tired, bruises easily', grey_baby: 'the baby is grey and floppy' }[s] || s);
+  for (const s of p.lastTox || []) tox.push({ tinnitus: 'ears ringing', cinchonism: 'ears ringing, dizzy, sick', quinine_toxic: 'cannot see well', digitalis_gi: 'nausea, sees yellow', digitalis_arrhythmia: 'heart stumbling', anticholinergic: 'mouth dry as dust, heart racing', anticholinergic_severe: 'seeing things that are not there', marrow: 'tired, bruises easily', grey_baby: 'the baby is grey and floppy', kidney_injury: 'hardly any urine', sjs: 'blisters, peeling skin, sore mouth and eyes', reye: 'vomiting, then drowsy and confused', iron_gi: 'vomiting, belly pain', iron_severe: 'vomiting blood, very drowsy', iron_lethal: 'cannot be woken', vita_acute: 'headache and vomiting', zinc_gi: 'vomiting, cramps', opioid_withdrawal: 'aching, yawning, loose stools, sleepless' }[s] || s);
   set('tox_symptoms', tox.length ? 'Complains of: ' + tox.join('; ') + '.' : 'No new complaints from the medicine.', tox.length > 0);
   const poorly = p.conds.some((c) => (c.s || 0) > 0.35);
   set('appetite', poorly ? 'Eating little.' : 'Eating well.', poorly);

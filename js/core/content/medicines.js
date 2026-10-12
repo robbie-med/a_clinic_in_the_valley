@@ -45,4 +45,14 @@ export const MEDICINES = [
   tab('iron_200', 'Ferrous sulfate 200 mg tablets', { iron: 65 }, 0.004, '#a04040', { ref: 'WTND p.392', note: '200 mg ferrous sulfate = 65 mg iron. Adults 1 tablet 1–3 times a day; children by weight.' }),
   tab('vita_200k', 'Vitamin A 200 000 IU capsules', { vitamin_a: 60 }, 0.03, '#f0c040', { ref: 'WTND p.391', note: 'Measles: one capsule on the first day and one the next (half for babies 6–12 months, a quarter under 6 months).' }),
   tab('zinc_20', 'Zinc sulfate 20 mg dispersible tablets', { zinc: 20 }, 0.04, '#d0d0e0', { ref: 'WTND p.381', note: 'Children with diarrhoea: 20 mg a day for 10–14 days (10 mg under 6 months).' }),
+
+  // injections: given by your hand in the clinic (encounter.js injectNow). `inj.ka` is absorption from the muscle (/h).
+  { id: 'benzathine_pen', name: 'Benzathine penicillin 2.4 MU vial', actives: { benzylpenicillin: 1440 }, inj: { ka: 0.0017 }, route: ['inj'], unit: 'vial', price: 0.4, pack: 50, stack: 200, icon: 'vial', color: '#f0f0f0', ref: 'WTND p.351',
+    note: 'A depot: one injection keeps a low level of penicillin for 3–4 weeks. Into the buttock muscle of an adult, never a small child.' }, // ka: fitted to ~0.02–0.1 mg/L for 3–4 weeks (Kaplan EL et al. J Pediatr 1989;115:146)
+  { id: 'benzylpen_1mu', name: 'Benzylpenicillin 1 MU vial (600 mg)', actives: { benzylpenicillin: 600 }, inj: { ka: 3 }, route: ['inj'], unit: 'vial', price: 0.2, pack: 50, stack: 200, icon: 'vial', color: '#f8f8f0', ref: 'WTND p.351',
+    note: 'Short-acting: every 4–6 hours.' },
+  { id: 'ceftriaxone_1g', name: 'Ceftriaxone 1 g vial', actives: { ceftriaxone: 1000 }, inj: { ka: 1.5 }, route: ['inj'], unit: 'vial', price: 0.6, pack: 25, stack: 100, icon: 'vial', color: '#f0e8d0', ref: 'WTND p.359',
+    note: 'Once a day. Adults 1–2 g; children 50–80 mg/kg.' },
+  { id: 'adrenaline_1mg', name: 'Adrenaline 1 mg/ml (1:1000) ampoule', actives: { adrenaline: 1 }, inj: { ka: 3 }, route: ['inj'], unit: 'ampoule', price: 0.25, pack: 10, stack: 50, icon: 'vial', color: '#f0d0d0', ref: 'WTND p.70',
+    note: 'For allergic shock. Keep it with you whenever you inject penicillin.' },
 ];
