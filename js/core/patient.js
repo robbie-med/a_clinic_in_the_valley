@@ -39,6 +39,8 @@ export function conditionWeight(def, person, season, hamlet) {
   if (E.onlyPregnant && !person.pregnant) return 0;
   if (E.early && person.pregnant > 14) return 0;
   if (E.late && person.pregnant < 26) return 0;
+  if (E.weeks && !(person.pregnant >= E.weeks[0] && person.pregnant < E.weeks[1])) return 0;
+  if (E.postpartum && !(person.pp >= E.postpartum[0] && person.pp < E.postpartum[1])) return 0; // pp: days since a birth
   let w = E.w * (E.season?.[season] ?? 1) * (E.sex?.[person.sex] ?? 1);
   if (E.age) {
     const band = E.age.find(([a, b]) => person.age >= a && person.age < b);
@@ -63,13 +65,22 @@ export function makePatient({ seed, key, t, season, hamlet, cond: forceCond, age
   const rng = makeRng(seed, 'patient', key);
   let person, condId, tries = 0;
   do {
-    if (who && !tries) { person = { sex: who.sex, age: who.age, pregnant: who.pregnant }; const ws = CONDITIONS.map((c) => [c.id, conditionWeight(c, person, season, hamlet)]).filter(([, w]) => w > 0); if (ws.length) { condId = weighted(ws, rng()); break; } tries++; }
+    if (who && !tries) { person = { sex: who.sex, age: who.age, pregnant: who.pregnant, pp: who.pp }; const ws = CONDITIONS.map((c) => [c.id, conditionWeight(c, person, season, hamlet)]).filter(([, w]) => w > 0); if (ws.length) { condId = weighted(ws, rng()); break; } tries++; }
     const sex = forceSex || (rng() < 0.52 ? 'f' : 'm');
     const band = weighted(PYRAMID.map((b) => [b, b[2]]), rng());
     const age = forceAge ?? lerp(band[0], band[1], rng());
     const pregnant = sex === 'f' && age >= 16 && age < 42 && rng() < 0.16 ? Math.floor(lerp(5, 39, rng())) : 0;
-    person = { sex, age, pregnant };
-    if (forceCond) { condId = forceCond; if (COND.get(forceCond).epi.onlyPregnant && !pregnant) { person.sex = 'f'; person.age = 24; person.pregnant = COND.get(forceCond).epi.late ? 32 : 9; } break; }
+    // a woman who gave birth in the last two months (own stream, so it never reshuffles who walks in)
+    const ppR = makeRng(seed, 'pp', key, tries);
+    person = { sex, age, pregnant, pp: sex === 'f' && age >= 16 && age < 42 && !pregnant && ppR() < 0.06 ? ppR() * 60 : null };
+    if (forceCond) {
+      condId = forceCond;
+      const E = COND.get(forceCond).epi;
+      if (E.onlyPregnant && !pregnant) { person.sex = 'f'; person.age = 24; person.pregnant = E.late ? 32 : 9; }
+      if (E.weeks) person.pregnant = E.weeks[0];
+      if (E.postpartum) Object.assign(person, { sex: 'f', age: 24, pregnant: 0, pp: E.postpartum[0] });
+      break;
+    }
     const ws = CONDITIONS.map((c) => [c.id, conditionWeight(c, person, season, hamlet)]).filter(([, w]) => w > 0);
     if (ws.length) { condId = weighted(ws, rng()); break; }
   } while (++tries < 20);
@@ -90,7 +101,8 @@ export function makePatient({ seed, key, t, season, hamlet, cond: forceCond, age
     nauseaSev: lerp(0.5, 1, rng()), pkv, allergy: ((r) => (r < 0.02 ? 'penicillin' : r < 0.03 ? 'aspirin' : null))(rng()),
     t, conds: [], hyd: 0, doses: { sys: {}, gut: [] }, rx: [], healed: [], flags: {}, toxSeen: {}, visits: [],
   };
-  if (who) Object.assign(p, { who: who.id, mother: who.mother, bf: who.bf, marks: who.marks });
+  if (who) Object.assign(p, { who: who.id, mother: who.mother, bf: who.bf, marks: who.marks, vacc: who.vacc, fpUntil: who.fpUntil });
+  if (person.pp != null) p.delivered = t - person.pp * 24 * 60; // when she gave birth (game minutes)
   p.immMalaria = clamp((0.1 + (age - 0.5) / 13) * (pregnant ? 0.7 : 1) * lerp(0.6, 1.2, hamlet?.mosquito ?? 0.5) * lerp(0.35, 1.45, rng()), 0.08, 0.85);
   const def = COND.get(condId);
   const sinceH = def.params.since ? Math.round(lerp(def.params.since[0], def.params.since[1], rng()))

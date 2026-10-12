@@ -138,6 +138,14 @@ compound, with sources.
 
   Months and years run 9 times faster than illness (time.js `COMPRESS`): a game year of high blood pressure carries
   a real year's stroke risk, and a child on therapeutic food recovers in about a game week.
+- **Childbirth and the newborn** (WTND chapter 19; models `labour`, `bleeding`, `spasm`):
+  - obstructed labour (refer: only the hospital can end it), bleeding after birth (oxytocin, misoprostol,
+    ergometrine; misoprostol to take at home as soon as the baby comes), eclampsia (magnesium sulfate), childbirth
+    fever, heavy miscarriage bleeding, ectopic pregnancy, breast infection;
+  - newborn blood infection (ampicillin and gentamicin), infected cord, newborn tetanus (the mother's tetanus
+    vaccine, a clean cord), jaundice (sunlight), the cold small baby (skin to skin);
+  - the DMPA injection lowers how many babies the valley has. A pregnancy lasts about 29 game days (COMPRESS),
+    and women in the valley die in childbirth at about 600 per 100,000.
 - **Hindsight**: the ledger shows what it really was, what helped and what harmed, once the
   patient recovers or dies.
 

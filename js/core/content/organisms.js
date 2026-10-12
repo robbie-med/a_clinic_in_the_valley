@@ -92,3 +92,11 @@ export function baseResistance() {
   for (const o of ORGANISMS) out[o.id] = { ...o.resist0 };
   return out;
 }
+
+// ——— childbirth and the newborn (WTND pp.275–276, 358): gentamicin against the germs above that it covers.
+// [organism, wild-type modal MIC (EUCAST), resistant fold, share resistant at the start (Tadesse BT et al. BMC Infect
+// Dis 2017;17:616, rounded)]. Added here rather than in each row so this section merges as one block.
+for (const [id, mic, fold, r0] of [['e_coli', 0.5, 32, 0.3], ['s_aureus', 0.25, 64, 0.15]]) {
+  const o = ORG.get(id);
+  o.mic.gentamicin = mic; o.fold.gentamicin = fold; o.resist0.gentamicin = r0;
+}

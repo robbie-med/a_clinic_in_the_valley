@@ -152,7 +152,11 @@ export const CONDITIONS = [
   {
     id: 'pre_eclampsia', name: 'Pre-eclampsia', local: ['swelling of pregnancy'], model: 'preeclampsia',
     epi: { w: 0.6, pregnant: 6, onlyPregnant: true, late: true, season: { cool_dry: 1, hot_dry: 1, rains: 1, late_rains: 1 } },
-    params: { weeks: [28, 38], sev: [0.2, 0.5], rise: 0.008, hazard: 0.004 },
+    // It worsens over the weeks left (rise per gestational day, compressed calendar). Once severe, fits may begin
+    // (eclampsia, disease.js): ~2% of all pre-eclampsia untreated (Magpie Trial Collaborative Group. Lancet
+    // 2002;359:1877), ~9% of the severe walk-ins here. hazard (stroke, abruption) and perH are estimates: ~3% of these
+    // walk-ins die of it untreated, ~6% with eclampsia and the birth (test/birth.test.mjs).
+    params: { weeks: [28, 38], sev: [0.2, 0.5], rise: 0.008, hazard: 0.0003, fits: { at: 0.65, perH: 0.001 } },
     complaint: ['My face and hands are swollen and my head is paining, {when}.', 'I am 8 months gone. My feet and face swell, and I see spots.'],
     teach: { treat: [], helps: [], harms: ['cornsilk_k'], refer: 'Refer at once: she needs a hospital before fits begin.' },
     learn: 'In late pregnancy, sudden swelling of the face and hands, headache, blurred vision, high blood pressure: toxaemia of pregnancy. It can turn to fits and kill mother and baby. A diuretic tea hides the swelling and treats nothing. Get her to a hospital.',
@@ -469,6 +473,147 @@ export const CONDITIONS = [
     teach: { treat: ['aspirin'], helps: ['paracetamol', 'ibuprofen', 'hot_compress'], harms: ['prednisolone'], refer: 'One joint suddenly hot and swollen with fever: infected — needs an antibiotic and help.' },
     learn: 'Most joint pain of older people cannot be cured but can be eased: rest, hot cloths on the joints, gentle exercises to keep them moving. Aspirin at a higher dose than for other pain (adults 3 tablets 4 times a day, with food; less if the ears ring).',
     ref: 'WTND p.173', icon: 'weight-lifting-up', color: '#a08070',
+  },
+  // ——— childbirth and the newborn (WTND chapter 19, pp.247–282; tetanus pp.182–184; small babies p.405)
+  // Complications of labour come from people.js `LABOUR` (a woman the clinic holds); some also walk in. `urgent`: when
+  // one begins at home, the family brings her (clinic.js). `mustRefer`: only a hospital can end it (judged in hindsight).
+  {
+    id: 'obstructed_labour', name: 'Obstructed labour', local: ['the stuck labour'], model: 'labour',
+    epi: { w: 2, onlyPregnant: true, weeks: [39, 43] },
+    // Untreated, the baby often dies, the womb may tear after a day or so, and infection follows (Dolea C, AbouZahr C.
+    // Global burden of obstructed labour in the year 2000. WHO 2003; Neilson JP et al. Br Med Bull 2003;67:191). Hourly
+    // rates are estimates calibrated to ~40% of babies and a few % of mothers dying (test/birth.test.mjs).
+    params: { since: [12, 30], foetal: 0.03, resolve: 0.03, hazard: 0.0015, loss: 1.5, after: { id: 'puerperal_sepsis', odds: 0.25 }, blocksBirth: true, urgent: true },
+    complaint: ['I have been in labour {when} and the baby will not come.', 'The waters broke and the pains have gone on {when}, but the baby does not come down.'],
+    teach: { treat: [], helps: ['oral_fluid'], harms: ['oxytocin', 'misoprostol', 'ergometrine'], refer: 'Refer at once: she needs an operation (caesarean).', mustRefer: true },
+    learn: 'Labour that goes on long after strong pains or after the waters broke, the baby not moving down: the head may be too big for her hips (a young girl, a first birth), or the baby lies sideways. Help her drink, pass urine and change position, and feel how the baby lies. Never give injections to hurry the birth: they can tear the womb and kill mother and baby. Get her to a hospital.',
+    ref: 'WTND pp.256, 266–268', icon: 'heart-beats', color: '#b05070',
+  },
+  {
+    id: 'pph', name: 'Bleeding after birth (postpartum haemorrhage)', local: ['the flood after birth'], model: 'bleeding',
+    epi: { w: 0 },
+    // A womb that fails to clamp down bleeds ~250 ml/h at first (log-normal spread 0.6), slowing with a half-life of
+    // ~1.5 h by itself: 2 in 3 of these women lose ≥500 ml, a quarter ≥1000 ml. Death rises steeply past ~40% of
+    // the blood volume, sooner in anaemia. Estimates, calibrated so untreated ~2% of them die (haemorrhage is ~27% of
+    // maternal deaths: Say L et al. Lancet Glob Health 2014;2:e323) and an oxytocic soon after cuts that several-fold.
+    // ~70% is the womb (atony), which uterotonics help; the rest is tears or a retained placenta (estimate).
+    params: { since: [0, 1], rate: [250, 0.6], half: 1.5, drug: 0.85, atony: 0.7, shock: 0.38, hazard: 0.1, urgent: true },
+    complaint: ['I gave birth an hour ago and the blood will not stop.', 'Since the baby came the blood pours out, and I feel faint.'],
+    teach: { treat: ['oxytocin', 'misoprostol', 'ergometrine'], helps: ['oral_fluid'], harms: [], refer: 'If the bleeding does not stop quickly, or she grows faint with a fast weak pulse, she may need blood: hospital.' },
+    learn: 'A little bleeding after the placenta comes is normal, a cup at most. More than that, or a steady trickle, or a soft big womb, is dangerous: she can bleed to death within hours. Put the baby to the breast, rub the womb until it is hard, and inject 10 units of oxytocin (again in 15 minutes if needed), or give 600 micrograms of misoprostol by mouth; ergometrine only once the placenta is out. Let her drink; legs up if faint. Anaemic women die of less blood: iron in pregnancy, and 3 misoprostol tablets to take as soon as the baby is born, prevent much of it.',
+    ref: 'WTND pp.264–266, 390–391', icon: 'water-drop', color: '#c02030',
+  },
+  {
+    id: 'eclampsia', name: 'Eclampsia (fits of pregnancy)', local: ['the fits of pregnancy'], model: 'spasm',
+    epi: { w: 0.3, onlyPregnant: true, late: true },
+    // Fits recur until the birth (which they often bring on) and for about a day after; each risks her life
+    // (aspiration, bleeding in the brain) and the baby's. Hourly rates are estimates calibrated so ~15% die untreated
+    // (up to 14% even in hospitals of poor countries: Duley L. Semin Perinatol 2009;33:130) and magnesium sulfate leaves
+    // about half the recurrent fits that diazepam does (Eclampsia Trial Collaborative Group. Lancet 1995;345:1455).
+    params: { since: [1, 6], sev: [0.6, 1], rise: 0.01, half: 12, labour: 0.025, fits: 0.12, perFit: 0.025, foetal: 0.08, hosp: 0.2, urgent: true },
+    complaint: ['I am near my time. My head pains, I see spots, and this morning I fell down shaking.', 'I had a fit: they say I went stiff, then shook all over, and would not wake for a while.'],
+    teach: { treat: ['magnesium'], helps: ['diazepam'], harms: ['ergometrine'], refer: 'Refer at once: she must give birth in hospital. Give magnesium sulfate (or diazepam) before the journey.', mustRefer: true },
+    learn: 'Fits in late pregnancy, in labour or just after the birth, usually after the signs of pre-eclampsia: swollen face and hands, headache, blurred vision, high blood pressure. Lay her on her side with nothing in her mouth. Magnesium sulfate into both buttocks stops and prevents fits better and more safely than diazepam; diazepam into the anus if there is nothing else. The cure is the birth: get her to a hospital.',
+    ref: 'WTND pp.178, 249, 389–390', icon: 'heart-beats', color: '#8030a0',
+  },
+  {
+    id: 'puerperal_sepsis', name: 'Childbirth fever (infection after giving birth)', local: ['the fever after birth'], model: 'bacterial',
+    epi: { w: 25, postpartum: [2, 14] },
+    // E. coli stands for the mix of gut germs, streptococci and anaerobes (one germ per infection here). Hazard calibrated
+    // so ~10% die untreated (sepsis ~11% of maternal deaths: Say L et al. Lancet Glob Health 2014;2:e323) and the
+    // book's antibiotics cut that several-fold.
+    params: { org: 'e_coli', since: [12, 48], L0: [6, 7], r: 0.06, Lsym: 4, Lmax: 9, imm: 0.08, onset: 120, hazard: 0.02, fever: [1.2, 2.6], puerperal: true, urgent: true },
+    complaint: ['Since the birth I have fever and chills, and the discharge smells bad.', 'I gave birth {ago}. Now I burn with fever and my belly pains low down.'],
+    teach: { treat: ['ampicillin', 'gentamicin', 'metronidazole'], helps: ['paracetamol', 'oral_fluid'], harms: [], refer: 'If she is not better the next day, or is very weak, confused or faint: hospital.' },
+    learn: 'Fever or chills in the days after a birth or miscarriage, headache or low back pain, pain low in the belly, and a foul-smelling or bloody discharge: an infection of the womb, often from unclean hands or a hand put inside her. Ampicillin and gentamicin injections and metronidazole by mouth, until two days after the fever is gone. It kills: if she is no better the next day, get help.',
+    ref: 'WTND pp.276, 352, 358, 368', icon: 'thermometer-hot', color: '#c06040',
+  },
+  {
+    id: 'miscarriage', name: 'Miscarriage with heavy bleeding', local: ['losing the pregnancy'], model: 'bleeding',
+    epi: { w: 1.5, onlyPregnant: true, early: true },
+    // An incomplete miscarriage bleeds until the womb is empty. Rates are estimates: most lose under a litre and live;
+    // a few bleed to danger. Misoprostol or oxytocin clamp the womb and help it empty.
+    params: { since: [1, 8], rate: [60, 0.5], half: 6, drug: 0.8, shock: 0.33, hazard: 0.15, lose: true, urgent: true },
+    complaint: ['I missed my monthly bleeding twice, and now I bleed heavily with clots and cramps, {when}.'],
+    teach: { treat: ['misoprostol', 'oxytocin', 'ergometrine'], helps: ['ibuprofen', 'paracetamol'], harms: [], refer: 'Heavy bleeding for days, or fever and a bad smell: hospital, to clean out the womb.' },
+    learn: 'Heavy bleeding with clots and cramps after missing one or more periods: a miscarriage, most often in the first 3 months. Rest, ibuprofen for the pain. If the bleeding is heavy or goes on, a medicine to clamp the womb, and medical help to empty it. Fever or a bad-smelling discharge afterwards means infection: treat as childbirth fever.',
+    ref: 'WTND pp.266, 281', icon: 'water-drop', color: '#a03040',
+  },
+  {
+    id: 'ectopic', name: 'Pregnancy outside the womb (ectopic)', local: ['the pregnancy in the tube'], model: 'bleeding',
+    epi: { w: 0.4, onlyPregnant: true, early: true },
+    // 1–2% of pregnancies. The tube bursts (rupture per hour) unless it settles (resolve); then the bleeding inside is
+    // fast and slow to stop (no womb to clamp it), and without an operation many die. Rates are estimates.
+    params: { since: [24, 96], rupture: 0.01, resolve: 0.002, rate: [300, 0.5], half: 4, drug: 0, shock: 0.33, hazard: 0.15, endsPregnancy: true, urgent: true },
+    complaint: ['My monthly bleeding is late, and I have a sharp pain low on one side, with a little dark bleeding.'],
+    teach: { treat: [], helps: [], harms: ['misoprostol'], refer: 'Refer soon, before it bursts: she needs an operation. Sudden terrible pain, fainting, a fast weak pulse: it has burst — at once.', mustRefer: true },
+    learn: 'Signs of early pregnancy with odd bleeding, cramps low in the belly and a painful lump to one side of the womb: the baby has begun to grow in the tube. It cannot live, and when the tube bursts she can bleed to death inside without much blood showing. Only an operation helps.',
+    ref: 'WTND pp.249, 280', icon: 'water-drop', color: '#902040',
+  },
+  {
+    id: 'newborn_sepsis', name: 'Blood infection of the newborn (septicaemia)', local: ['the sleepy baby'], model: 'bacterial',
+    epi: { w: 6, age: [[0, 0.077, 20]] },
+    // Newborns barely fight infection. Hazard calibrated so ~40% die untreated and ampicillin with gentamicin cut that
+    // several-fold (home treatment brought case fatality from 16.6% to 2.8%: Bang AT et al. Lancet 1999;354:1955).
+    params: { org: 'e_coli', since: [12, 48], L0: [6, 7], r: 0.07, Lsym: 4, Lmax: 9, imm: 0.14, onset: 80, hazard: 0.025, fever: [0, 1.5], newborn: true, urgent: true },
+    complaint: ['The baby will not suck since yesterday, and sleeps all the time.', 'The baby has stopped feeding {when}; floppy and hot.'],
+    teach: { treat: ['ampicillin', 'gentamicin'], helps: ['oral_fluid'], harms: ['chloramphenicol', 'cotrimoxazole'], refer: 'Try to get medical help; start the injections first.' },
+    learn: 'In a baby under a month: will not suck, very sleepy or floppy, too hot or too cold (below 35 °C), vomiting, a swollen belly, yellow skin, fits, turning blue. Any of these, and above all several together, may be an infection in the blood. Ampicillin and gentamicin injections by weight; keep giving breast milk, by spoon if need be. Chloramphenicol and cotrimoxazole are dangerous at this age.',
+    ref: 'WTND pp.272–275', icon: 'thermometer-hot', color: '#d08060',
+  },
+  {
+    id: 'cord_infection', name: 'Infected cord (navel)', local: ['the rotten navel'], model: 'bacterial',
+    epi: { w: 3, age: [[0, 0.04, 20]] },
+    // Staphylococcus mostly; it spreads to the blood in some (ascend; perH an estimate).
+    params: { org: 's_aureus', since: [24, 72], L0: [5, 6.5], r: 0.05, Lsym: 4, Lmax: 9, imm: 0.12, onset: 72, hazard: 0.0005, fever: [0, 1], cord: true, ascend: { to: 'newborn_sepsis', perH: 0.002, minS: 0.4 } },
+    complaint: ['The baby\'s navel is red and smells bad.', 'Pus comes from my baby\'s cord, {when}.'],
+    teach: { treat: ['ampicillin', 'gentamicin', 'dicloxacillin'], helps: [], harms: [], refer: 'If the baby stops sucking, is floppy, hot or cold: blood infection — get help.' },
+    learn: 'Pus or a bad smell from the cord is a danger sign: watch for tetanus and for infection in the blood. Clean it with alcohol and leave it open to the air. If the skin around it is red and hot, ampicillin (or penicillin with gentamicin). Prevent it: clean hands, a new blade, a short cord kept dry, nothing (never dung) put on it.',
+    ref: 'WTND pp.263, 272', icon: 'bandage-roll', color: '#c09060',
+  },
+  {
+    id: 'newborn_tetanus', name: 'Tetanus of the newborn', local: ['the seven-day sickness'], model: 'spasm',
+    epi: { w: 1, age: [[0.008, 0.06, 20]] },
+    // Spasms worsen for ~5 days, then ease over ~3 weeks. Untreated nearly all die; with care 10–60% (Roper MH et al.
+    // Lancet 2007;370:1947); "half die even in the best hospitals" (WTND p.184). Rates calibrated to that.
+    params: { since: [12, 48], sev: [0.6, 1], course: [5, 21], fits: 1.5, perFit: 0.005, foetal: 0, hosp: 0.4 },
+    complaint: ['My baby cries all the time and cannot suck, {when}. Now he goes stiff.', 'The baby\'s jaw is locked and he stiffens when we touch him.'],
+    teach: { treat: ['diazepam'], helps: ['benzylpenicillin'], harms: [], refer: 'Refer at once.', mustRefer: true },
+    learn: 'Begins 3 to 10 days after birth: the baby cries all the time and cannot suck, then the jaw locks and the body stiffens in spasms when touched or at a noise. It comes from a cord cut with a dirty blade, left long, or covered with dung. Diazepam for the spasms, penicillin, breast milk by tube, quiet and dark, and a hospital. Prevent it: two tetanus injections in pregnancy, a new blade, a short dry cord.',
+    ref: 'WTND pp.182–184, 263, 389–390', icon: 'spider-web', color: '#806060',
+  },
+  {
+    id: 'newborn_jaundice', name: 'Yellow newborn (jaundice)', local: ['the yellow baby'], model: 'viral',
+    epi: { w: 4, age: [[0.003, 0.03, 20]] },
+    // Peaks at 3–5 days and fades by two weeks; in a few the bilirubin climbs high enough to harm the brain
+    // (kernicterus). Filtered sunlight lowers it about as well as phototherapy (Slusher TM et al. N Engl J Med
+    // 2015;373:1115). Hazard an estimate (~1% untreated die).
+    params: { since: [24, 72], days: [10, 3], peak: 4, hazard: 0.00002, jaundice: true, cut: [{ instr: 'sunlight', by: 0.5 }] },
+    complaint: ['My baby has turned yellow, {when}.', 'The whites of the baby\'s eyes are yellow.'],
+    teach: { treat: [], helps: [], harms: ['cotrimoxazole'], refer: 'Yellow on the first day, after the fifth, or the baby will not feed or is floppy: get medical help.' },
+    learn: 'Some yellow colour between the 2nd and 5th day is common and usually not serious. Give plenty of breast milk (by spoon if needed), undress the baby and lay him in bright light by a window, not in direct sun. Yellow on the first day of life or after the fifth day is serious.',
+    ref: 'WTND p.274', icon: 'sun-cloud', color: '#e0c040',
+  },
+  {
+    id: 'cold_baby', name: 'Cold, small baby (low temperature)', local: ['the cold baby'], model: 'viral',
+    epi: { w: 3, age: [[0, 0.06, 20]], season: { cool_dry: 1.6, hot_dry: 0.7, rains: 1, late_rains: 1.1 } },
+    // A small or early baby loses heat; below 35 °C it stops feeding and may die. Skin-to-skin ("kangaroo") care at
+    // home cut deaths in small babies by ~30% (Mazumder S et al. Lancet 2019;393:1876). Hazard an estimate.
+    params: { since: [6, 36], days: [14, 4], peak: 1, hazard: 0.00008, cold: 3, cut: [{ instr: 'kangaroo', by: 0.6 }] },
+    complaint: ['My baby was born small and is cold, and sucks weakly.', 'The baby feels cold and will hardly feed, {when}.'],
+    teach: { treat: [], helps: [], harms: [], refer: 'Very small (under 2 kg), will not feed at all, or cold and floppy despite warming: hospital.' },
+    learn: 'A baby born small or early cannot keep himself warm. Below 35 °C is dangerous, and low temperature can also mean infection. Keep him naked against his mother\'s skin, between her breasts, inside her clothes, day and night, with his head covered; breastfeed at least every 2 hours. This "kangarooing" keeps him warm and saves many small babies.',
+    ref: 'WTND pp.270, 273, 405', icon: 'sun-cloud', color: '#80a0c0',
+  },
+  {
+    id: 'mastitis', name: 'Breast infection (mastitis)', local: ['the hot breast'], model: 'bacterial',
+    epi: { w: 6, postpartum: [7, 180] },
+    // Mostly Staphylococcus aureus; WTND gives dicloxacillin. Rarely dangerous.
+    params: { org: 's_aureus', since: [24, 72], L0: [5.5, 6.5], r: 0.05, Lsym: 4, Lmax: 9, imm: 0.06, onset: 72, hazard: 0, fever: [0.8, 2], breast: true },
+    complaint: ['My breast is hot, red and so painful I cannot feed the baby, {when}.'],
+    teach: { treat: ['dicloxacillin', 'erythromycin', 'cotrimoxazole'], helps: ['paracetamol'], harms: [], refer: 'A soft swelling full of pus (an abscess) may need opening.' },
+    learn: 'Part of the breast hot, red, swollen and very painful, with fever, and a sore lump in the armpit: usually after cracked nipples or a breast left too full. Keep feeding from that breast (or milk it by hand), hot cloths before feeds, rest and drink; dicloxacillin for 7 days, acetaminophen for the pain.',
+    ref: 'WTND pp.277–278', icon: 'heart-beats', color: '#e08080',
   },
 ];
 
