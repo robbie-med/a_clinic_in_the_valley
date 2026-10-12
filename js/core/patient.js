@@ -114,7 +114,8 @@ export function sinceWords(h) {
   if (h < 30 || d < 2) return 'since yesterday';
   if (d < 8) return 'for ' + ['', '', 'two days', 'three days', 'four days', 'five days', 'six days', 'a week'][d];
   if (d < 18) return 'for two weeks';
-  return 'for ' + Math.round(d / 7) + ' weeks';
+  if (d < 100) return 'for ' + Math.round(d / 7) + ' weeks';
+  return d < 730 ? 'for ' + Math.round(d / 30) + ' months' : 'for ' + Math.round(d / 365) + ' years'; // slow illnesses (paced) last that long
 }
 
 export function agoWords(h) { if (h < 10) return 'this morning'; const d = Math.round(h / 24); if (h < 30 || d < 2) return 'yesterday'; return d < 8 ? ['', '', 'two', 'three', 'four', 'five', 'six', 'seven'][d] + ' days ago' : 'weeks ago'; }

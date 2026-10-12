@@ -311,7 +311,7 @@ export const CONDITIONS = [
     // untreated and stays after cure. Rates are estimates; it hardly ever kills by itself.
     params: { org: 'm_leprae', pace: COMPRESS, since: [180 * 24 / COMPRESS, 720 * 24 / COMPRESS], A0: [5, 10], r: 0.001, Asym: 4, Amax: 11, imm: 0.0002,
       sleep: 1e-8, wake: 1e-4, hazard: 0, waste: 0, hosp: 0, nerve: 2.2e-5, leprosy: true },
-    complaint: ['There is a pale patch on my arm that has grown for months. I cannot feel a thorn in it.', 'My hands tingle and are numb, and I burned my fingers on the pot without feeling it.'],
+    complaint: ['There is a pale patch on my arm that has grown for months. I cannot feel a thorn in it.', 'Pale patches on my back and arms, for a long time now; they do not itch or hurt.'],
     teach: { treat: ['dapsone', 'rifampicin'], helps: [], harms: [], refer: 'Pain along the nerves, sudden weakness, red painful eyes (a lepra reaction): refer, but keep the medicine.' },
     learn: 'A slowly growing pale patch that does not itch or hurt, and later loses feeling; thick nerves at the elbow, knee and neck; numb hands and feet that get burned and cut without pain; in the lumpy form, thick ear lobes and lost eyebrows. Dapsone every day with rifampicin, for 6 months (patches only) to a year (lumps). Damage already done stays: protect numb hands, feet and eyes.',
     ref: 'WTND pp.191–192, 362–363', icon: 'hand', color: '#c0a080',
@@ -323,7 +323,7 @@ export const CONDITIONS = [
     // into the spasms. Without intensive care ~half die even in hospital (WTND p.184); in African hospitals ~43%
     // (Woldeamanuel YW et al. J Neurol Sci 2016;368:292). Hazard calibrated: untreated ~55%, newborns far more.
     params: { org: 'c_tetani', since: [190, 300], L0: [1, 2], r: 0.08, Lmax: 6, imm: 0.12, heal: 500, toxin: 1.2, bind: 0.02, recover: 340, hazard: 0.006, tetanus: true, fever: [0.3, 1.2] },
-    complaint: ['{who} cannot open the mouth, the neck is stiff, and the body jerks in painful spasms.', 'My jaw is locked and swallowing is hard; I stepped on a nail two weeks ago.'],
+    complaint: ['{who} cannot open the mouth well, the neck is stiff, and swallowing is hard.', 'My jaw is getting stiff and swallowing is hard; I stepped on a nail two weeks ago.'],
     teach: { treat: ['tetanus_ig', 'tetanus_antitoxin', 'metronidazole', 'benzylpenicillin', 'diazepam'], helps: [], harms: [], refer: 'Tetanus is deadly: refer at once. Meanwhile clean the wound, antitoxin, penicillin or metronidazole, diazepam for the spasms, quiet and dark.' },
     learn: 'A stiff jaw (lockjaw), then a stiff neck and body, and painful spasms set off by touch, noise or light; the knee jerk jumps high. In newborns: stops sucking and cries all the time, 3–10 days after birth, from a dirty cord. Clean the wound, give penicillin (or metronidazole), human immune globulin (or horse antitoxin, with adrenaline ready), diazepam for the spasms; touch and move the person little. Vaccination prevents it; so does a clean wound and a clean cord.',
     ref: 'WTND pp.182–184, 388–390', icon: 'person', color: '#806060',
