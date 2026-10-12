@@ -6,6 +6,7 @@ import { COND } from './content/conditions.js';
 import { drugState } from './pk.js';
 import { sinceWords } from './patient.js';
 import { makeRng } from './rng.js';
+import { HERB } from './content/herbs.js';
 
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -219,6 +220,9 @@ export function signs(p, t, tools = new Set()) {
   const hives = (p.allergicUntil || 0) > t;
   set('rash', p.lastTox?.includes('sjs') ? 'Blisters and peeling skin over the body; raw sores in the mouth and red eyes.' : hives ? 'Raised, itchy pale welts over the body (hives); the lips are a little swollen.' : 'No rash.', hives);
   const taking = (p.rx || []).filter((r) => !r.instr && !r.stopped && r.left > 0).map((r) => r.name);
+  // the plant itself, if you ask to see it: what it really is, whatever they call it
+  const home = (p.rx || []).find((r) => r.home && !r.stopped);
+  set('herb_seen', home ? `They show you the plant: ${HERB.get(home.home).name}${HERB.get(home.home).latin ? ` (${HERB.get(home.home).latin})` : ''}.` : '—', !!home && home.home !== home.meant);
   set('meds_taken', taking.length ? 'Taking: ' + taking.join(', ') + '.' : 'Nothing yet.', false);
   const tox = [];
   if (hives) tox.push('an itchy rash all over');

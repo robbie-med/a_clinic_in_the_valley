@@ -16,6 +16,7 @@ import { PLACEABLES } from '../core/content/build.js';
 import { VENDORS } from '../core/content/vendors.js';
 import { stock, buy, sell, offer, LOT, lotPrice, nextVisit, CATALOGUE, IMPORT, catalogueItems, importItems, orderTotal, placeOrder } from '../core/economy.js';
 import { lookalikes, climateFit } from '../core/flora.js';
+import { teaOf } from '../core/homecare.js';
 import { CLIMATE } from '../core/content/flora_herbs.js';
 import { startEncounter, ask, examine, differential, questionsFor, examsFor, remedies, rxLine, doseInfo, stockOf, finishEncounter, doProcedure, injectNow, toolsAt, INSTRUCTIONS, PROCEDURES } from '../core/encounter.js';
 import { EXAMS } from '../core/content/findings.js';
@@ -407,7 +408,10 @@ export function makeUI(G) {
             : h('button', { disabled: !R.amount || line.qty > stockOf(G, it.id), onclick: () => { enc.rx.push(line); render(); } }, 'Add'))) : h('p', { class: 'hint' }, 'No remedies in your bag or on the shelves.'),
       enc.rx.length ? h('ul', { class: 'rxlist' }, enc.rx.map((l, i) => h('li', {}, l.given ? `${l.name}: ${amt(G.C.items.get(l.item), l.amount)} injected` : `${l.name}: ${amt(G.C.items.get(l.item), l.amount)} ${l.route === 'topical' ? 'applied' : ''} ${l.perDay}× a day for ${l.days} days`, l.given ? null : h('button', { class: 'link', onclick: () => { enc.rx.splice(i, 1); render(); } }, ' remove')))) : '');
     treat.append(h('h4', {}, 'In the clinic'), h('div', { class: 'chips' }, PROCEDURES.filter((pr) => pr.applies(p)).map((pr) => h('button', { class: enc.proc.has(pr.id) ? 'on' : '', onclick: () => { const r = doProcedure(G, enc, pr.id); ui.toast(r.text); render(); } }, pr.label))));
-    treat.append(h('h4', {}, 'Advice'), h('div', { class: 'checks' }, INSTRUCTIONS.map((ins) => h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: enc.instr.has(ins.id), onchange: (e) => { if (e.target.checked) enc.instr.add(ins.id); else enc.instr.delete(ins.id); } }), ins.label))));
+    const teas = Object.keys(G.p.known).filter((id) => teaOf(G.C, id)).sort((a, b) => HERB.get(a).name.localeCompare(HERB.get(b).name));
+    if (teas.length) treat.append(h('h4', {}, 'Send them to gather'), h('select', { onchange: (e) => { enc.gather = e.target.value || null; } },
+      [h('option', { value: '' }, 'Nothing'), ...teas.map((id) => h('option', { value: id, selected: enc.gather === id }, `${HERB.get(id).name}: a cup of tea 3 times a day, 5 days`))]));
+    treat.append(h('h4', {}, 'Advice'), h('div', { class: 'checks' }, INSTRUCTIONS.filter((ins) => !ins.only || ins.only(p)).map((ins) => h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: enc.instr.has(ins.id), onchange: (e) => { if (e.target.checked) enc.instr.add(ins.id); else enc.instr.delete(ins.id); } }), ins.label))));
     treat.append(h('div', { class: 'row' }, h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: enc.refer, onchange: (e) => { enc.refer = e.target.checked; } }), 'Refer to the health centre (two days\' walk)')),
       h('div', { class: 'row' }, h('span', {}, 'Come back in:'), h('span', { class: 'chips' }, [0, 1, 2, 3, 7].map((n) => h('button', { class: enc.returnDays === n ? 'on' : '', onclick: () => { enc.returnDays = n; render(); } }, n ? n + ' d' : 'only if worse')))),
       h('div', { class: 'acts' }, h('button', { class: 'primary', onclick: () => finish() }, 'Finish and send home')));

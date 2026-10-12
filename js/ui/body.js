@@ -10,8 +10,8 @@ export const REGIONS = {
   belly: { label: 'Belly', exams: ['x_belly', 'x_pinch'] },
   arm: { label: 'Upper arm', exams: ['x_thermo', 'x_muac', 'x_bp'] },
   wrist: { label: 'Wrist', exams: ['x_pulse'] },
-  hands: { label: 'Hands & skin', exams: ['x_skin'] },
-  legs: { label: 'Legs & feet', exams: ['x_feet'] },
+  hands: { label: 'Hands & skin', exams: ['x_skin', 'x_joints'] },
+  legs: { label: 'Legs & feet', exams: ['x_feet', 'x_joints'] },
   back: { label: 'Back', exams: ['x_back'] },
   wound: { label: 'Wound / burn', exams: ['x_wound'] },
 };

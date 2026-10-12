@@ -12,6 +12,7 @@ import { payment, collect, scheduleReturn, who, selectPressure } from './clinic.
 import { gainXp } from './crafting.js';
 import { stackPotency } from './crafting.js';
 import { makeRng } from './rng.js';
+import { gather, giveTea } from './homecare.js';
 
 export const INSTRUCTIONS = [
   { id: 'finish', label: 'Explain the medicine, and to finish every dose even when better', min: 3 },
@@ -22,6 +23,7 @@ export const INSTRUCTIONS = [
   { id: 'rest_move', label: 'Keep moving gently; lift with the legs', min: 1 },
   { id: 'hot_compress', label: 'Hot compresses 20 minutes, 4 times a day; raise the limb', min: 2 },
   { id: 'dressing', label: 'Keep it covered with a clean cloth, change daily', min: 1, needs: [['cloth', 2]] },
+  { id: 'stop_home', label: 'Stop the tea you have been giving at home', min: 1, only: (p) => p.rx.some((r) => r.home && !r.stopped) },
 ];
 export const PROCEDURES = [
   { id: 'clean', label: 'Clean the wound with soap and boiled water, remove dirt', min: 12, needs: [['soap', 1], ['cloth', 1]], station: 'hearth',
@@ -217,8 +219,15 @@ export function finishEncounter(G, enc) {
       fluid: it.fluid ? { na: it.fluid.na * q } : undefined, counselled, bitter: !!it.bitter,
     });
   }
+  if (enc.instr.has('stop_home')) for (const r of p.rx) if (r.home && !r.stopped) r.stopped = now;
+  // sent to gather a plant near home and give it as a tea (homecare.js): they may not find it, or bring a lookalike
+  if (enc.gather) {
+    const got = gather(G, p, enc.gather, makeRng(p.seed, 'gather', p.visits.length));
+    if (got) giveTea(G, p, got, enc.gather, now + 4 * HOUR, 5);
+    enc.log.push({ who: speaker(p), text: got ? 'We will look for it on the way home.' : 'We do not know where that grows.' });
+  }
   for (const id of enc.instr) {
-    if (id === 'finish') continue;
+    if (id === 'finish' || id === 'stop_home') continue;
     const ins = INSTRUCTIONS.find((x) => x.id === id);
     if (ins.needs) for (const [nid, n] of ins.needs) if (stockOf(G, nid) >= n) dispense(G, nid, n);
     p.rx.push({ instr: id, name: ins.label, start: now, until: now + 21 * DAY });

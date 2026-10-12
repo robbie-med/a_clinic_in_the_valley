@@ -9,6 +9,7 @@ import { addItem } from './inventory.js';
 import { deliverOrders } from './economy.js';
 import { ORGANISMS, baseResistance } from './content/organisms.js';
 import { tickPeople, drawResident, personNow, hold, patientEvents } from './people.js';
+import { homeRemedyOnArrival } from './homecare.js';
 
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 export const OPEN = 7 * 60, CLOSE = 18 * 60, LAST_ARRIVAL = 15.5 * 60;
@@ -93,6 +94,7 @@ export function dueArrivals(G) {
     const p = makePatient({ seed: G.meta.seed, key: a.key, t: a.t, season: season(a.t), hamlet: hamletOf(G, a.hamlet), resist: resistance(cl), who: q && personNow(G, q, a.t) });
     if (p.who) hold(G, p);
     p.status = 'arriving'; p.firstSeen = a.t;
+    if (G.W.obj) homeRemedyOnArrival(G, p);
     cl.patients[p.id] = p;
     out.push(p.id);
   }

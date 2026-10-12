@@ -118,3 +118,26 @@ test('an injection in the clinic: needs a syringe, is charged, and an allergic p
   assert.ok(res.pay.total > C.items.get('benzathine_pen').price, 'the vial is charged');
   assert.equal(p.rx.filter((x) => x.route === 'inj').length, 1);
 });
+
+test('home remedies: families give teas of what grows near them; sent to gather, most find it, a few bring a lookalike', async () => {
+  const { buildContent } = await import('../js/core/content/index.js');
+  const { createRegion } = await import('../js/core/region.js');
+  const { floraNear } = await import('../js/core/flora.js');
+  const { gather, homeRemedyOnArrival, teaOf } = await import('../js/core/homecare.js');
+  const { makeRng } = await import('../js/core/rng.js');
+  const C = buildContent(), R = createRegion(7, C);
+  const G = { C, W: { R, obj: (x, y) => (R.obj[y * R.N + x] ? R.oKeys[R.obj[y * R.N + x]] : null) } };
+  const h = R.hamlets[0], near = floraNear(G, h.id).filter((s) => teaOf(C, s.id));
+  const p = { hamlet: h.id, seed: 1 };
+  const picks = Array.from({ length: 400 }, (_, i) => gather(G, p, near[0].id, makeRng(1, 'g', i)));
+  const right = picks.filter((x) => x === near[0].id).length / 400, none = picks.filter((x) => !x).length / 400;
+  assert.ok(right > 0.6 && right < 0.85, 'found the right plant ' + right);
+  assert.ok(none > 0.1 && none < 0.3, 'found nothing ' + none);
+  let home = 0;
+  for (let i = 0; i < 300; i++) {
+    const q = person('malaria', i, { tag: 'home', hamlet: h, age: 20 });
+    q.hamlet = h.id;
+    if (homeRemedyOnArrival(G, q)) home++;
+  }
+  assert.ok(home / 300 > 0.05 && home / 300 < 0.45, 'home remedies ' + home / 300); // only where something used for it grows near
+});

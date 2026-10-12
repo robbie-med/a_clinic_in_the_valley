@@ -19,6 +19,7 @@ export const QUESTIONS = [
   { id: 'q_preg', label: 'Could you be pregnant? When was your last monthly bleeding?', min: 1, reveals: ['pregnancy', 'nausea_preg'], only: (p) => p.sex === 'f' && p.age >= 13 && p.age < 50 },
   { id: 'q_vision', label: 'Headache? Blurred vision or spots? Swelling of face/hands?', min: 1, reveals: ['headache', 'vision', 'face_swelling'] },
   { id: 'q_meds', label: 'Any medicines or remedies taken already?', min: 1, reveals: ['meds_taken', 'tox_symptoms'] },
+  { id: 'q_herb', label: 'Show me the plant you have been giving.', min: 1, reveals: ['herb_seen'], only: (p) => p.rx.some((r) => r.home) },
   { id: 'q_allergy', label: 'Has any medicine ever given you a rash or swelling?', min: 1, reveals: ['allergy_hx'] },
   { id: 'q_eat', label: 'Eating? Losing weight?', min: 1, reveals: ['appetite', 'weight_loss'] },
 ];

@@ -121,6 +121,10 @@ compound, with sources.
 
   Where the evidence says a warning in the book is outdated, nothing happens: doxycycline in short courses does
   not stain children's teeth, and metronidazole with alcohol gave no reaction in trials.
+- **Home remedies** (`homecare.js`): about 4 in 10 families have already been giving a tea of something
+  that grows near home and is used for the illness. Ask to see the plant: now and then it is a lookalike.
+  You can tell them to stop, or send them to gather a plant you know. They may not find it, or may bring
+  back a lookalike. Either way the plant acts through its real compounds.
 - **Hindsight**: the ledger shows what it really was, what helped and what harmed, once the
   patient recovers or dies.
 
