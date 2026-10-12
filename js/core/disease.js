@@ -9,6 +9,7 @@ import { ACTIVE } from './content/actives.js';
 import { ORG } from './content/organisms.js';
 import { drugState, toxSigns, gutExposure, hill } from './pk.js';
 import { makeRng } from './rng.js';
+import { pregnancyHour, newbornHazard } from './people.js';
 
 export const HOUR = 60;
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -383,14 +384,12 @@ export function simulate(p, toT, C) {
         rx.stopped = t0; ev.push({ t: t0, kind: 'stopped', text: `stopped ${rx.name} (felt better)` });
       }
     }
-    if (p.pregnant) {
-      p.pregnant += 1 / 168;
-      if (p.pregnant >= 40) { p.pregnant = 0; p.delivered = t1; ev.push({ t: t1, kind: 'birth', text: 'gave birth' }); }
-    }
     const ds = drugState(p, t1);
+    if (p.pregnant) ev.push(...pregnancyHour(p, ds, t1)); // the foetus (people.js)
     const x = { ds, rng, t: t1, hosp: p.hospital && t1 >= p.hospital.from && t1 < p.hospital.until, instr, topical, wormKills };
     // ~1 in 100 allergic exposures by mouth goes on to anaphylaxis; without adrenaline some of those die
     let loss = 0, hazard = allergic * 0.002;
+    if (p.age < 0.2) hazard += newbornHazard(p, ds);
     for (const c of [...p.conds]) {
       const def = COND.get(c.id);
       const r = MODELS[def.model].step(p, c, 1, x);

@@ -10,7 +10,7 @@ const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const lerp = (a, b, t) => a + (b - a) * t;
 
 // Rural population pyramid (young): share of people per age band.
-const PYRAMID = [[0, 1, 0.035], [1, 5, 0.13], [5, 15, 0.28], [15, 45, 0.4], [45, 60, 0.09], [60, 85, 0.065]];
+export const PYRAMID = [[0, 1, 0.035], [1, 5, 0.13], [5, 15, 0.28], [15, 45, 0.4], [45, 60, 0.09], [60, 85, 0.065]];
 // Median weight (kg) by age, roughly WHO growth standards; adults are rural averages.
 const WEIGHT = [[0, 3.3], [0.5, 7.5], [1, 9.6], [2, 12.2], [3, 14.3], [4, 16.3], [5, 18.3], [6, 20.5], [8, 25.5], [10, 31.5], [12, 39], [14, 48], [16, 54], [18, 58], [60, 58], [85, 52]];
 export function medianWeight(age, sex) {
@@ -55,13 +55,15 @@ export function conditionWeight(def, person, season, hamlet) {
 
 /**
  * A new patient. opts: { seed, key, t (game min), season, hamlet:{id,name,mosquito,water,crowd,wealth}, cond?,
- * resist? (the valley's resistance index, for the strain of a bacterial infection) }
- * Picks age/sex from the population, then an illness that fits them, then how long they have had it.
+ * resist? (the valley's resistance index, for the strain of a bacterial infection), who? (a person from the
+ * valley, people.js personNow: { id, sex, age, pregnant, name, bw, mother, bf, marks }) }
+ * Takes `who` (or picks age/sex from the pyramid), then an illness that fits them, then how long they have had it.
  */
-export function makePatient({ seed, key, t, season, hamlet, cond: forceCond, age: forceAge, sex: forceSex, resist }) {
+export function makePatient({ seed, key, t, season, hamlet, cond: forceCond, age: forceAge, sex: forceSex, resist, who }) {
   const rng = makeRng(seed, 'patient', key);
   let person, condId, tries = 0;
   do {
+    if (who && !tries) { person = { sex: who.sex, age: who.age, pregnant: who.pregnant }; const ws = CONDITIONS.map((c) => [c.id, conditionWeight(c, person, season, hamlet)]).filter(([, w]) => w > 0); if (ws.length) { condId = weighted(ws, rng()); break; } tries++; }
     const sex = forceSex || (rng() < 0.52 ? 'f' : 'm');
     const band = weighted(PYRAMID.map((b) => [b, b[2]]), rng());
     const age = forceAge ?? lerp(band[0], band[1], rng());
@@ -72,8 +74,9 @@ export function makePatient({ seed, key, t, season, hamlet, cond: forceCond, age
     if (ws.length) { condId = weighted(ws, rng()); break; }
   } while (++tries < 20);
   const { sex, age, pregnant } = person;
+  if (who && tries) who = null; // nothing this person could have: a stranger came instead
   const nutrition = clamp((age < 5 ? 0.82 : 0.9) + (rng() - 0.5) * 0.35 + ((hamlet?.wealth ?? 0.5) - 0.5) * 0.2, 0.45, 1.1);
-  const weight = Math.round(medianWeight(age, sex) * lerp(0.82, 1, nutrition) * (1 + (rng() - 0.5) * 0.12) * 10 + (pregnant ? pregnant * 3 : 0)) / 10;
+  const weight = Math.round(medianWeight(age, sex) * (who?.bw && age < 2 ? who.bw / 3.2 : 1) * lerp(0.82, 1, nutrition) * (1 + (rng() - 0.5) * 0.12) * 10 + (pregnant ? pregnant * 3 : 0)) / 10;
   const hb = age < 5 ? lerp(9.5, 12, rng()) : sex === 'f' ? lerp(10.5, 13.5, rng()) - (pregnant ? 1 : 0) : lerp(12.5, 15.5, rng());
   const pkv = {};
   // each drug draws from its own stream, so adding a drug to the game never reshuffles who walks in
@@ -81,12 +84,13 @@ export function makePatient({ seed, key, t, season, hamlet, cond: forceCond, age
   const wealth = clamp((hamlet?.wealth ?? 0.5) + (rng() - 0.5) * 0.5, 0.02, 1);
   const p = {
     id: 'p' + key, key, seed: (seed ^ hashKey(key)) >>> 0,
-    name: personName(rng, sex), sex, age: Math.round(age * 10) / 10, weight, nutrition, hb, pregnant,
+    name: who?.name || personName(rng, sex), sex, age: Math.round(age * 10) / 10, weight, nutrition, hb, pregnant,
     hamlet: hamlet?.id || null, wealth, adh: clamp(lerp(0.6, 0.95, rng()) + (age < 12 ? 0.03 : 0), 0.4, 0.98), trust: 0.5,
     // true penicillin allergy ~2% (far fewer than the ~10% who say so); aspirin ~1%
     nauseaSev: lerp(0.5, 1, rng()), pkv, allergy: ((r) => (r < 0.02 ? 'penicillin' : r < 0.03 ? 'aspirin' : null))(rng()),
     t, conds: [], hyd: 0, doses: { sys: {}, gut: [] }, rx: [], healed: [], flags: {}, toxSeen: {}, visits: [],
   };
+  if (who) Object.assign(p, { who: who.id, mother: who.mother, bf: who.bf, marks: who.marks });
   p.immMalaria = clamp((0.1 + (age - 0.5) / 13) * (pregnant ? 0.7 : 1) * lerp(0.6, 1.2, hamlet?.mosquito ?? 0.5) * lerp(0.35, 1.45, rng()), 0.08, 0.85);
   const def = COND.get(condId);
   const sinceH = def.params.since ? Math.round(lerp(def.params.since[0], def.params.since[1], rng()))

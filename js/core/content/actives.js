@@ -57,6 +57,8 @@ export const ACTIVES = [
     ],
     resistanceRisk: 'monotherapy',
     cautions: ['Alone, and especially as tea, the parasites come back (recrudescence). WHO advises against Artemisia tea.'],
+    // foetal: none. Artemisinins kill embryos in animals, but in first-trimester human pregnancies they brought no
+    // more miscarriage, stillbirth or malformation than quinine (Dellicour S et al. PLoS Med 2017;14:e1002290).
     ref: 'Räth K et al. Am J Trop Med Hyg 2004;70:128; Mueller MS et al. Trans R Soc Trop Med Hyg 2004;98:318; WHO position statement on non-pharmaceutical Artemisia, 2019',
   },
   {
@@ -194,6 +196,11 @@ export const ACTIVES = [
     pk: { F: 0.95, ka: 1, half: 10, vd: 1.6, fu: 0.56, spread: 0.3 },
     abx: { kmax: 0.15, ec50: 1, hill: 2, window: 8, calibrated: true },
     cautions: ['Not for babies under 2 months or in the last month of pregnancy (jaundice).', 'Rarely a severe blistering rash: stop at once.'],
+    // Sulfonamides push bilirubin off albumin: near term (in the foetus) or in a baby under 2 months, jaundice and
+    // kernicterus. In premature newborns sulfisoxazole raised deaths and kernicterus (Silverman WA et al. Pediatrics
+    // 1956;18:614); from the mother near term the risk is mostly theoretical, so it is small here. Rates are estimates.
+    foetal: [{ weeks: [36, 41], at: 1, harm: 'jaundice', per: 9e-5, ref: 'Silverman WA et al. Pediatrics 1956;18:614; WTND p.357' }],
+    newborn: [{ days: 60, at: 1, harm: 'kernicterus', per: 2e-4, ref: 'Silverman WA et al. Pediatrics 1956;18:614' }],
     ref: 'WTND p.357; Goodman & Gilman 13e ch.56',
   },
   {
@@ -208,6 +215,10 @@ export const ACTIVES = [
     pk: { F: 0.93, ka: 0.8, half: 18, vd: 0.8, fu: 0.12, spread: 0.25 },
     abx: { kmax: 0.15, ec50: 1, hill: 2, window: 8, calibrated: true },
     cautions: ['Not for children under 8 or in pregnancy: it stains and weakens growing teeth and bones.', 'Do not take with milk or antacids.'],
+    // Tetracyclines bind calcium in teeth calcifying from mid-pregnancy and stain them. Doxycycline binds far less:
+    // a systematic review found no staining or malformation linked to it (Cross R et al. Expert Opin Drug Saf
+    // 2016;15:367), so it is weak here: a week's course after 16 weeks marks ~1 baby in 100 (estimate).
+    foetal: [{ weeks: [16, 41], at: 1, harm: 'teeth', per: 2e-5, ref: 'Cross R et al. Expert Opin Drug Saf 2016;15:367; Goodman & Gilman 13e ch.59' }],
     ref: 'WTND p.355; Goodman & Gilman 13e ch.59',
   },
   {
@@ -220,6 +231,9 @@ export const ACTIVES = [
       { at: 50, sign: 'grey_baby', text: 'grey, floppy, cold, will not feed (chloramphenicol poisoning)', harm: 0.4 },
     ],
     cautions: ['WTND: only for dangerous infections like typhoid, when nothing safer works.', 'Never for newborns.'],
+    // The newborn liver barely clears it: levels climb and the baby goes grey and collapses (Burns LE et al. N Engl
+    // J Med 1959;261:1318; Mulhall A et al. BMJ 1983;287:1424). per is a calibrated estimate.
+    newborn: [{ days: 30, at: 25, harm: 'grey', per: 0.005, ref: 'Burns LE et al. N Engl J Med 1959;261:1318; Mulhall A et al. Br Med J 1983;287:1424' }],
     ref: 'WTND p.356; Goodman & Gilman 13e ch.59',
   },
   {
@@ -254,6 +268,9 @@ export const ACTIVES = [
       { on: 'fever', emax: 0.7, ec50: 6, hill: 1.5 },
     ],
     cautions: ['Not for someone who is dehydrated (the kidneys), has a stomach ulcer, or is in the last months of pregnancy.'],
+    // After ~30 weeks NSAIDs can close the foetal ductus arteriosus early (OR ~15: Koren G et al. Ann Pharmacother
+    // 2006;40:824; FDA Drug Safety Communication 2020). per is an estimate: ~3 days of full doses marks ~1 in 10.
+    foetal: [{ weeks: [30, 41], at: 10, harm: 'ductus', per: 1.3e-3, ref: 'Koren G et al. Ann Pharmacother 2006;40:824; FDA Drug Safety Communication 2020 (NSAIDs in pregnancy)' }],
     ref: 'WTND p.379; Goodman & Gilman 13e ch.34',
   },
   {
@@ -269,6 +286,9 @@ export const ACTIVES = [
       { at: 400, sign: 'salicylism', text: 'deep fast breathing, vomiting, confusion (aspirin poisoning)', harm: 0.35 },
     ],
     cautions: ['Not for children with flu or chickenpox (Reye syndrome).', 'Not with stomach ulcers or in late pregnancy.'],
+    // Analgesic doses only: low-dose aspirin (75–150 mg) stays far below this level. After ~30 weeks NSAIDs can close the foetal ductus arteriosus early (OR ~15: Koren G et al. Ann Pharmacother
+    // 2006;40:824; FDA Drug Safety Communication 2020). per is an estimate: ~3 days of full doses marks ~1 in 10.
+    foetal: [{ weeks: [30, 41], at: 30, harm: 'ductus', per: 1.3e-3, ref: 'Koren G et al. Ann Pharmacother 2006;40:824; FDA Drug Safety Communication 2020 (NSAIDs in pregnancy)' }],
     ref: 'WTND p.378; Goodman & Gilman 13e ch.34',
   },
   {
@@ -312,6 +332,8 @@ export const ACTIVES = [
     // so 3 days of artemether–lumefantrine cure ≥95% (WHO 2023) — about 10^4 per cycle overall (White 1997).
     effects: [{ on: 'plasmodium', prr: 30, ec50: 0.01, hill: 1.5, calibrated: true }],
     cautions: ['Fast and strong, gone in hours: always with a partner drug (lumefantrine).'],
+    // foetal: none. Artemisinins kill embryos in animals, but in first-trimester human pregnancies they brought no
+    // more miscarriage, stillbirth or malformation than quinine (Dellicour S et al. PLoS Med 2017;14:e1002290).
     ref: 'WTND p.364; Ezzet F et al. Br J Clin Pharmacol 1998;46:553; White NJ. Antimicrob Agents Chemother 1997;41:1413; WHO Guidelines for malaria 2023',
   },
   {
@@ -332,6 +354,8 @@ export const ACTIVES = [
     effects: [{ on: 'plasmodium', prr: 30, ec50: 0.006, hill: 1.5, calibrated: true }],
     cautions: ['Alone, a 3-day course lets the parasites come back; WHO pairs it with a partner drug.'],
     resistanceRisk: 'monotherapy',
+    // foetal: none. Artemisinins kill embryos in animals, but in first-trimester human pregnancies they brought no
+    // more miscarriage, stillbirth or malformation than quinine (Dellicour S et al. PLoS Med 2017;14:e1002290).
     ref: 'WTND p.364; Batty KT et al. Br J Clin Pharmacol 1998;45:123; White NJ. Antimicrob Agents Chemother 1997;41:1413; WHO Guidelines for malaria 2023',
   },
 
@@ -395,6 +419,10 @@ export const ACTIVES = [
     // 200 000 IU (60 mg retinol) restores the liver store for weeks; in measles it cuts deaths in young children.
     gut: { duration: 14 * 24, effects: [{ on: 'vita', per: 1, perMg: 1 / 10 }] },
     cautions: ['Too much in early pregnancy harms the baby: not the big capsules for pregnant women.'],
+    // Retinol is a teratogen in early pregnancy: above ~10 000 IU/day (3 mg) of supplements before week 7, ~1 extra
+    // malformed baby in 57 (Rothman KJ et al. N Engl J Med 1995;333:1369). Exposure here is mg/kg taken in the last
+    // 14 days; 0.75 mg/kg is 3 mg a day for two weeks. per is calibrated to Rothman's 1 in 57.
+    foetal: [{ weeks: [3, 8], at: 0.75, harm: 'malformation', per: 1.4e-5, calibrated: true, ref: 'Rothman KJ et al. N Engl J Med 1995;333:1369; WHO Guideline: vitamin A supplementation in pregnant women 2011' }],
     ref: 'WTND pp.226, 311, 391; Huiming Y et al. Cochrane 2005;CD001479',
   },
 ];
