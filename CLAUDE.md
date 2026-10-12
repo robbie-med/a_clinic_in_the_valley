@@ -1,4 +1,4 @@
-# A Clinic in the Valley (`no_doctor`): notes for agents
+# A Clinic in the Valley (`a_clinic_in_the_valley`): notes for agents
 
 Read `README.md` first. Static vanilla-JS ES modules, no build step, vendored libraries.
 Sibling of `~/Projects/dont get lost`. Code was **copied** from there, not imported, so keep them
@@ -18,8 +18,10 @@ independent.
 - **No synthesis or extraction routes for controlled substances** (opioids, benzodiazepines,
   ketamine, ephedrine and similar precursors). `test/content.test.mjs` enforces this. The phase-3
   chemistry lab keeps it.
-- WTND text is paraphrased with page refs. The extracted book text lives in `sources/` (gitignored).
-  Never commit it.
+- WTND text is paraphrased with page refs. The book (2011 PDF plus extracted text) is committed only
+  encrypted, as `sources/wtnd-book.tar.gz.gpg` (AES-256, symmetric; the user holds the password). On a
+  new machine, unpack it with `gpg -d sources/wtnd-book.tar.gz.gpg | tar xz -C sources`. The
+  plaintext files in `sources/` are gitignored: never commit them unencrypted.
 - New game-icon name: rebuild icons (`node tools/used-icons.mjs | python3 tools/build_icons.py <game-icons repo>`;
   a clone was used from the session scratchpad, so `git clone --depth 1 https://github.com/game-icons/icons`).
 - After gameplay changes, run `npm test` and `node tools/playtest.mjs <scratch dir>` (and `--mobile`).

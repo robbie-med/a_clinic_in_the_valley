@@ -70,6 +70,10 @@ compound, with sources.
 - **Phase 4:** clinic → hospital: lab, ward, maternity, theatre, staff, community health.
 - After phase 1, if wanted: PWA hosting, APK and save sync, copied from `dont get lost`.
 
+## The book
+`sources/wtnd-book.tar.gz.gpg` holds *Where There Is No Doctor* (2011 PDF + extracted text), encrypted.
+Unpack it with `gpg -d sources/wtnd-book.tar.gz.gpg | tar xz -C sources` (ask the owner for the password).
+
 ## Code
 - `js/core/` — pure simulation (runs in Node): content tables, region, world diffs, PK, disease,
   signs, encounter, clinic, economy, crafting, actions, time.

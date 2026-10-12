@@ -1,4 +1,5 @@
 node_modules/
 *.apk
-sources/
+sources/*
+!sources/*.gpg
 playtest-out/
