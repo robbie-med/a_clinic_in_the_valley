@@ -5,6 +5,7 @@
 import { field, fbm, clamp, smooth } from './noise.js';
 import { hash, hashf, makeRng, pickBy } from './rng.js';
 import { HERBS } from './content/herbs.js';
+import { valleyFlora, FLORA_COVER } from './flora.js';
 import { expand } from './lore.js';
 
 export const SIZE = 160;
@@ -177,9 +178,20 @@ export function createRegion(seed, C) {
     }
   }
 
-  // ——— vegetation: medicinal plants first (by habitat), then scenery
-  const herbBy = HABITATS.map((h) => HERBS.filter((x) => x.habitat[h]).map((x) => [x, x.habitat[h] * x.density]));
-  const count = Object.fromEntries(HERBS.map((h) => [h.id, 0]));
+  // ——— vegetation: medicinal plants first (by habitat), then scenery.
+  // The 12 hand-written herbs grow by their own density; this valley's share of the world's flora
+  // (flora.js, chosen from the seed) spreads over FLORA_COVER of the suitable tiles between them.
+  const flora = valleyFlora(S);
+  const herbBy = HABITATS.map((hab) => {
+    const mine = flora.filter((x) => x.habitat[hab]);
+    const sum = mine.reduce((a, x) => a + x.habitat[hab], 0);
+    const rows = [...HERBS.filter((x) => x.habitat[hab]).map((x) => [x, x.habitat[hab] * x.density]),
+      ...mine.map((x) => [x, (x.habitat[hab] * FLORA_COVER) / (sum || 1)])];
+    let acc = 0;
+    const cum = rows.map(([x, w]) => [x, (acc += w)]);
+    return { total: acc, cum };
+  });
+  const count = Object.fromEntries([...HERBS, ...flora].map((h) => [h.id, 0]));
   for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
     const i = I(x, y);
     if (obj[i]) continue;
@@ -187,13 +199,11 @@ export function createRegion(seed, C) {
     if (g === 'deep' || g === 'shallow' || g === 'path' || g === 'house_floor' || g === 'clinic_floor' || g === 'yard' && Math.hypot(x - V.x, y - V.y) < 14) continue;
     const habitat = HABITATS[hab[i]];
     const r = hashf(S, x, y, 11);
-    let acc = 0;
-    let placed = false;
-    for (const [herb, w] of herbBy[hab[i]]) {
-      acc += w * (g === 'crop' ? 0 : 1);
-      if (r < acc) { setO(x, y, 'plant_' + herb.id); count[herb.id]++; placed = true; break; }
+    const H = herbBy[hab[i]];
+    if (g !== 'crop' && r < H.total) {
+      for (const [herb, upto] of H.cum) if (r < upto) { setO(x, y, 'plant_' + herb.id); count[herb.id]++; break; }
+      continue;
     }
-    if (placed) continue;
     const r2 = hashf(S, x, y, 12);
     if (habitat === 'forest' && r2 < 0.22) setO(x, y, 'tree_' + (1 + hash(S, x, y, 13) % 13));
     else if (habitat === 'swamp' && r2 < 0.08) setO(x, y, 'mangrove');
@@ -214,7 +224,9 @@ export function createRegion(seed, C) {
     }
   }
   const spawn = { x: clinic.out.x + 0.5, y: clinic.out.y + 1.5 };
-  return { seed: S, N, ground, obj, hab, gKeys, gIdx, oKeys, oIdx, village, hamlets, clinic, duka, square, stalls, spawn, count, riverDist };
+  // which of the world's species actually came up in this valley (the rest are trade-only)
+  const floraHere = flora.filter((h) => count[h.id] > 0).map((h) => h.id);
+  return { seed: S, N, ground, obj, hab, gKeys, gIdx, oKeys, oIdx, village, hamlets, clinic, duka, square, stalls, spawn, count, floraHere, riverDist };
 }
 
 /** The stable per-plant strength factor: plants of one species really differ in content. */

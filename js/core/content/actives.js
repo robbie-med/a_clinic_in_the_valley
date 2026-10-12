@@ -13,6 +13,8 @@
 // used and `spread` says how much it varies between people. Numbers marked `calibrated` are fitted to
 // a clinical effect size rather than measured directly; the note says which trial.
 
+import { FLORA_ACTIVES } from './flora_actives.js';
+
 export const ACTIVES = [
   {
     id: 'salicin', name: 'Salicin (willow salicylates)', channel: 'systemic', class: 'analgesic', allergen: 'aspirin',
@@ -478,6 +480,8 @@ export const ACTIVES = [
     cautions: ['Into the muscle of the thigh or upper arm: ½ ml of 1:1000 for an adult, ¼ ml for a child 6–12, less for a baby. Repeat in 10 minutes if needed.'],
     ref: 'WTND pp.70, 385; Simons FE et al. J Allergy Clin Immunol 1998;101:33',
   },
+  // ——— the world's flora: one entry per compound class, plus the non-plant materia medica
+  ...FLORA_ACTIVES,
 ];
 
 export const ACTIVE = new Map(ACTIVES.map((a) => [a.id, a]));

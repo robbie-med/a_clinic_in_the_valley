@@ -115,6 +115,24 @@ try {
     await shot(page, `9-${name}`);
     await page.evaluate(() => window.nd.ui.close());
   }
+  // the handbook's plant list and the import catalogue: hundreds of species, so both are searchable
+  await page.evaluate(() => window.nd.ui.open('handbook'));
+  await page.click('.panel .chips button:has-text("Plants")');
+  await page.fill('.panel input[type=search]', 'will');
+  await sleep(250);
+  if (!(await page.locator('.panel .rlist button.recipe').count())) throw new Error('plant search found nothing');
+  await shot(page, '9-plants');
+  await page.evaluate(() => window.nd.ui.close());
+  await page.evaluate(() => window.nd.ui.open('ledger'));
+  await page.click('.panel .chips button:has-text("Order by post")');
+  await page.fill('.panel input[type=search]', 'seed');
+  await sleep(300);
+  const imports = await page.locator('.panel .trow', { hasText: 'seed' }).count();
+  console.log('import rows', imports);
+  if (!imports) throw new Error('the import catalogue found nothing');
+  await shot(page, '9-imports');
+  await page.evaluate(() => window.nd.ui.close());
+
   // a trader
   await page.evaluate(() => { const w = [...window.nd.scene.walkers.values()].find((x) => x.kind === 'vendor'); if (w) window.nd.ui.trade(w.vendor, w.key); });
   await sleep(300);

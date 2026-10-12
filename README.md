@@ -57,6 +57,19 @@ compound, with sources.
   - Methods: drying, powder, infusion, decoction, sour (acid) decoction, cold soak and tincture,
     each with its own extraction efficiency per compound.
   - Every plant and every batch differs in strength, and nobody tells you by how much.
+- **The world's flora** (`content/flora.js`, `flora_herbs.js`, `core/flora.js`): 870 more species built
+  from open data by `tools/build_flora.mjs` — USDA Dr. Duke's databases (public domain) for compound
+  content in ppm of the dry part and for folk uses, Kew's WCVP (CC BY 4.0) for accepted name, family,
+  life form and climate.
+  - Every effect comes from one of **28 compound classes** (`content/flora_actives.js`): tannins,
+    berberine, anthraquinones, saponins, cardiac glycosides, tropanes, pyrrolizidine alkaloids (liver),
+    aristolochic acids (kidneys), aconitine, ephedrine, caffeine, cyanogenic glycosides, thujone,
+    coumarin, oxalates, essential-oil antiseptics… Each class is written once, with real PK and
+    toxicity and its own references. No species is rated by hand: strength = content × extraction × PK.
+  - Each valley grows 200–400 climate-suitable species, scattered from the seed; the rest are
+    trade-only. A plant out of its climate is thin and weak.
+  - Hooks for the patient side: `floraNear(G, hamletId)`, `folkUses(speciesId)`,
+    `lookalikes(speciesId)` (same genus or family — misidentification), `climateFit(speciesId)`.
 - **Traders** (`content/vendors.js`, `economy.js`):
   - the village shop, open daily;
   - market day, every 7th day;
@@ -85,6 +98,11 @@ compound, with sources.
   vitamin A, each with real PK and the book's page.
   - Buy them from the shop, the market tray, the mission stores van, or **order by post**
     (Ledger): paid when posted, on your shelf in 4–8 days.
+- **The import house** (Ledger → Order by post): dried material and seed packets of any species in the
+  world table, plus the non-plant materia medica (`content/materia.js`: deer antler, cinnabar = mercury
+  sulfide, realgar = arsenic sulfide). Priced and delayed by distance (3–8 weeks), and about one sack in
+  three holds a different species altogether (Newmaster 2013; worse for antler). Seed can be planted;
+  it grows as well as the climate allows.
 - **More of the book** (phase 2): urinary infection, ear infection, strep throat, typhoid, amoebic
   dysentery, giardia, hookworm with anaemia (iron rebuilds the blood), and measles (vitamin A
   cuts deaths).
@@ -122,9 +140,9 @@ compound, with sources.
     reputation rises. Hire him into a built dispensary and his work is faster, though it still takes
     real-world times.
 - **Phase 4:** clinic → hospital: lab, ward, maternity, theatre, staff, community health.
-- **Later: the world's materia medica.** Herbs and animal materials from other traditions (Chinese, Ayurvedic,
-  Western), each modelled like the valley's own: its compounds and their % content, PK, and effects only as
-  strong as the clinical evidence shows (none, if there is none).
+- **The world's materia medica (done, before phase 3).** Built from open data; see "The world's flora"
+  above and `CREDITS.md`. What is still missing: HerbMedPro-style evidence grading per species, and
+  patients bringing in the remedies they gathered (the hooks in `core/flora.js` are there for it).
   - Sources: TCMBank (herb → ingredient; https://tcmbank.cn), USDA Dr. Duke's Phytochemical and Ethnobotanical
     Database (public domain, plant → compound with ppm), HerbMedPro (American Botanical Council; evidence per
     herb), PubMed. TCMBank's targets are network-pharmacology predictions, not effect sizes: never use them as
@@ -155,6 +173,7 @@ Unpack it with `gpg -d sources/wtnd-book.tar.gz.gpg | tar xz -C sources` (ask th
 npm test                                  # content integrity, region, PK, outcome bands
 node tools/playtest.mjs <outdir> [--mobile]   # headless Chromium play-through (serves :3411)
 node tools/used-icons.mjs | python3 tools/build_icons.py <game-icons repo>   # rebuild icons
+node tools/build_flora.mjs --duke <dir> --wcvp <dir>   # rebuild content/flora.js from the open data
 ```
 The outcome bands in `test/sim.test.mjs` are deliberately broad. Examples:
 - a full 7-day quinine course cures more than 70% of child malaria;
