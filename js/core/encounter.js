@@ -15,31 +15,41 @@ import { makeRng } from './rng.js';
 import { gather, giveTea } from './homecare.js';
 import { reactsTo } from './disease.js';
 
+// Advice, one thing each, grouped. `for`: who it can apply to (age, sex, pregnancy, a newborn), never the diagnosis, so
+// the list gives nothing away. `days`: how long it is kept (game days; prevention is a habit that lasts longer). What each
+// does lives with the illness (conditions.js `instr`, `reinfect`, `epi.prevent`) and in disease.js and clinic.js.
+const adult = (p) => p.age >= 13, pregnant = (p) => p.pregnant > 0, newborn = (p) => p.age < 0.25;
 export const INSTRUCTIONS = [
-  { id: 'finish', label: 'Explain the medicine, and to finish every dose even when better', min: 3 },
-  { id: 'hygiene', label: 'Wash hands and bottom, cut nails, wash bedding', min: 2 },
-  { id: 'treat_family', label: 'Treat the whole family; boil or sun clothes and bedding', min: 2 },
-  { id: 'feeding', label: 'Keep feeding and breastfeeding; give drinks often', min: 2 },
-  { id: 'low_salt', label: 'Eat little salt; sleep propped up', min: 2 },
-  { id: 'rest_move', label: 'Keep moving gently; lift with the legs', min: 1 },
-  { id: 'hot_compress', label: 'Hot compresses 20 minutes, 4 times a day; raise the limb', min: 2 },
-  { id: 'dressing', label: 'Keep it covered with a clean cloth, change daily', min: 1, needs: [['cloth', 2]] },
-  { id: 'stop_home', label: 'Stop the tea you have been giving at home', min: 1, only: (p) => p.rx.some((r) => r.home && !r.stopped) },
-  // ——— chronic illness and emergencies (WTND pp.98–105, 127)
-  { id: 'splint', label: 'Splint or bind it firmly; keep it still and raised; do not walk on it', min: 4, needs: [['cloth', 1]] },
-  { id: 'diet', label: 'No sugar or sweets; beans, whole grains, vegetables; lose weight if fat; shoes always', min: 3 },
+  { id: 'finish', group: 'Medicine', label: 'Explain each medicine; take every dose to the end, even when better', min: 3 },
+  { id: 'supporter', group: 'Medicine', label: 'Choose someone at home to keep the tablets and watch every dose', min: 3 },
+  { id: 'stop_home', group: 'Medicine', label: 'Stop the tea you have been giving at home', min: 1, for: (p) => p.rx.some((r) => r.home && !r.stopped) },
+  // IMCI: tell the carer which signs mean "come back at once"; those told come back sooner when it turns bad (clinic.js)
+  { id: 'danger_signs', group: 'When to come back', label: 'Come back at once if worse: cannot drink, breathing fast, very sleepy, a fit, bleeding', min: 2 },
+  { id: 'feeding', group: 'Care at home', label: 'Keep eating and breastfeeding; give drinks often', min: 2 },
+  { id: 'rest_move', group: 'Care at home', label: 'Keep moving gently; lift with the legs', min: 1, for: adult },
+  { id: 'hot_compress', group: 'Care at home', label: 'Hot compresses 20 minutes, 4 times a day; raise the limb', min: 2 },
+  { id: 'dressing', group: 'Care at home', label: 'Keep it covered with a clean cloth, changed daily', min: 1, needs: [['cloth', 2]] },
+  { id: 'splint', group: 'Care at home', label: 'Splint or bind it firmly; keep it still and raised', min: 4, needs: [['cloth', 1]] },
+  { id: 'low_salt', group: 'Care at home', label: 'Eat little salt', min: 2, for: adult },
+  { id: 'diet', group: 'Care at home', label: 'No sugar or sweets; beans, whole grains and vegetables; lose weight if heavy', min: 3, for: adult },
+  { id: 'hygiene', group: 'Prevention', label: 'Wash hands with soap, and the bottom every morning; cut nails short', min: 2 },
+  { id: 'boil_water', group: 'Prevention', label: 'Boil the drinking water', min: 1, days: 60 },
+  { id: 'latrine', group: 'Prevention', label: 'Use a latrine, never the open ground', min: 1, days: 60 },
+  { id: 'shoes', group: 'Prevention', label: 'Wear shoes or sandals outside', min: 1, days: 60 },
+  { id: 'net', group: 'Prevention', label: 'Sleep under a mosquito net, every night', min: 1, days: 60 },
+  { id: 'wash_face', group: 'Prevention', label: 'Wash the children\'s faces with clean water every day', min: 1, days: 60 },
+  { id: 'no_smoke', group: 'Prevention', label: 'Keep away from smoke and dust; cook outside or by an open window', min: 1, days: 60 },
+  { id: 'treat_family', group: 'Family', label: 'Treat the whole family at once; boil or sun the clothes and bedding', min: 2 },
+  // ——— infections (WTND p.239)
+  { id: 'treat_partner', group: 'Family', label: 'Bring your partner for the same medicine; no sex until both are cured', min: 2, for: adult },
   // ——— childbirth and the newborn (WTND pp.254, 262–263, 266, 274, 405). `atBirth`: medicine she takes home and
   // takes herself as soon as the baby is born (disease.js), as community misoprostol programmes do.
-  { id: 'clean_birth', label: 'For the birth: washed hands, a new razor blade, tie and cut the cord short, keep it dry and open', min: 3 },
-  { id: 'miso_at_birth', label: 'Take the 3 misoprostol tablets as soon as the baby is born (never before)', min: 2, needs: [['miso_200', 3]], atBirth: { item: 'miso_200', amount: 3 } },
-  { id: 'sunlight', label: 'Feed the baby often; lay him undressed in bright light by a window (not in the sun)', min: 2 },
-  { id: 'kangaroo', label: 'Carry the baby skin to skin inside your clothes, day and night; breastfeed every 2 hours', min: 3 },
-  // ——— infections (WTND p.239)
-  { id: 'treat_partner', label: 'Bring your partner for the same medicine; no sex until both are cured', min: 2 },
-  // directly observed treatment: missed doses and stopping early fall (WHO TB programmes; Volmink J, Garner P. Cochrane
-  // 2007;CD003343 found DOT itself adds little over a well-supported self-run course, so the effect is modest: estimates)
-  { id: 'supporter', label: 'Choose someone at home to keep the tablets and watch every dose', min: 3 },
+  { id: 'clean_birth', group: 'Birth and the baby', label: 'For the birth: washed hands, a new razor blade, tie and cut the cord short, keep it dry', min: 3, for: pregnant },
+  { id: 'miso_at_birth', group: 'Birth and the baby', label: 'Take the 3 misoprostol tablets as soon as the baby is born (never before)', min: 2, needs: [['miso_200', 3]], atBirth: { item: 'miso_200', amount: 3 }, for: pregnant },
+  { id: 'sunlight', group: 'Birth and the baby', label: 'Feed the baby often; lay it undressed in bright light by a window (not in the sun)', min: 2, for: newborn },
+  { id: 'kangaroo', group: 'Birth and the baby', label: 'Carry the baby skin to skin inside your clothes; breastfeed every 2 hours', min: 3, for: newborn },
 ];
+export const adviceFor = (p) => INSTRUCTIONS.filter((x) => !x.for || x.for(p));
 export const PROCEDURES = [
   { id: 'clean', label: 'Clean the wound with soap and boiled water, remove dirt', min: 12, needs: [['soap', 1], ['cloth', 1]], station: 'hearth',
     applies: (p) => p.conds.some((c) => c.id.startsWith('wound') || c.id === 'burn_minor') },
@@ -76,21 +86,31 @@ export function ask(G, enc, qid) {
   const q = QUESTIONS.find((x) => x.id === qid);
   G.meta.time += q.min;
   const F = signs(p, G.W.time, toolsAt(G));
-  const parts = [];
-  for (const k of q.reveals) {
+  const said = new Set(p.visits.length ? [] : p.says || []);
+  const pos = [], neg = [];
+  for (const k of qid === 'q_story' ? storyOf(p, F) : q.reveals) {
     const f = F[k];
     if (!f || f.v === '—') continue;
-    // small children cannot say; parents miss things sometimes
-    const missed = f.pos && makeRng(p.seed, 'miss', k, Math.floor(G.W.time / DAY))() < (p.age < 3 ? 0.15 : 0.07);
-    if (missed) { parts.push(['I have not noticed.', false]); continue; }
-    parts.push([f.v, f.pos]);
+    // small children cannot say; parents miss things sometimes — but not what they came about
+    const missed = f.pos && !said.has(k) && makeRng(p.seed, 'miss', k, Math.floor(G.W.time / DAY))() < (p.age < 3 ? 0.15 : 0.07);
+    if (missed) { neg.unshift('I have not noticed.'); continue; }
     enc.found[k] = f;
+    (f.pos || q.all ? pos : neg).push(f.v);
   }
-  const text = parts.length ? parts.map((x) => x[0]).filter((v, i, a) => a.indexOf(v) === i).join(' ') : 'No, nothing like that.';
+  const text = pos.length ? [...new Set(pos)].join(' ') : neg[0] || 'No, nothing like that.';
   enc.log.push({ who: 'You', text: q.label });
   enc.log.push({ who: speaker(p), text });
   enc.done.add(qid);
   return text;
+}
+// every finding a question can ask about (history, not examination)
+const HISTORY_KEYS = new Set(QUESTIONS.flatMap((q) => q.reveals));
+/** The open question: the main illness as they tell it — what they came about, then what else it gives them that they
+ * would mention unprompted (its strongest history findings), and how long. */
+function storyOf(p, F) {
+  const w = (k) => POINTS[k]?.[p.mainCond] || 0;
+  const more = [...HISTORY_KEYS].filter((k) => F[k]?.pos && w(k) > 0 && !p.says?.includes(k)).sort((a, b) => w(b) - w(a)).slice(0, 2);
+  return [...(p.visits.length ? ['better'] : p.says || []), ...more, 'duration'];
 }
 
 /** Examine. Returns { ok, text } (needs the right tool). */
@@ -253,7 +273,7 @@ export function finishEncounter(G, enc) {
   for (const id of enc.instr) {
     if (id === 'finish' || id === 'stop_home') continue;
     const ins = INSTRUCTIONS.find((x) => x.id === id);
-    const line = { instr: id, name: ins.label, start: now, until: now + 21 * DAY };
+    const line = { instr: id, name: ins.label, start: now, until: now + (ins.days ?? 21) * DAY };
     if (ins.needs) for (const [nid, n] of ins.needs) if (stockOf(G, nid) >= n) {
       const { q } = dispense(G, nid, n);
       if (ins.atBirth?.item === nid) { const it = C.items.get(nid); line.atBirth = { item: nid, name: it.name, amount: ins.atBirth.amount, left: ins.atBirth.amount, actives: it.actives, q }; charges += n * it.price; }
@@ -274,7 +294,7 @@ export function finishEncounter(G, enc) {
   const pay = payment(G, p, charges);
   collect(G, p, pay);
   const judged = judge(G, p, enc);
-  p.visits.push({ t: now, dx: enc.dx, rx: enc.rx.map((r) => `${r.name} ${r.amount}${C.items.get(r.item).unit || ''} ×${r.perDay}/day ×${r.days}d`), instr: [...enc.instr], refer: enc.refer, paid: pay.cash, judged });
+  p.visits.push({ t: now, burden: p.conds.reduce((a, c) => a + (c.s || 0), 0), dx: enc.dx, rx: enc.rx.map((r) => `${r.name} ${r.amount}${C.items.get(r.item).unit || ''} ×${r.perDay}/day ×${r.days}d`), instr: [...enc.instr], refer: enc.refer, paid: pay.cash, judged });
   p.trust = Math.min(1, p.trust + 0.1 + (counselled ? 0.05 : 0));
   p.leftBurden = p.conds.reduce((a, c) => a + (c.s || 0), 0);
   p.returnWhy = null;

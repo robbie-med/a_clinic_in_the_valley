@@ -5,6 +5,7 @@ import { expand } from './lore.js';
 import { COND, CONDITIONS } from './content/conditions.js';
 import { ACTIVES } from './content/actives.js';
 import { addCondition } from './disease.js';
+import { signs } from './signs.js';
 
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -47,6 +48,7 @@ export function conditionWeight(def, person, season, hamlet) {
     w *= band ? band[2] : 0;
   }
   if (person.pregnant && E.pregnant) w *= E.pregnant;
+  for (const [a, by] of Object.entries(E.prevent || {})) if (person.advice?.[a]) w *= 1 - by;
   if (hamlet) {
     if (E.mosquito) w *= lerp(1, E.mosquito, hamlet.mosquito ?? 0.5) / ((E.mosquito + 1) / 2);
     if (E.water) w *= lerp(1, E.water, hamlet.water ?? 0.5) / ((E.water + 1) / 2);
@@ -65,7 +67,14 @@ export function makePatient({ seed, key, t, season, hamlet, cond: forceCond, age
   const rng = makeRng(seed, 'patient', key);
   let person, condId, tries = 0;
   do {
-    if (who && !tries) { person = { sex: who.sex, age: who.age, pregnant: who.pregnant, pp: who.pp }; const ws = CONDITIONS.map((c) => [c.id, conditionWeight(c, person, season, hamlet)]).filter(([, w]) => w > 0); if (ws.length) { condId = weighted(ws, rng()); break; } tries++; }
+    if (who && !tries) {
+      person = { sex: who.sex, age: who.age, pregnant: who.pregnant, pp: who.pp, advice: who.advice };
+      const ws = CONDITIONS.map((c) => [c.id, conditionWeight(c, person, season, hamlet)]).filter(([, w]) => w > 0);
+      // what their advice prevents, they do not catch: they stay well and someone else comes
+      const sum = (l) => l.reduce((a, [, w]) => a + w, 0), all = sum(CONDITIONS.map((c) => [c.id, conditionWeight(c, { ...person, advice: null }, season, hamlet)]));
+      if (ws.length && makeRng(seed, 'prevent', key)() < sum(ws) / all) { condId = weighted(ws, rng()); break; }
+      tries++;
+    }
     const sex = forceSex || (rng() < 0.52 ? 'f' : 'm');
     const band = weighted(PYRAMID.map((b) => [b, b[2]]), rng());
     const age = forceAge ?? lerp(band[0], band[1], rng());
@@ -93,7 +102,7 @@ export function makePatient({ seed, key, t, season, hamlet, cond: forceCond, age
   // each drug draws from its own stream, so adding a drug to the game never reshuffles who walks in
   for (const a of ACTIVES) if (a.pk) { const r = makeRng(seed, 'pkv', key, a.id); pkv[a.id] = [Math.exp(gauss(r) * a.pk.spread), Math.exp(gauss(r) * a.pk.spread * 0.6)]; }
   const wealth = clamp((hamlet?.wealth ?? 0.5) + (rng() - 0.5) * 0.5, 0.02, 1);
-  const p = {
+  let p = {
     id: 'p' + key, key, seed: (seed ^ hashKey(key)) >>> 0,
     name: who?.name || personName(rng, sex), sex, age: Math.round(age * 10) / 10, weight, nutrition, hb, pregnant,
     hamlet: hamlet?.id || null, wealth, adh: clamp(lerp(0.6, 0.95, rng()) + (age < 12 ? 0.03 : 0), 0.4, 0.98), trust: 0.5,
@@ -104,16 +113,49 @@ export function makePatient({ seed, key, t, season, hamlet, cond: forceCond, age
   if (who) Object.assign(p, { who: who.id, mother: who.mother, bf: who.bf, marks: who.marks, vacc: who.vacc, fpUntil: who.fpUntil });
   if (person.pp != null) p.delivered = t - person.pp * 24 * 60; // when she gave birth (game minutes)
   p.immMalaria = clamp((0.1 + (age - 0.5) / 13) * (pregnant ? 0.7 : 1) * lerp(0.6, 1.2, hamlet?.mosquito ?? 0.5) * lerp(0.35, 1.45, rng()), 0.08, 0.85);
-  const def = COND.get(condId);
-  const sinceH = def.params.since ? Math.round(lerp(def.params.since[0], def.params.since[1], rng()))
-    : def.model === 'pain' || def.model === 'scabies' || def.model === 'worms' || def.model === 'heart' ? Math.round(lerp(72, 400, rng()))
-    : def.model === 'wound' || def.model === 'burn' ? Math.round(lerp(def.id === 'wound_infected' ? 60 : 2, def.id === 'wound_infected' ? 140 : 30, rng()))
-      : Math.round(lerp(12, 72, rng()));
-  addCondition(p, condId, makeRng(seed, 'cond', key), sinceH, resist);
-  p.mainCond = condId;
-  p.since = sinceH;
-  p.complaint = complaintText(p, def, rng);
+  // People come when they feel ill: draw how long they have had it until what they would say is true now (a
+  // semi-immune adult carrying silent parasites does not walk in with a fever). If this illness would not bring them
+  // today, they come with another that would; a forced illness (tests) keeps its best try.
+  const base = structuredClone(p);
+  const pick = (id) => {
+    const def = COND.get(id);
+    let best = null;
+    for (let k = 0; k < 8; k++) {
+      const q = structuredClone(base);
+      const sinceH = sinceFor(def, k ? makeRng(seed, 'since', key, id, k) : rng);
+      addCondition(q, id, makeRng(seed, 'cond', key), sinceH, resist);
+      const F = signs(q, t);
+      const said = def.complaint.map((c) => ({ t: c.t, says: c.says.filter((x) => F[x]?.pos), all: c.says.every((x) => F[x]?.pos) }));
+      const ok = said.filter((c) => c.all);
+      if (ok.length) return { q, sinceH, def, list: ok };
+      best ||= { q, sinceH, def, list: said, partial: true };
+    }
+    return best;
+  };
+  let got = pick(condId);
+  if (got.partial && !forceCond) {
+    const ws = CONDITIONS.map((c) => [c.id, c.id === condId ? 0 : conditionWeight(c, person, season, hamlet)]).filter(([, w]) => w > 0);
+    for (let k = 0; k < 4 && ws.length && got.partial; k++) {
+      const id = weighted(ws, makeRng(seed, 'repick', key, k)());
+      const g = pick(id);
+      if (!g.partial) got = g; else ws.splice(ws.findIndex(([x]) => x === id), 1);
+    }
+  }
+  p = got.q;
+  p.mainCond = got.def.id;
+  p.since = got.sinceH;
+  const said = pickBy(got.list, rng());
+  p.complaint = complaintText(p, said.t);
+  p.says = said.says; // what the opening complaint claims (finding keys): never "not noticed" on this visit
   return p;
+}
+
+/** Hours they have been ill when they come (conditions.js params.since, or by the kind of illness). */
+function sinceFor(def, rng) {
+  if (def.params.since) return Math.round(lerp(def.params.since[0], def.params.since[1], rng()));
+  if (['pain', 'scabies', 'worms', 'heart'].includes(def.model)) return Math.round(lerp(72, 400, rng()));
+  if (def.model === 'wound' || def.model === 'burn') return Math.round(lerp(def.id === 'wound_infected' ? 60 : 2, def.id === 'wound_infected' ? 140 : 30, rng()));
+  return Math.round(lerp(12, 72, rng()));
 }
 
 const gauss = (rng) => Math.sqrt(-2 * Math.log(Math.max(1e-9, rng()))) * Math.cos(2 * Math.PI * rng());
@@ -132,16 +174,17 @@ export function sinceWords(h) {
 
 export function agoWords(h) { if (h < 10) return 'this morning'; const d = Math.round(h / 24); if (h < 30 || d < 2) return 'yesterday'; return d < 8 ? ['', '', 'two', 'three', 'four', 'five', 'six', 'seven'][d] + ' days ago' : 'weeks ago'; }
 
-/** What the patient (or the parent) says first. */
-export function complaintText(p, def, rng) {
+/** What the patient (or the parent) says first, from a complaint template. */
+export function complaintText(p, template) {
   const child = p.age < 13;
   const kid = p.sex === 'f' ? 'my daughter' : 'my son';
   const vars = {
     who: child ? cap(kid) : 'I', pron: child ? (p.sex === 'f' ? 'she' : 'he') : 'I', poss: child ? (p.sex === 'f' ? 'her' : 'his') : 'my',
     refl: child ? (p.sex === 'f' ? 'herself' : 'himself') : 'myself', when: sinceWords(p.since), ago: agoWords(p.since),
   };
-  let s = pickBy(def.complaint, rng()).replace(/\{(\w+)\}/g, (_, k) => vars[k]);
-  if (!child) s = s.replace(/\bI has\b/g, 'I have').replace(/\bI is\b/g, 'I am').replace(/\bI itches\b/g, 'I itch').replace(/\bI scratches\b/g, 'I scratch').replace(/\bI passed\b/g, 'I passed').replace(/\bI was\b/g, 'I was').replace(/\bI cut myself\b/, 'I cut myself').replace(/\bI fell\b/, 'I fell');
+  let s = template.replace(/\{(\w+)\}/g, (_, k) => vars[k]);
+  const firstPerson = { has: 'have', is: 'am', itches: 'itch', scratches: 'scratch', falls: 'fall', coughs: 'cough', gets: 'get', fights: 'fight', vomits: 'vomit', limps: 'limp' };
+  if (!child) s = s.replace(/\bI (\w+)\b/g, (m, v) => (firstPerson[v] ? 'I ' + firstPerson[v] : m));
   return cap(s).replace(/([.!?] )([a-z])/g, (_, a, c) => a + c.toUpperCase());
 }
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);

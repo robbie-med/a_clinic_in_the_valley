@@ -63,7 +63,7 @@ export function bodySVG(p, found, woundSite) {
     pins.push(`<g class="pin" data-region="${reg}"><circle cx="${x}" cy="${y}" r="9" /><text x="${x}" y="${y + 4}">${ks.length}</text></g>`);
   }
   const wound = woundSite ? `<g ${r('wound')}><ellipse cx="${at.wound[0]}" cy="${at.wound[1]}" rx="11" ry="8" fill="#b03030" stroke="#3a0a0a" stroke-width="2"/></g>` : '';
-  const rash = found.burrows?.pos || found.itch_night?.pos ? `<g class="rash" pointer-events="none">${[0, 1, 2, 3, 4, 5].map((i) => `<circle cx="${cx - shoulder - 6 + (i % 3) * 5}" cy="${tY + armL + 2 + Math.floor(i / 3) * 6}" r="1.8" fill="#d04040"/>`).join('')}</g>` : '';
+  const rash = found.burrows?.pos || found.itch?.pos ? `<g class="rash" pointer-events="none">${[0, 1, 2, 3, 4, 5].map((i) => `<circle cx="${cx - shoulder - 6 + (i % 3) * 5}" cy="${tY + armL + 2 + Math.floor(i / 3) * 6}" r="1.8" fill="#d04040"/>`).join('')}</g>` : '';
   const swell = found.edema?.pos ? `<g pointer-events="none"><ellipse cx="${cx - hip / 2}" cy="${bY + legL - 8}" rx="15" ry="10" fill="${skin}" opacity="0.9"/><ellipse cx="${cx + hip / 2}" cy="${bY + legL - 8}" rx="15" ry="10" fill="${skin}" opacity="0.9"/></g>` : '';
   const lw = infant ? 20 : child ? 22 : 26;                  // limb thickness
   const elbowY = tY + armL * 0.5, wristY = tY + armL - 6;

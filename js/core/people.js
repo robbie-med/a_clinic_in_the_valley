@@ -281,7 +281,8 @@ export function drawResident(G, hamletId, key) {
 export function personNow(G, q, t) {
   const d = t / DAY + 1;
   return { id: q.id, sex: q.sex, age: (d - q.born) / YEAR_DAYS, pregnant: q.conc != null ? weeksOf(q, d) : 0, name: personName(makeRng(G.meta.seed, 'name', q.id), q.sex), bw: q.bw, mother: q.mother, bf: q.bf, marks: q.marks,
-    pp: q.lastBirth != null ? Math.max(0, (d - q.lastBirth) * COMPRESS) : null, vacc: q.vacc, fpUntil: q.fpUntil };
+    pp: q.lastBirth != null ? Math.max(0, (d - q.lastBirth) * COMPRESS) : null, vacc: q.vacc, fpUntil: q.fpUntil,
+    advice: q.advice && Object.fromEntries(Object.entries(q.advice).filter(([, until]) => until > t)) };
 }
 /** The clinic now holds this person's body (their patient record runs it, hour by hour). */
 export function hold(G, p) {
@@ -302,5 +303,8 @@ export function patientEvents(G, p, ev) {
     if (e.kind === 'birth' || e.kind === 'stillbirth') q.lastBirth = d;
   }
   if (p.vacc || p.fpUntil) { q.vacc = p.vacc; q.fpUntil = p.fpUntil; touch(P, q); }
+  // advice they took home (a net, boiled water): kept until it lapses, it lowers what they catch next (patient.js)
+  const adv = (p.rx || []).filter((r) => r.instr && !r.stopped);
+  if (adv.length) { q.advice = { ...q.advice, ...Object.fromEntries(adv.map((r) => [r.instr, r.until])) }; touch(P, q); }
   if (q.held && p.recovered && !p.pregnant) { q.held = null; endPregnancy(q); touch(P, q); }
 }
