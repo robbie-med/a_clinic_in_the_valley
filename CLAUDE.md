@@ -27,8 +27,12 @@ independent.
 - Bacterial (and parasite) strains come from `content/organisms.js` and the valley's resistance
   index (`clinic.js`). Antibiotics act only through MIC there, never by naming an illness.
 - Harms are data on the active, not code: `toxic` (`at` mg/L, or `atMgKg` swallowed in 24 h; `dry` = only when
-  dehydrated), `idio` (rare reactions per course), `dependence`, `allergen`. Complications are data on the condition:
-  `ascend` (spreads to the next organ, keeping its strain) and `sequel` (decided when its window closes).
+  dehydrated), `idio` (rare reactions per course), `dependence` (with `harm` if stopping can kill), `allergen`,
+  `reacts` (share of anyone who reacts, allergic or not: horse serum). Complications are data on the condition:
+  `ascend` (spreads to the next organ, keeping its strain), `sequel` (decided when its window closes) and, on the
+  `chronic` model, `risk` (per game year, rising with the level: high blood pressure → stroke).
+- Slow processes (months, years) run `COMPRESS` (time.js) times faster than illness: divide real-time `tau`s and
+  recovery times by it in the condition data and say so; attacks, fits, bites and PK stay in real hours.
 - `abxAs` lets an active share another's MIC (benzylpenicillin uses penicillin V's); an organism's `link` makes one
   drug's resistance draw follow another's (MRSA resists ceftriaxone too).
 - New game-icon name: rebuild icons (`node tools/used-icons.mjs | python3 tools/build_icons.py <game-icons repo>`;

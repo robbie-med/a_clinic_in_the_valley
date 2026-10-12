@@ -398,7 +398,7 @@ export const CONDITIONS = [
     // Weeks, not years: real time. ~30–40% heal by themselves in a month (self), omeprazole ~80–90% (G&G ch.49); NSAIDs
     // and steroids make them worse and bleed (gi_harm). hazard: bleeding to death, ~0.1–0.4% a year in active ulcers
     // (estimate), several times that on aspirin.
-    params: { since: [200, 1500], level: [0.4, 1], self: [0.3, 0.9], by: ['acid'], worse: 'gi_harm', tau: 10, full: 1, heal: 0.15, hazard: 2e-6 },
+    params: { since: [24, 120], level: [0.4, 1], self: [0.35, 0.95], by: ['acid'], worse: 'gi_harm', tau: 8, full: 1, heal: 0.15, hazard: 2e-6 },
     complaint: ['A burning pain in the pit of my stomach {when}, worse at night and when I am hungry.', 'My stomach burns after I eat {when}. Food and water calm it.'],
     teach: { treat: ['omeprazole', 'antacid'], helps: ['amoxicillin', 'metronidazole'], harms: ['aspirin', 'ibuprofen', 'prednisolone'], refer: 'Vomiting blood or coffee grounds, black tarry stools, or a hard very painful belly: refer at once.' },
     learn: 'A burning pain in the pit of the stomach or chest, often eased by food or water, worse when hungry, at night, after alcohol, coffee, spicy or fatty food. Small frequent meals, much water, no tobacco. Antacids (aluminium and magnesium hydroxide) calm it; omeprazole heals the sore, with two antibiotics against the germ that causes most ulcers. Aspirin and ibuprofen make ulcers worse: use paracetamol.',

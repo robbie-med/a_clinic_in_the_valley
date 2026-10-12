@@ -103,6 +103,19 @@ compound, with sources.
 
   Where the evidence says a warning in the book is outdated, nothing happens: doxycycline in short courses does
   not stain children's teeth, and metronidazole with alcohol gave no reaction in trials.
+- **Chronic illness and emergencies** (WTND chapters 10, 11, 13, 22; four more models in `disease.js`: `chronic`,
+  `asthma`, `fits`, `venom`):
+  - asthma attacks (salbutamol, prednisolone, adrenaline); epilepsy and fever fits (phenobarbital every night,
+    diazepam into the anus for a fit that will not stop);
+  - high blood pressure on the cuff (amlodipine, hydrochlorothiazide, less salt) that brings stroke and heart failure
+    over the years; stroke itself; diabetes (diet, the urine taste test) with foot sores; goitre (iodized oil);
+    stomach ulcer (antacid, omeprazole; aspirin makes it bleed);
+  - severe malnutrition, dry and wet (therapeutic food, feeding often), and anaemia from too little iron or folate;
+  - snakebite and scorpion sting (horse-serum antivenom: a third react, a few with shock), kerosene swallowed,
+    broken bones, sprains and arthritis.
+
+  Months and years run 9 times faster than illness (time.js `COMPRESS`): a game year of high blood pressure carries
+  a real year's stroke risk, and a child on therapeutic food recovers in about a game week.
 - **Hindsight**: the ledger shows what it really was, what helped and what harmed, once the
   patient recovers or dies.
 

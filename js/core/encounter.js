@@ -178,7 +178,7 @@ export function injectNow(G, enc, itemId, amount) {
   const boiled = G.stations.has('hearth'), rectal = !!it.inj?.rectal; // a solution squirted into the anus (diazepam) leaves no abscess
   if (!rectal && makeRng(p.seed, 'abscess', now)() < (boiled ? 0.001 : 0.02)) (p.pending ||= []).push({ id: 'wound_infected', t: now + 48 * HOUR });
   if (!boiled && !rectal) p.flags.dirtyNeedle = now; // for blood-borne infections later (hepatitis B)
-  let text = rectal ? `Gave ${it.name.toLowerCase()} into the anus with a syringe without a needle.` : `Injected ${it.name.toLowerCase()}.`;
+  let text = rectal ? `Gave ${it.name.toLowerCase()} with a syringe without a needle.` : `Injected ${it.name.toLowerCase()}.`;
   const al = Object.keys(it.actives || {}).find((id) => reactsTo(p, id, itemId, now));
   // same draw as disease.js, so what you see now is what the body does
   if (al) text += makeRng(p.seed, 'ana', itemId, now, 0)() < 0.1 ? ' Within minutes: cold grey sweat, a weak fast pulse, wheezing, the lips swelling — allergic shock!' : ' Soon itchy welts rise on the skin.';
