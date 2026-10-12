@@ -283,7 +283,8 @@ export const CONDITIONS = [
   {
     id: 'tb', name: 'Tuberculosis of the lungs', local: ['the long cough', 'consumption'], model: 'mycobacterial',
     epi: { w: 1.4, age: [[0, 5, 0.3], [5, 15, 0.4], [15, 35, 1.6], [35, 60, 1.3], [60, 99, 1]], sex: { m: 1.5, f: 1 }, season: { cool_dry: 1.1, hot_dry: 1, rains: 1, late_rains: 1 }, crowd: 1.5 },
-    // ~10^9 bacilli in a lung cavity, doubling in ~22 h (r log10/h); 1 in 100 semi-dormant (sleep/wake per hour).
+    // ~10^9 bacilli in a lung cavity; ~22 h doubling at best in a dish, ~3 days in the lung (r log10/h, estimate); 1 in 100
+    // semi-dormant (sleep/wake per hour).
     // Untreated smear-positive TB kills ~70% within 10 years, most in the first 3 (Tiemersma EW et al. PLoS One 2011;
     // 6:e17601): ~20% a year; hazard calibrated to that. Walks in after 4–12 weeks of cough.
     params: { org: 'm_tuberculosis', pace: COMPRESS, since: [28 * 24 / COMPRESS, 84 * 24 / COMPRESS], A0: [8, 9.5], r: 0.004, Asym: 6, Amax: 9.5, imm: 0.002,
