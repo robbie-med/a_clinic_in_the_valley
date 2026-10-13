@@ -15,6 +15,9 @@ import { makeRng, hashf } from './rng.js';
 import { COMPRESS } from './time.js';
 import { pregnancyHour, newbornHazard } from './people.js';
 import { YEAR_DAYS } from './time.js';
+import { msg, en } from './i18n.js';
+
+const withEn = (m, text) => ({ ...m, en: text }); // a msg with its exact English (patient.js say())
 
 export const HOUR = 60;
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -706,7 +709,8 @@ function dosesDue(rx, t0, t1) {
   return out;
 }
 
-/** Advance a patient from p.t to toT (game minutes). Returns events [{t, kind, text}]. */
+/** Advance a patient from p.t to toT (game minutes). Returns events [{t, kind, text, msg}]: `text` is English, `msg` the
+ *  same to render in any language (say()/tm()). */
 export function simulate(p, toT, C) {
   const ev = [];
   if (p.dead) { p.t = toT; return ev; }
@@ -735,11 +739,11 @@ export function simulate(p, toT, C) {
       }
       const c = addCondition(p, q.id, rng, 0);
       if (q.mic) { c.org = q.org; c.mic = { ...q.mic }; }
-      ev.push({ t: q.t, kind: 'onset', id: q.id, text: `${COND.get(q.id).name} began` });
+      ev.push({ t: q.t, kind: 'onset', id: q.id, text: `${en(COND.get(q.id), 'name')} began`, msg: msg('{cond} began', { cond: en(COND.get(q.id), 'name') }) });
     }
     for (const rx of p.rx || []) {
       for (const [td, k] of dosesDue(rx, t0, t1)) {
-        if (rx.left <= 0) { if (!rx.ranOut) { rx.ranOut = true; ev.push({ t: td, kind: 'ranout', text: `ran out of ${rx.name}` }); } continue; }
+        if (rx.left <= 0) { if (!rx.ranOut) { rx.ranOut = true; ev.push({ t: td, kind: 'ranout', text: `ran out of ${rx.name}`, msg: msg('ran out of {item}', { item: rx.name }) }); } continue; }
         // an injection is given by your hand, so it is never missed
         if (rx.route !== 'inj' && makeRng(p.seed, 'dose', rx.item, rx.start, k)() > takeChance(p, rx, instr)) { rx.missed = (rx.missed || 0) + 1; continue; }
         const amt = Math.min(rx.amount, rx.left);
@@ -751,17 +755,21 @@ export function simulate(p, toT, C) {
         // Most stop a medicine they take at home.
         const al = Object.keys(rx.actives || {}).find((id) => reactsTo(p, id, rx.item, rx.start));
         if (al) {
-          if (!p.toxSeen.allergy) { p.toxSeen.allergy = td; ev.push({ t: td, kind: 'tox', text: `an itchy raised rash and swollen lips (allergic to ${ACTIVE.get(al).name.toLowerCase()})`, active: al }); }
+          if (!p.toxSeen.allergy) {
+            p.toxSeen.allergy = td;
+            const drug = en(ACTIVE.get(al), 'name'), text = `an itchy raised rash and swollen lips (allergic to ${drug.toLowerCase()})`;
+            ev.push({ t: td, kind: 'tox', text, msg: withEn(msg('an itchy raised rash and swollen lips (allergic to {drug})', { drug }), text), active: al });
+          }
           p.allergicUntil = td + 48 * HOUR;
-          if (makeRng(p.seed, 'ana', rx.item, rx.start, k)() < (rx.route === 'inj' ? 0.1 : 0.01)) { p.ana = td; p.anaTo = al; ev.push({ t: td, kind: 'tox', text: 'the throat swells, wheezing, faint and cold (anaphylaxis)', active: al }); }
-          if (rx.route !== 'inj' && rng() < 0.6) { rx.stopped = td; rx.stopWhy = 'rash'; ev.push({ t: td, kind: 'stopped', text: `stopped ${rx.name} (the rash)` }); }
+          if (makeRng(p.seed, 'ana', rx.item, rx.start, k)() < (rx.route === 'inj' ? 0.1 : 0.01)) { p.ana = td; p.anaTo = al; ev.push({ t: td, kind: 'tox', text: 'the throat swells, wheezing, faint and cold (anaphylaxis)', msg: msg('the throat swells, wheezing, faint and cold (anaphylaxis)'), active: al }); }
+          if (rx.route !== 'inj' && rng() < 0.6) { rx.stopped = td; rx.stopWhy = 'rash'; ev.push({ t: td, kind: 'stopped', text: `stopped ${rx.name} (the rash)`, msg: msg('stopped {item} (the rash)', { item: rx.name }) }); }
         }
         if (rx.fluid) { fluidIn += amt / 1000; naLoad += (amt / 1000) * rx.fluid.na; }
       }
       // stop when better: the classic way a course is cut short
       // someone who watches every dose (a treatment supporter, as TB programmes use) makes stopping far rarer
       if (!rx.instr && !rx.stopped && p.feelBetter && !rx.fluid && rng() < (rx.counselled ? 0.0015 : 0.008) * (instr.has('supporter') ? 0.1 : 1)) {
-        rx.stopped = t0; rx.stopWhy = 'better'; ev.push({ t: t0, kind: 'stopped', text: `stopped ${rx.name} (felt better)` });
+        rx.stopped = t0; rx.stopWhy = 'better'; ev.push({ t: t0, kind: 'stopped', text: `stopped ${rx.name} (felt better)`, msg: msg('stopped {item} (felt better)', { item: rx.name }) });
       }
     }
     const ds = drugState(p, t1);
@@ -786,7 +794,7 @@ export function simulate(p, toT, C) {
         if (def.params.sequel) (p.pending ||= []).push({ roll: c.id, t: Math.max(t1, c.t0 + def.params.sequel.within * HOUR), abxH: c.abxH || 0, org: c.org, mic: c.mic });
         p.conds.splice(p.conds.indexOf(c), 1);
         p.healed.push({ id: c.id, t: t1 });
-        ev.push({ t: t1, kind: 'healed', id: c.id, text: `${def.name} is gone` });
+        ev.push({ t: t1, kind: 'healed', id: c.id, text: `${en(def, 'name')} is gone`, msg: msg('{cond} is gone', { cond: en(def, 'name') }) });
       }
     }
     // water: the sick drink some on their own; the rehydration drink does the real work
@@ -803,7 +811,7 @@ export function simulate(p, toT, C) {
     dependence(p, ds, tox);
     for (const s of tox) {
       hazard += s.harm * 0.01;
-      if (!p.toxSeen[s.sign]) { p.toxSeen[s.sign] = t1; ev.push({ t: t1, kind: 'tox', text: s.text, active: s.active }); }
+      if (!p.toxSeen[s.sign]) { p.toxSeen[s.sign] = t1; ev.push({ t: t1, kind: 'tox', text: en(s, 'text'), msg: en(s, 'text'), active: s.active }); } // content text: tm() looks it up
     }
     if (ds.conc.quinine > 5 && (p.age < 5 || p.pregnant) && rng() < 0.004) { hazard += 0.01; p.toxSeen.lowsugar ||= t1; }
     p.lastTox = tox.map((s) => s.sign);
@@ -813,8 +821,9 @@ export function simulate(p, toT, C) {
     p.feelBetter = burden < p.burden0 * 0.35;
     if (rng() < hazard) {
       p.dead = true; p.diedAt = t1;
-      p.cause = causeOfDeath(p, tox, d);
-      ev.push({ t: t1, kind: 'died', text: `died (${p.cause})` });
+      p.causeMsg = causeOfDeath(p, tox, d); // shown: say(p.causeMsg ?? p.cause)
+      p.cause = p.causeMsg.en; // English, a fixed phrase (tests and logic read it)
+      ev.push({ t: t1, kind: 'died', text: `died (${p.cause})`, msg: withEn(msg('died ({cause})', { cause: p.causeMsg }), `died (${p.cause})`) });
     }
     p.t = t1;
   }
@@ -838,7 +847,7 @@ function dependence(p, ds, tox) {
     if (!v && C < D.ec) continue;
     v = clamp(v + (C >= D.ec ? 1 : -0.5) / (D.days * 24), 0, 1);
     (p.dep ||= {})[a.id] = v;
-    if (v > 0.5 && C < D.ec * 0.3) tox.push({ active: a.id, sign: D.sign, text: D.text, harm: D.harm || 0 });
+    if (v > 0.5 && C < D.ec * 0.3) tox.push({ active: a.id, sign: D.sign, text: en(D, 'text'), harm: D.harm || 0 });
   }
 }
 /** Rare reactions that do not depend on the dose (a blistering rash from a sulfa, Reye syndrome after aspirin in a
@@ -848,7 +857,7 @@ function idiosyncrasy(p, rx, td) {
     if (r.ageMax && p.age >= r.ageMax) continue;
     if (r.withModel && !p.conds.some((c) => COND.get(c.id).model === r.withModel)) continue;
     const g = makeRng(p.seed, 'idio', id, rx.start);
-    if (g() < r.per) (p.react ||= []).push({ active: id, sign: r.sign, text: r.text, harm: r.harm, t: td + lerp(r.days[0], r.days[1], g()) * 24 * HOUR, hours: r.hours });
+    if (g() < r.per) (p.react ||= []).push({ active: id, sign: r.sign, text: en(r, 'text'), harm: r.harm, t: td + lerp(r.days[0], r.days[1], g()) * 24 * HOUR, hours: r.hours });
   }
 }
 function takeChance(p, rx, instr) {
@@ -889,13 +898,22 @@ function applyDose(p, rx, amt, td, topical, wormKills) {
 }
 function trimDoses(list, t) { while (list.length > 2 && t - list[0][0] > 40 * 24 * HOUR) list.shift(); }
 
+/** Why they died: a msg (looked up at display) with `en`, the English phrase kept in p.cause. */
 function causeOfDeath(p, tox, d) {
-  if (p.ana !== undefined && p.t - p.ana < 2 * HOUR) return 'anaphylaxis (allergic to ' + (ACTIVE.get(p.anaTo)?.name.toLowerCase() || p.allergy) + ')';
-  if (tox.some((s) => s.harm >= 0.2)) return 'poisoned by ' + ACTIVE.get(tox.find((s) => s.harm >= 0.2).active).name.split(' (')[0].toLowerCase();
-  if (d > 0.1) return 'dehydration';
-  if (p.killer?.t === p.t + HOUR && p.killer.h > 0 && COND.has(p.killer.id)) return COND.get(p.killer.id).name.toLowerCase();
+  const said = (m, text) => ({ ...(typeof m === 'string' ? { $: m } : m), en: text });
+  const condName = (id) => en(COND.get(id), 'name');
+  if (p.ana !== undefined && p.t - p.ana < 2 * HOUR) {
+    const a = ACTIVE.get(p.anaTo), drug = a ? en(a, 'name') : p.allergy;
+    return said(msg('anaphylaxis (allergic to {drug})', { drug }), 'anaphylaxis (allergic to ' + (a ? drug.toLowerCase() : p.allergy) + ')');
+  }
+  if (tox.some((s) => s.harm >= 0.2)) {
+    const drug = en(ACTIVE.get(tox.find((s) => s.harm >= 0.2).active), 'name');
+    return said(msg('poisoned by {drug}', { drug }), 'poisoned by ' + drug.split(' (')[0].toLowerCase());
+  }
+  if (d > 0.1) return said(msg('dehydration'), 'dehydration');
+  if (p.killer?.t === p.t + HOUR && p.killer.h > 0 && COND.has(p.killer.id)) return said(condName(p.killer.id), condName(p.killer.id).toLowerCase());
   const worst = [...p.conds].sort((a, b) => (b.sev ?? b.s ?? 0) - (a.sev ?? a.s ?? 0))[0];
-  return worst ? COND.get(worst.id).name.toLowerCase() : 'unknown';
+  return worst ? said(condName(worst.id), condName(worst.id).toLowerCase()) : said(msg('unknown'), 'unknown');
 }
 
 export const MODEL_NAMES = Object.keys(MODELS);

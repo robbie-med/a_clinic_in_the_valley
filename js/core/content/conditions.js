@@ -8,6 +8,7 @@
 //
 // Page refs: Where There Is No Doctor (Hesperian, 2011 printing). Paraphrased, never copied.
 import { COMPRESS } from '../time.js';
+import { localize } from '../i18n.js';
 
 
 // Time: illness runs in real hours, but anything taking months or years (a worm's lifespan, a pregnancy, chronic
@@ -875,4 +876,6 @@ export const CONDITIONS = [
   },
 ];
 
+// Shown text translates on read (i18n.js); the Korean lives in i18n/ko/conditions_*.js. `ref` is a citation (cite()).
+localize(CONDITIONS, ['name', 'local[]', 'complaint[].t', 'teach.refer', 'learn']);
 export const COND = new Map(CONDITIONS.map((c) => [c.id, c]));

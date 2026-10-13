@@ -1,13 +1,16 @@
 /* A Clinic in the Valley — interface (base copied from dont get lost). Dark, warm, parchment-and-ink; readable on a phone in sunlight.
-   One typeface everywhere (Pixelify Sans, OFL, bundled) and four sizes: --fs-s / --fs / --fs-l / --fs-xl. */
+   One typeface everywhere (Pixelify Sans, OFL, bundled; Galmuri for Korean) and four sizes: --fs-s / --fs / --fs-l / --fs-xl. */
 @font-face { font-family: 'Pixelify Sans'; src: url('../assets/fonts/pixelify-sans-latin-400-normal.woff2') format('woff2'); font-weight: 400; font-display: block; }
 @font-face { font-family: 'Pixelify Sans'; src: url('../assets/fonts/pixelify-sans-latin-600-normal.woff2') format('woff2'); font-weight: 600 700; font-display: block; }
+/* Korean: Galmuri (OFL, bundled). unicode-range keeps it from loading until Hangul is on screen. */
+@font-face { font-family: 'Galmuri'; src: url('../assets/fonts/Galmuri14.woff2') format('woff2'); font-weight: 400 700; font-display: swap;
+  unicode-range: U+1100-11FF, U+3000-303F, U+3130-318F, U+A960-A97F, U+AC00-D7AF, U+D7B0-D7FF, U+FF00-FFEF; }
 :root {
   --fs-s: 13px; --fs: 15px; --fs-l: 19px; --fs-xl: 30px;
   --bg: #0b0d12; --ink: #ece3cf; --dim: #a89f8c; --line: #3b342a; --panel: rgba(22, 19, 15, 0.96); --panel2: #221d17;
   --accent: #e8b450; --good: #8ad070; --bad: #e0604a; --slot: #2a241c; --slot-hi: #4a3e2c;
   --safe-b: env(safe-area-inset-bottom, 0px); --safe-t: env(safe-area-inset-top, 0px);
-  font-family: 'Pixelify Sans', system-ui, sans-serif; font-size: var(--fs);
+  font-family: 'Pixelify Sans', 'Galmuri', system-ui, sans-serif; font-size: var(--fs);
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--ink); -webkit-user-select: none; user-select: none; touch-action: none; }
@@ -139,6 +142,7 @@ button.link { background: none; border: none; color: var(--accent); padding: 0; 
 /* ——— title */
 #title { position: fixed; inset: 0; overflow-y: auto; touch-action: pan-y; background: radial-gradient(ellipse at 30% 20%, #23301d 0%, #0b0d12 70%); display: flex; justify-content: center; padding: 24px 12px; }
 .tcard { width: min(560px, 100%); }
+.langs { display: flex; justify-content: flex-end; gap: 6px; } .langs .lang { padding: 3px 9px; font-size: var(--fs-s); color: var(--dim); } .langs .lang.on { color: var(--ink); border-color: var(--accent); }
 .tcard h1 { font-size: var(--fs-xl); font-weight: 400; margin: 10px 0 0; color: #f4ead2; letter-spacing: 0.02em; }
 .tag { color: var(--dim);  margin-top: 4px; }
 .worlds { display: flex; flex-direction: column; gap: 6px; }
@@ -246,8 +250,8 @@ svg.body { width: 100%; max-height: 58vh; touch-action: manipulation; }
 svg.body .reg { cursor: pointer; transition: filter 0.15s; }
 svg.body path.reg, svg.body circle.reg, svg.body g.reg circle { stroke: #120e0a; stroke-width: 1.5; }
 svg.body .reg:hover, svg.body .reg:active { filter: brightness(1.35) drop-shadow(0 0 3px #ffe08a); }
-svg.body .backtab rect { fill: #2a241c; stroke: #6a5a3a; } svg.body .backtab text { fill: #e8dcc0; font: 11px 'Pixelify Sans'; text-anchor: middle; }
-svg.body .pin circle { fill: #e04a3a; stroke: #fff; stroke-width: 1.5; } svg.body .pin text { fill: #fff; font: 600 11px 'Pixelify Sans'; text-anchor: middle; pointer-events: none; }
+svg.body .backtab rect { fill: #2a241c; stroke: #6a5a3a; } svg.body .backtab text { fill: #e8dcc0; font: 11px 'Pixelify Sans', 'Galmuri'; text-anchor: middle; }
+svg.body .pin circle { fill: #e04a3a; stroke: #fff; stroke-width: 1.5; } svg.body .pin text { fill: #fff; font: 600 11px 'Pixelify Sans', 'Galmuri'; text-anchor: middle; pointer-events: none; }
 svg.body .pin { cursor: pointer; }
 .regmenu { display: flex; flex-direction: column; gap: 4px; overflow-y: auto; }
 .regmenu h4 { margin: 2px 0; color: var(--accent); }
@@ -284,3 +288,11 @@ li.abn { color: #ffd0a0; }
   .toasts { top: calc(118px + var(--safe-t)); }
   .is-touch .sidebtns { top: calc(96px + var(--safe-t)); }
 }
+
+/* ——— languages: the HUD toggle (ui.js) and Korean line breaking */
+.hud-info .langbtn { pointer-events: auto; align-self: flex-start; margin-top: 3px; padding: 1px 8px; min-height: 24px; font-size: var(--fs-s); color: var(--dim); background: rgba(20, 17, 13, 0.85); }
+.hud-info .langbtn b { color: var(--accent); font-weight: 600; }
+.is-touch .hud-info .langbtn { min-height: 30px; padding: 3px 10px; }
+:lang(ko) { word-break: keep-all; overflow-wrap: anywhere; }
+:lang(ko) .banner small { letter-spacing: 0.08em; }
+:lang(ko) .hudbtn span { letter-spacing: -0.03em; white-space: nowrap; }

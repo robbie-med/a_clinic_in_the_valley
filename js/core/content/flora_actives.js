@@ -6,6 +6,8 @@
 // Classes whose benefit this simulation has no target for carry no `effects` — only their real
 // toxicity. That is deliberate: an untreatable-here compound must not pretend to work.
 
+import { localize } from '../i18n.js';
+
 export const FLORA_ACTIVES = [
   // ——— the gut: astringents and laxatives
   {
@@ -261,3 +263,6 @@ export const FLORA_ACTIVES = [
     ref: 'Sleivert G et al. Int J Sport Nutr Exerc Metab 2003;13:251; Moreau M et al. Can Vet J 2004;45:133; Wu F et al. J Ethnopharmacol 2013;145:403',
   },
 ];
+
+// Shown text translates on read (i18n.js); the Korean lives in i18n/ko/actives.js. `ref` is a citation (cite()).
+localize(FLORA_ACTIVES, ['name', 'class', 'toxic[].text', 'idio[].text', 'dependence.text', 'cautions[]', 'note']);

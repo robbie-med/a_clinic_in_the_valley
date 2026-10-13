@@ -6,6 +6,11 @@ import { makeInv, addItem } from './inventory.js';
 import { DAY, HOUR, season, raining, inSeason } from './time.js';
 import { DRY_HOURS } from './content/preparations.js';
 import { hashf } from './rng.js';
+import { herbPartName } from './crafting.js';
+import { t, getLang } from './i18n.js';
+
+/** Lower-case a mid-sentence noun in English only (other scripts have no case, or other rules). */
+const lc = (s) => (getLang() === 'en' ? String(s).toLowerCase() : s);
 
 export const WORLD_VERSION = 1;
 
@@ -98,8 +103,8 @@ export class World {
       const def = this.objDef(x, y);
       if (s.regrowAt && now >= s.regrowAt) { delete s.regrowAt; if (!Object.keys(s).length) this.st.delete(i); this.onChange?.(x, y); }
       if (def?.dries && s.inv) this.dry(s, x, y, now, ev);
-      if (def?.brews && s.brew && now >= s.brew.readyAt && !s.brew.done) { s.brew.done = true; ev.push({ kind: 'brewed', x, y, text: `${this.C.items.get(s.brew.out).name} is ready.` }); this.onChange?.(x, y); }
-      if (def?.garden && s.plant && now >= s.plant.readyAt) { this.setObj(x, y, 'plant_' + s.plant.herb, null); ev.push({ kind: 'grown', x, y, text: `${this.C.items.get('fresh_' + s.plant.herb).name.split(' (')[0]} is ready in the garden.` }); }
+      if (def?.brews && s.brew && now >= s.brew.readyAt && !s.brew.done) { s.brew.done = true; ev.push({ kind: 'brewed', x, y, text: t('{item} is ready.', { item: this.C.items.get(s.brew.out).name }) }); this.onChange?.(x, y); }
+      if (def?.garden && s.plant && now >= s.plant.readyAt) { this.setObj(x, y, 'plant_' + s.plant.herb, null); ev.push({ kind: 'grown', x, y, text: t('{herb} is ready in the garden.', { herb: herbPartName(this.C, s.plant.herb) }) }); }
     }
     this.lastSim = now;
     this.dirty = true;
@@ -120,7 +125,7 @@ export class World {
       const wet = !this.indoor(x, y) && (season(st.at) === 'rains' || season(st.at) === 'late_rains');
       const mould = wet && hashf(this.R.seed, x * 31 + k, Math.floor(st.at), 5) < 0.35;
       s.inv.slots[k] = mould ? null : { id: 'dried_' + herb, n: st.n, q: (st.q ?? 1) * 0.95, t: now };
-      ev.push({ kind: 'dried', x, y, text: mould ? `The ${C.items.get(st.id).name.toLowerCase()} went mouldy on the rack in the damp.` : `${C.items.get('dried_' + herb).name} is dry.` });
+      ev.push({ kind: 'dried', x, y, text: mould ? t('The {item} went mouldy on the rack in the damp.', { item: lc(C.items.get(st.id).name) }) : t('{item} is dry.', { item: C.items.get('dried_' + herb).name }) });
     }
   }
 

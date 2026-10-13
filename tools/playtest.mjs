@@ -2,7 +2,9 @@
 // in Chromium, walks, gathers a herb, makes a remedy, sees a patient through the whole consultation
 // (talk, tap the body, diagnose, prescribe, finish), opens every panel, sleeps, reloads. Screenshots
 // go to outDir. Fails on any page error.
-//   node tools/playtest.mjs [outDir] [--mobile]
+//   node tools/playtest.mjs [outDir] [--mobile] [--lang ko]
+// With --lang, every screenshot also scans the visible text for leftover English and the run fails on any,
+// or on any key the language pack lacks (i18n.js MISSING).
 import { chromium } from 'playwright';
 import { serve } from './serve.mjs';
 import { mkdirSync } from 'node:fs';
@@ -10,12 +12,31 @@ import { setTimeout as sleep } from 'node:timers/promises';
 
 const out = process.argv[2] && !process.argv[2].startsWith('--') ? process.argv[2] : 'playtest-out';
 const mobile = process.argv.includes('--mobile');
+const lang = process.argv.includes('--lang') ? process.argv[process.argv.indexOf('--lang') + 1] : null;
 mkdirSync(out, { recursive: true });
 const PORT = +process.env.PORT || 3411;
 const server = await serve(PORT);
 const errors = [];
 let browser;
-const shot = (page, name) => page.screenshot({ path: `${out}/${name}.png` });
+const leftovers = new Map(); // English word → where seen
+// words that may stay in Latin script on a translated screen: units, abbreviations, credits, key names
+const KEEP = /^(mg|ml|kg|mmHg|min|MUAC|WTND|HIV|AIDS|ORS|TB|BCG|DMPA|INH|PID|MIC|MRSA|IU|EN|English|Esc|Tab|Shift|Enter|Space|Phaser|ZzFX|nipplejs|Dungeon|Crawl|Stone|Soup|CC0|CC|BY|OFL|Hesperian|Health|Guides|David|Werner|Where|There|Is|No|Doctor|game-icons|net|Galmuri|IndexedDB|ec50|WASD|L|g|h)$/i;
+async function scan(page, name) {
+  if (!lang) return;
+  const words = await page.evaluate(async () => {
+    // Latin names and families, and citations (class "cite"), stay as written in every language
+    const latin = new Set((await import('/js/core/content/flora.js')).FLORA.flatMap((f) => [f.n, f.f]));
+    for (const h of (await import('/js/core/content/herbs.js')).HERBS) { latin.add(h.latin); latin.add(h.family); }
+    const read = (sel) => { const el = document.querySelector(sel); if (!el) return ''; const c = el.cloneNode(true); c.querySelectorAll('.cite').forEach((x) => x.remove()); document.body.append(c); const s = c.innerText; c.remove(); return s; };
+    let text = [read('#ui'), read('#title:not(.hidden)')].join('\n');
+    for (const n of [...latin].sort((a, b) => b.length - a.length)) text = text.split(n).join(' ');
+    return text.match(/[A-Za-z][A-Za-z'-]{2,}/g) || [];
+  });
+  for (const w of words) if (!KEEP.test(w) && !leftovers.has(w)) leftovers.set(w, name);
+}
+// a label as the page shows it now (the English key through i18n.js t(); with no --lang it is the English)
+const tr = (page, key) => page.evaluate(async (k) => (await import('/js/core/i18n.js')).t(k), key);
+const shot = async (page, name) => { await scan(page, name); return page.screenshot({ path: `${out}/${name}.png` }); };
 try {
   await sleep(700);
   browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
@@ -23,6 +44,7 @@ try {
   const page = await ctx.newPage();
   page.on('pageerror', (e) => errors.push('pageerror: ' + e.message + '\n' + (e.stack || '').split('\n').slice(0, 4).join('\n')));
   page.on('console', (m) => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
+  if (lang) await ctx.addInitScript((l) => { try { localStorage.setItem('nd.settings', JSON.stringify({ ...JSON.parse(localStorage.getItem('nd.settings') || '{}'), lang: l })); } catch {} }, lang);
   await page.goto(`http://127.0.0.1:${PORT}/index.html`);
   await page.waitForSelector('#start', { timeout: 20000 });
   await page.fill('#wseed', 'playtest');
@@ -52,8 +74,8 @@ try {
   console.log('herb', JSON.stringify(herb));
   await page.evaluate(() => window.nd.ui.open('make'));
   await sleep(300);
-  await page.locator('.recipe', { hasText: 'Guava decoction' }).first().click();
-  await page.locator('.detail button.primary', { hasText: 'Make' }).click();
+  await page.locator('.recipe', { hasText: await page.evaluate(() => window.nd.C.items.get('decoction_guava').name) }).first().click();
+  await page.locator('.detail button.primary', { hasText: await tr(page, 'Make') }).click();
   await sleep(300);
   await shot(page, '2-make');
   const brew = await page.evaluate(() => { const s = window.nd.p.inv.slots.find((x) => x?.id === 'decoction_guava'); return s && { n: s.n, q: s.q }; });
@@ -77,10 +99,12 @@ try {
   const pt = await page.evaluate(() => { const p = Object.values(window.nd.meta.clinic.patients).find((q) => q.status === 'consult'); return { id: p.id, name: p.name, age: p.age, cond: p.mainCond, complaint: p.complaint }; });
   console.log('patient', JSON.stringify(pt), 'planned today', arrival);
   // talk
-  for (const q of ['How long', 'Fever?', 'Any loose stools', 'Cough?']) { const b = page.locator('.qchips button', { hasText: q }).first(); if (await b.count()) { if (mobile) await page.click('.etabs button:has-text("Talk")'); await b.click(); await sleep(120); } }
+  const qs = await page.evaluate(async () => { const { QUESTIONS } = await import('/js/core/content/findings.js'); return ['q_duration', 'q_fever', 'q_stool', 'q_cough'].map((id) => QUESTIONS.find((q) => q.id === id)?.label).filter(Boolean); });
+  const talk = await tr(page, 'Talk'), examineTab = await tr(page, 'Examine'), notesTab = await tr(page, 'Notes'), treatTab = await tr(page, 'Treat');
+  for (const q of qs) { const b = page.locator('.qchips button', { hasText: q }).first(); if (await b.count()) { if (mobile) await page.click(`.etabs button:has-text("${talk}")`); await b.click(); await sleep(120); } }
   await shot(page, '4-talk');
   // examine: tap chest and belly on the body
-  if (mobile) await page.click('.etabs button:has-text("Examine")');
+  if (mobile) await page.click(`.etabs button:has-text("${examineTab}")`);
   for (const reg of ['chest', 'belly', 'head', 'face']) {
     await page.locator(`svg.body [data-region="${reg}"]`).first().click({ force: true });
     await sleep(120);
@@ -90,13 +114,13 @@ try {
   }
   await shot(page, '5-exam');
   // notes and treat
-  if (mobile) await page.click('.etabs button:has-text("Notes")'); else await page.click('.etabs2 button:has-text("Notes")');
+  if (mobile) await page.click(`.etabs button:has-text("${notesTab}")`); else await page.click(`.etabs2 button:has-text("${notesTab}")`);
   await sleep(150);
   await shot(page, '6-notes');
-  if (mobile) await page.click('.etabs button:has-text("Treat")'); else await page.click('.etabs2 button:has-text("Treat")');
+  if (mobile) await page.click(`.etabs button:has-text("${treatTab}")`); else await page.click(`.etabs2 button:has-text("${treatTab}")`);
   await sleep(150);
   await page.locator('.treatbox .chips button').first().click();
-  const addBtn = page.locator('.rxform button', { hasText: 'Add' });
+  const addBtn = page.locator('.rxform button', { hasText: await tr(page, 'Add') });
   if (await addBtn.count() && await addBtn.isEnabled()) await addBtn.click();
   await page.locator('.checks input').first().check();
   await shot(page, '7-treat');
@@ -117,17 +141,18 @@ try {
   }
   // the handbook's plant list and the import catalogue: hundreds of species, so both are searchable
   await page.evaluate(() => window.nd.ui.open('handbook'));
-  await page.click('.panel .chips button:has-text("Plants")');
+  await page.click(`.panel .chips button:has-text("${await tr(page, 'Plants')}")`);
   await page.fill('.panel input[type=search]', 'will');
   await sleep(250);
   if (!(await page.locator('.panel .rlist button.recipe').count())) throw new Error('plant search found nothing');
   await shot(page, '9-plants');
   await page.evaluate(() => window.nd.ui.close());
   await page.evaluate(() => window.nd.ui.open('ledger'));
-  await page.click('.panel .chips button:has-text("Order by post")');
-  await page.fill('.panel input[type=search]', 'seed');
+  await page.click(`.panel .chips button:has-text("${await tr(page, 'Order by post')}")`);
+  const seedWord = (await page.evaluate(async () => (await import('/js/core/i18n.js')).t('{herb} seed', { herb: '' }))).trim();
+  await page.fill('.panel input[type=search]', seedWord);
   await sleep(300);
-  const imports = await page.locator('.panel .trow', { hasText: 'seed' }).count();
+  const imports = await page.locator('.panel .trow', { hasText: seedWord }).count();
   console.log('import rows', imports);
   if (!imports) throw new Error('the import catalogue found nothing');
   await shot(page, '9-imports');
@@ -157,6 +182,20 @@ try {
   console.log('reloaded', JSON.stringify(reloaded));
   if (!reloaded.patient) throw new Error('patient lost on reload');
   await shot(page, '12-reloaded');
+  if (lang) {
+    // the toggle: to English and back, with a panel open; then nothing the pack lacks was asked for
+    await page.evaluate(() => window.nd.ui.toggle('ledger'));
+    await page.evaluate(() => window.nd.ui.setLang('en'));
+    await sleep(300);
+    const enText = await page.evaluate(() => document.querySelector('#ui').innerText);
+    if (!/Ledger|Day /.test(enText)) errors.push('test: switching to English left the screen untranslated');
+    await page.evaluate((l) => window.nd.ui.setLang(l), lang);
+    await sleep(300);
+    await shot(page, '13-ledger-after-toggle');
+    const missing = await page.evaluate(async () => [...(await import('/js/core/i18n.js')).MISSING]);
+    if (missing.length) errors.push(`i18n: ${missing.length} keys with no ${lang}: ` + missing.slice(0, 20).map((k) => JSON.stringify(k)).join(', '));
+    if (leftovers.size) errors.push(`i18n: English left on ${lang} screens: ` + [...leftovers].slice(0, 40).map(([w, at]) => `${w} (${at})`).join(', '));
+  }
   console.log('fps (swiftshader)', await page.evaluate(() => window.nd.scene.game.loop.actualFps.toFixed(1)));
 } catch (e) {
   errors.push('test: ' + e.message);

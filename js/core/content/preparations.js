@@ -8,6 +8,8 @@
 //
 // Liquid volumes: ml of finished preparation per gram of DRY herb (a fresh herb counts by its dry mass).
 
+import { localize } from '../i18n.js';
+
 export const METHODS = {
   dry:            { name: 'Dried', verb: 'Dry on a rack', form: 'dried' },
   powder:         { name: 'Powder', verb: 'Grind to powder', form: 'powder', unit: 'g', tool: 'mortar', min: 10, shelfDays: 180 },
@@ -69,3 +71,6 @@ export const SPECIALS = [
   { id: 'ors_cereal', name: 'Rehydration drink (rice)', unit: 'ml', from: [['salt', 3], ['rice_flour', 50]], station: 'hearth', tool: 'cooking_pot', min: 15, n: 1000, fluid: true, shelfDays: 0.33, icon: 'bowl-of-rice', color: '#f0f0e0',
     note: 'Powdered rice and salt boiled 5–7 minutes to a thin gruel. Spoils within hours in the heat.' },
 ];
+// Shown text translates on read (i18n.js); the Korean lives in i18n/ko/items.js.
+localize(Object.values(METHODS), ['name', 'verb']);
+localize(SPECIALS, ['name', 'note']);

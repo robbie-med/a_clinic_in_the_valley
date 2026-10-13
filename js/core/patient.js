@@ -6,6 +6,7 @@ import { COND, CONDITIONS } from './content/conditions.js';
 import { ACTIVES } from './content/actives.js';
 import { addCondition } from './disease.js';
 import { signs } from './signs.js';
+import { t, tm, msg, en, getLang } from './i18n.js';
 
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -125,7 +126,7 @@ export function makePatient({ seed, key, t, season, hamlet, cond: forceCond, age
       const sinceH = sinceFor(def, k ? makeRng(seed, 'since', key, id, k) : rng);
       addCondition(q, id, makeRng(seed, 'cond', key), sinceH, resist);
       const F = signs(q, t);
-      const said = def.complaint.map((c) => ({ t: c.t, says: c.says.filter((x) => F[x]?.pos), all: c.says.every((x) => F[x]?.pos) }));
+      const said = def.complaint.map((c) => ({ t: en(c, 't'), says: c.says.filter((x) => F[x]?.pos), all: c.says.every((x) => F[x]?.pos) }));
       const ok = said.filter((c) => c.all);
       if (ok.length) return { q, sinceH, def, list: ok };
       best ||= { q, sinceH, def, list: said, partial: true };
@@ -145,7 +146,8 @@ export function makePatient({ seed, key, t, season, hamlet, cond: forceCond, age
   p.mainCond = got.def.id;
   p.since = got.sinceH;
   const said = pickBy(got.list, rng());
-  p.complaint = complaintText(p, said.t);
+  p.complaint = complaintText(p, said.t); // English (old code, tests)
+  p.complaintMsg = complaintMsg(p, said.t); // any language: say(p.complaintMsg) / complaintOf(p)
   p.says = said.says; // what the opening complaint claims (finding keys): never "not noticed" on this visit
   return p;
 }
@@ -161,20 +163,43 @@ function sinceFor(def, rng) {
 const gauss = (rng) => Math.sqrt(-2 * Math.log(Math.max(1e-9, rng()))) * Math.cos(2 * Math.PI * rng());
 const hashKey = (k) => { let h = 2166136261; for (const ch of String(k)) h = Math.imul(h ^ ch.charCodeAt(0), 16777619); return h >>> 0; };
 
-/** Words for how long: "this morning", "yesterday", "three days", "two weeks". */
-export function sinceWords(h) {
-  if (h < 10) return 'since this morning';
+/** Words for how long: "this morning", "yesterday", "three days", "two weeks". sinceWords/agoWords give the English;
+ *  sinceMsg/agoMsg the same as msgs (render with tm(), any language). */
+export function sinceMsg(h) {
+  if (h < 10) return msg('since this morning');
   const d = Math.round(h / 24);
-  if (h < 30 || d < 2) return 'since yesterday';
-  if (d < 8) return 'for ' + ['', '', 'two days', 'three days', 'four days', 'five days', 'six days', 'a week'][d];
-  if (d < 18) return 'for two weeks';
-  if (d < 100) return 'for ' + Math.round(d / 7) + ' weeks';
-  return d < 730 ? 'for ' + Math.round(d / 30) + ' months' : 'for ' + Math.round(d / 365) + ' years'; // slow illnesses (paced) last that long
+  if (h < 30 || d < 2) return msg('since yesterday');
+  if (d < 8) return [msg('for two days'), msg('for three days'), msg('for four days'), msg('for five days'), msg('for six days'), msg('for a week')][d - 2];
+  if (d < 18) return msg('for two weeks');
+  if (d < 100) return msg('for {n} weeks', { n: Math.round(d / 7) });
+  return d < 730 ? msg('for {n} months', { n: Math.round(d / 30) }) : msg('for {n} years', { n: Math.round(d / 365) }); // slow illnesses (paced) last that long
+}
+export function agoMsg(h) {
+  if (h < 10) return msg('this morning');
+  const d = Math.round(h / 24);
+  if (h < 30 || d < 2) return msg('yesterday');
+  return d < 8 ? [msg('two days ago'), msg('three days ago'), msg('four days ago'), msg('five days ago'), msg('six days ago'), msg('seven days ago')][d - 2] : msg('weeks ago');
+}
+const enFill = (m) => m.$.replace(/\{(\w+)\}/g, (_, k) => m.v[k]);
+export const sinceWords = (h) => enFill(sinceMsg(h));
+export const agoWords = (h) => enFill(agoMsg(h));
+/** A msg with its exact English (`en`, used by say() in English) or a context (`ctx`: dictionary key 'ctx|English'). */
+export const withEn = (m, text) => ({ ...m, en: text });
+export const withCtx = (m, ctx) => ({ ...m, ctx });
+
+/**
+ * Show a saved or logged text in the current language. x: a msg, a plain English string, a person marker, or an
+ * array of these (joined by spaces). A msg may carry `en`, its exact English (capitals, verb forms, lowercased names
+ * that a template cannot make): English shows that, other languages render the msg.
+ */
+export function say(x) {
+  if (getLang() !== 'en') return tm(x);
+  if (Array.isArray(x)) return x.map(say).join(' ');
+  if (x && typeof x === 'object' && x.en != null) return x.en;
+  return tm(x);
 }
 
-export function agoWords(h) { if (h < 10) return 'this morning'; const d = Math.round(h / 24); if (h < 30 || d < 2) return 'yesterday'; return d < 8 ? ['', '', 'two', 'three', 'four', 'five', 'six', 'seven'][d] + ' days ago' : 'weeks ago'; }
-
-/** What the patient (or the parent) says first, from a complaint template. */
+/** What the patient (or the parent) says first, from a complaint template (English, as said). */
 export function complaintText(p, template) {
   const child = p.age < 13;
   const kid = p.sex === 'f' ? 'my daughter' : 'my son';
@@ -187,10 +212,26 @@ export function complaintText(p, template) {
   if (!child) s = s.replace(/\bI (\w+)\b/g, (m, v) => (firstPerson[v] ? 'I ' + firstPerson[v] : m));
   return cap(s).replace(/([.!?] )([a-z])/g, (_, a, c) => a + c.toUpperCase());
 }
+/** The same complaint as a msg (saved; JSON-safe), so it reads in any language: the English template (its key) with
+ *  the speaker's words as msgs, and `en`, the exact English. Render with say() (or complaintOf). */
+export function complaintMsg(p, template) {
+  const child = p.age < 13, f = p.sex === 'f', I = { $: 'I', ctx: 'complaint' }; // tc('complaint', 'I'): the adult speaking of themselves
+  return {
+    $: template,
+    v: {
+      who: child ? (f ? msg('my daughter') : msg('my son')) : I, pron: child ? (f ? msg('she') : msg('he')) : I,
+      poss: child ? (f ? msg('her') : msg('his')) : msg('my'), refl: child ? (f ? msg('herself') : msg('himself')) : msg('myself'),
+      when: sinceMsg(p.since), ago: agoMsg(p.since),
+    },
+    en: complaintText(p, template),
+  };
+}
+/** The opening complaint in the current language (old saves: the English, looked up). */
+export const complaintOf = (p) => say(p.complaintMsg ?? p.complaint);
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
 /** Who brought them: a child comes with a parent. */
 export function companion(p) {
   if (p.age >= 13) return null;
-  return p.age < 5 ? 'carried by the mother' : 'with the mother';
+  return p.age < 5 ? t('carried by the mother') : t('with the mother');
 }

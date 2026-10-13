@@ -6,6 +6,7 @@ import { HOUR } from './time.js';
 import { floraNear, folkUses, lookalikes } from './flora.js';
 import { HERB } from './content/herbs.js';
 import { ACTIVE } from './content/actives.js';
+import { msg, en } from './i18n.js';
 
 // Estimates: a large share of rural patients try plant medicine at home before a clinic, and wild plants are
 // misidentified now and then. No single study fits this valley; these are round middle values.
@@ -38,7 +39,8 @@ export function giveTea(G, p, herbId, meant, start, days, pastDoses = 0) {
   const item = teaOf(G.C, herbId);
   if (!item) return null;
   const it = G.C.items.get(item), q = 0.5 + makeRng(p.seed, 'teaq', herbId)() * 0.8; // a wild batch, unknown strength
-  const name = `${HERB.get(meant).name} tea (gathered at home)`;
+  const herb = en(HERB.get(meant), 'name'); // English: the rx is saved
+  const name = `${herb} tea (gathered at home)`, label = msg('{herb} tea (gathered at home)', { herb }); // show tm(rx.label ?? rx.name)
   // doses already taken before they reached you, so the levels (and any poisoning) are there on arrival
   for (let k = 1; k <= pastDoses; k++) {
     const td = start - k * 8 * HOUR;
@@ -48,7 +50,7 @@ export function giveTea(G, p, herbId, meant, start, days, pastDoses = 0) {
       else if (a.channel === 'gut') p.doses.gut.push([td, id, mg]);
     }
   }
-  const rx = { item, name, q, left: CUP * 3 * days, amount: CUP, perDay: 3, days, start, route: 'oral', actives: it.actives, home: herbId, meant };
+  const rx = { item, name, label, q, left: CUP * 3 * days, amount: CUP, perDay: 3, days, start, route: 'oral', actives: it.actives, home: herbId, meant };
   p.rx.push(rx);
   return rx;
 }

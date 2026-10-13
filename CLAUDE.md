@@ -25,6 +25,11 @@ independent.
 - Any drug may be made in the lab: this valley follows no real country's drug law. Recipes for drugs
   that are controlled in the real world stay at game level (inputs, station, time, yield), with no
   real reagents, conditions or step-by-step chemistry.
+- **Bilingual (English + Korean), more languages later.** Every player-visible string goes through `t()` /
+  `localize()` / `msg()` (`js/core/i18n.js`); the English text is the key, so never edit an English string without
+  updating its Korean in `js/core/i18n/ko/*.js`. Build whole-sentence templates (never glue fragments), keep the
+  first argument of `t()` a plain literal, store saved text as `msg()`, and follow `i18n/ko/glossary.md`.
+  `npm test` fails on any string without Korean (`node tools/i18n-check.mjs ko --list` shows which).
 - WTND text is paraphrased with page refs. The book (2011 PDF plus extracted text) is committed only
   encrypted, as `sources/wtnd-book.tar.gz.gpg` (AES-256, symmetric; the user holds the password). On a
   new machine, unpack it with `gpg -d sources/wtnd-book.tar.gz.gpg | tar xz -C sources`. The

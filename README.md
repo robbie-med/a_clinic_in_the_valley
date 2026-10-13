@@ -168,6 +168,21 @@ compound, with sources.
 - **Hindsight**: the ledger shows what it really was, what helped and what harmed, once the
   patient recovers or dies.
 
+## Languages
+English and Korean (한국어), switched at any time from the title screen, the HUD toggle or the Menu; the choice is
+remembered, and a first visit follows the browser's language.
+- `js/core/i18n.js` — `t('English text', vars)` everywhere a player reads something. The English is the key; a
+  language pack maps it to its own words, so English needs no pack. Korean particles follow the word they attach to
+  (`{who:이}` → 딸이 / 아들이 / 제가). Content tables translate on read (`localize()`), saved text (ledger, patient
+  records) is stored as `msg()` and rendered in whatever language is current, and generated names are written in
+  Hangul (`i18n/ko/names.js`).
+- `js/core/i18n/ko/` — the Korean pack (one dictionary per area) and `glossary.md` (register and terms).
+- Korean uses the Galmuri pixel font (OFL), loaded only when Hangul is on screen.
+- **Adding a language:** add a row to `AVAILABLE` in `i18n.js`, copy `i18n/ko/` to `i18n/<code>/` and translate the
+  values (keep the keys), give it its own `attach`/`name`/`cite` rules if its grammar needs them, add a font for its
+  script if Pixelify Sans lacks it, then run `node tools/i18n-check.mjs <code> --list` until nothing is missing.
+  `npm test` checks Korean coverage, and plays a consultation for every illness in Korean looking for leftover English.
+
 ## Roadmap
 - **Phase 2 (done):** Green Pages medicines from the mission stores and a mail-order catalogue;
   antibiotics with organism MICs and the valley's resistance index; the rest of the book's illnesses (injections,

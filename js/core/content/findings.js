@@ -1,6 +1,7 @@
 // findings.js — what you can learn about a patient, and how. History questions (ask), examination
 // (look / feel / listen / count) and measurements that need a tool. Each costs game minutes. The
 // values come from the patient's real state (signs.js); this table says how to get at them.
+import { localize } from '../i18n.js';
 
 // One topic per question, grouped as a history is taken. The answer gives what is there; if nothing is, the first
 // finding's "no". `only` limits a question to who could answer it (a woman, a baby's mother), never to a diagnosis.
@@ -170,3 +171,6 @@ Object.assign(POINTS, {
   fits_hx: { eclampsia: 14, newborn_tetanus: 4 }, lockjaw: { newborn_tetanus: 8 }, suck: { newborn_sepsis: 3, newborn_tetanus: 2, cold_baby: 2 },
   cord: { cord_infection: 8, newborn_sepsis: 1 }, jaundice: { newborn_jaundice: 6, newborn_sepsis: 1 }, breast: { mastitis: 9 },
 });
+// Shown text translates on read (i18n.js); the Korean lives in i18n/ko/items.js.
+localize(QUESTIONS, ['group', 'label']);
+localize(EXAMS, ['label']);

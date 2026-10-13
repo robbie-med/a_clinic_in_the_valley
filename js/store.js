@@ -1,11 +1,12 @@
 // store.js — saves in IndexedDB (copied from dont get lost; pattern from nongbu_game: timeouts so a stuck database
 // never hangs the game). Two stores: 'worlds' (one meta record per world: player, time, journal,
 // markers…) and 'chunks' (key "<worldId>|cx,cy" → chunk diff record).
+import { t } from './core/i18n.js';
 const DB = 'no-doctor', VER = 1;
 
 function open(timeoutMs = 12000) {
   return new Promise((res, rej) => {
-    const to = setTimeout(() => rej(new Error('IndexedDB open timed out')), timeoutMs);
+    const to = setTimeout(() => rej(new Error(t('IndexedDB open timed out'))), timeoutMs);
     const r = indexedDB.open(DB, VER);
     r.onupgradeneeded = () => {
       const db = r.result;
@@ -73,7 +74,7 @@ export async function exportWorld(id) {
   return { format: 'no-doctor', v: 1, meta, chunks: Object.fromEntries(records) };
 }
 export async function importWorld(data, { asNew = false } = {}) {
-  if (data?.format !== 'no-doctor') throw new Error('Not a save from this game');
+  if (data?.format !== 'no-doctor') throw new Error(t('Not a save from this game'));
   const meta = { ...data.meta };
   if (asNew) { meta.id = 'w' + Date.now().toString(36); meta.name += ' (copy)'; }
   const d = await db();

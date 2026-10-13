@@ -6,6 +6,7 @@
 // volume (seeded, log-normal with the active's `spread`), so the same dose lands differently in each.
 // Auto-induction (artemisinin) raises ke over days of continuous dosing.
 import { ACTIVE } from './content/actives.js';
+import { en } from './i18n.js';
 
 const LN2 = Math.LN2;
 const HOUR = 60; // game minutes
@@ -104,7 +105,7 @@ export function drugState(p, t) {
 export const tolerance = (p, a) => 1 + (p.dep?.[a.id] || 0) * (a.dependence?.tolerance || 0);
 
 /**
- * Toxic signs present at time t: [{ active, sign, text, harm }]. Systemic thresholds (`at`, mg/L) are on the
+ * Toxic signs present at time t: [{ active, sign, text, harm }] (`text` is English: show it with tm()/t()). Systemic thresholds (`at`, mg/L) are on the
  * plasma level; gut-acting ones (`atMgKg`) on what was swallowed in the last 24 h. `dry` (water deficit, share
  * of body weight) makes a sign appear only in someone that dehydrated (NSAIDs and the kidneys).
  */
@@ -113,12 +114,12 @@ export function toxSigns(p, t, ds = drugState(p, t)) {
   const dry = (p.hyd || 0) / p.weight;
   for (const [id, c] of Object.entries(ds.conc)) {
     const a = ACTIVE.get(id), tol = tolerance(p, a);
-    for (const x of a.toxic || []) if (x.at !== undefined && c >= x.at * tol && dry >= (x.dry || 0)) out.push({ active: id, ...x, c });
+    for (const x of a.toxic || []) if (x.at !== undefined && c >= x.at * tol && dry >= (x.dry || 0)) out.push({ active: id, ...x, text: en(x, 'text'), c });
   }
   const mg = {};
   for (const [td, id, m] of p.doses?.gut || []) if (td <= t && t - td < 24 * HOUR) mg[id] = (mg[id] || 0) + m;
   for (const [id, m] of Object.entries(mg)) {
-    for (const x of ACTIVE.get(id)?.toxic || []) if (x.atMgKg !== undefined && m / p.weight >= x.atMgKg) out.push({ active: id, ...x, c: m / p.weight });
+    for (const x of ACTIVE.get(id)?.toxic || []) if (x.atMgKg !== undefined && m / p.weight >= x.atMgKg) out.push({ active: id, ...x, text: en(x, 'text'), c: m / p.weight });
   }
   return out;
 }

@@ -9,6 +9,7 @@ import { STATION_RANGE } from '../core/content/build.js';
 import { hash, makeRng } from '../core/rng.js';
 import { IconAtlas, tileFrame } from './icons.js';
 import { sfx } from './sfx.js';
+import { t, getLang, personName } from '../core/i18n.js';
 
 const Phaser = window.Phaser;
 const T = 32;
@@ -16,6 +17,8 @@ const ICON_GID = 4096;
 const SPEED = 4.2;          // tiles per real second
 const WALKER_SPEED = 2.6;
 const REACH = 1.8;
+const FONT = "'Pixelify Sans', 'Galmuri', sans-serif"; // Galmuri11: the Korean pixel font
+const lc = (s) => (getLang() === 'en' ? String(s).toLowerCase() : s);
 
 const LOOKS_F = [['player/base/human_f', 'player/hair/long_red'], ['player/base/human2_f', 'player/hair/short_black'], ['player/base/human3_f', 'player/hair/long_yellow'], ['player/base/human2_f', 'player/hair/pigtails_brown']];
 const LOOKS_M = [['player/base/human_m', 'player/hair/short_black'], ['player/base/human2_m', 'player/hair/brown1'], ['player/base/human3_m', 'player/hair/short_black'], ['player/base/human2_m', 'player/hair/mountain_man']];
@@ -149,7 +152,7 @@ export class ClinicScene extends Phaser.Scene {
         const doll = this.makeDoll(v.look.base, v.look.hair, v.id === 'duka' ? 'player/body/shirt_white1' : 'player/body/robe_green', 1).setDepth(18);
         const w = { kind: 'vendor', id, vendor: v, key, x: spot.x + 0.5, y: spot.y + 0.5, doll, path: null };
         this.walkers.set(id, w);
-        if (!first && v.id !== 'duka') { this.G.ui.toast(`${v.name}: ${v.who.toLowerCase()} has come to the market square.`); sfx('coin'); }
+        if (!first && v.id !== 'duka') { this.G.ui.toast(t('{vendor}: {who} has come to the market square.', { vendor: v.name, who: lc(v.who) })); sfx('coin'); }
       } else if (!key && has) { has.doll.destroy(); this.walkers.delete(id); }
       else if (has) has.key = key;
     }
@@ -207,11 +210,11 @@ export class ClinicScene extends Phaser.Scene {
     const pt = G.meta.clinic.patients[w.id];
     if (!pt) return;
     if (pt.status === 'waiting' || pt.status === 'arriving') { G.ui.encounter(pt.id); return; }
-    G.ui.toast(`${pt.name} is on the way home.`);
+    G.ui.toast(t('{name} is on the way home.', { name: personName(pt.name) }));
   }
   nextPatient() {
     const q = Object.values(this.G.meta.clinic.patients).filter((p) => p.status === 'waiting').sort((a, b) => a.arrivedAt - b.arrivedAt);
-    if (q.length) this.G.ui.encounter(q[0].id); else this.G.ui.toast('Nobody is waiting.');
+    if (q.length) this.G.ui.encounter(q[0].id); else this.G.ui.toast(t('Nobody is waiting.'));
   }
   act(x, y) {
     const { G } = this;
@@ -223,17 +226,25 @@ export class ClinicScene extends Phaser.Scene {
     for (const e of ev) {
       if (e[0] === 'msg') G.ui.toast(e[1]);
       else if (e[0] === 'sound') sfx(e[1]);
-      else if (e[0] === 'gain') { this.floatText(G.p.x, G.p.y - 0.6, `+${e[2]} ${G.C.items.get(e[1]).name}`, '#e8f0c0'); }
+      else if (e[0] === 'gain') { const [, id, n] = e; this.floatText(G.p.x, G.p.y - 0.6, () => t('+{n} {item}', { n, item: G.C.items.get(id).name }), '#e8f0c0'); }
       else if (e[0] === 'open') G.ui.openContainer(e[1], e[2]);
       else if (e[0] === 'brew') G.ui.openJar(e[1], e[2]);
       else if (e[0] === 'placed') { if (!G.p.inv.slots[G.p.hot] || G.p.inv.slots[G.p.hot].id !== e[3]) { G.placing = null; this.ghost.setVisible(false); } }
-      else if (e[0] === 'level') { G.ui.banner(`${e[1] === 'herbal' ? 'Herbal craft' : e[1] === 'diagnosis' ? 'Diagnosis' : 'Building'} level ${e[2]}`, 'Skill'); sfx('level'); }
+      else if (e[0] === 'level') { const n = e[2]; G.ui.banner(e[1] === 'herbal' ? t('Herbal craft level {n}', { n }) : e[1] === 'diagnosis' ? t('Diagnosis level {n}', { n }) : t('Building level {n}', { n }), t('Skill')); sfx('level'); }
     }
     G.ui.refresh();
   }
+  /** A rising label. `text` is a string or a function giving it in the current language (so relabel() can redo it). */
   floatText(x, y, text, color) {
-    const t = this.add.text(x * T, y * T, text, { fontFamily: 'Pixelify Sans', fontSize: '12px', color, stroke: '#000', strokeThickness: 3 }).setOrigin(0.5).setDepth(950);
-    this.tweens.add({ targets: t, y: t.y - 24, alpha: 0, duration: 1400, onComplete: () => t.destroy() });
+    const make = typeof text === 'function' ? text : () => text;
+    const lb = this.add.text(x * T, y * T, make(), { fontFamily: FONT, fontSize: '12px', color, stroke: '#000', strokeThickness: 3 }).setOrigin(0.5).setDepth(950);
+    lb.relabel = make;
+    (this.labels ||= new Set()).add(lb);
+    this.tweens.add({ targets: lb, y: lb.y - 24, alpha: 0, duration: 1400, onComplete: () => { this.labels.delete(lb); lb.destroy(); } });
+  }
+  /** After a language switch: redraw every canvas label in the current language. */
+  relabel() {
+    for (const lb of this.labels || []) if (lb.active) lb.setText(lb.relabel());
   }
 
   // ———————————————————————————————————————— frame
@@ -264,7 +275,7 @@ export class ClinicScene extends Phaser.Scene {
   newDay(d) {
     const { G } = this;
     const s = season(G.W.time);
-    if (s !== this.lastSeason && this.lastSeason) G.ui.banner(SEASON_NAMES[s], `Day ${d}`);
+    if (s !== this.lastSeason && this.lastSeason) G.ui.banner(SEASON_NAMES[s], t('Day {n}', { n: d }));
     this.lastSeason = s;
     G.journalDay?.(d);
   }
@@ -343,7 +354,7 @@ export class ClinicScene extends Phaser.Scene {
     if (!pt) return;
     if (pt.status === 'arriving') {
       pt.status = 'waiting'; pt.arrivedAt = G.W.time;
-      G.ui.toast(`${pt.age < 13 ? 'A mother with ' + pt.name : pt.name} is waiting at the clinic.`);
+      G.ui.toast(pt.age < 13 ? t('A mother with {name} is waiting at the clinic.', { name: personName(pt.name) }) : t('{name} is waiting at the clinic.', { name: personName(pt.name) }));
       sfx('ui');
     } else if (pt.status === 'leaving' || pt.status === 'hospital' || pt.status === 'gone') {
       if (pt.status === 'leaving') pt.status = 'home';
@@ -365,7 +376,7 @@ export class ClinicScene extends Phaser.Scene {
       if (G.W.time - pt.arrivedAt > 4 * HOUR || closed) {
         pt.status = 'leaving';
         cl.rep = Math.max(0, cl.rep - 0.015);
-        G.ui.toast(`${pt.name} got tired of waiting and went home.`);
+        G.ui.toast(t('{name} got tired of waiting and went home.', { name: personName(pt.name) }));
         this.sendHome(pt.id);
       }
     }
@@ -394,7 +405,7 @@ export class ClinicScene extends Phaser.Scene {
     while (G.meta.time < target) { G.meta.time = Math.min(target, G.meta.time + 2 * HOUR); for (const n of tickHome(G)) G.ui.news(n); }
     for (const e of G.W.catchUp()) G.ui.toast(e.text);
     G.sleeping = false;
-    G.ui.banner(`Day ${day(G.W.time)} · ${clock(G.W.time)}`, SEASON_NAMES[season(G.W.time)]);
+    G.ui.banner(t('Day {n} · {time}', { n: day(G.W.time), time: clock(G.W.time) }), SEASON_NAMES[season(G.W.time)]);
     G.save();
   }
 }

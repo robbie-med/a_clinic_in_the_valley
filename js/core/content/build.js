@@ -2,6 +2,8 @@
 // for patients, and walls. Each becomes an item (made at the workbench or bought) that you place.
 // Tiers grow the clinic: the hut → consult room → dispensary → (later) lab, ward, theatre.
 
+import { localize } from '../i18n.js';
+
 export const STATION_RANGE = 2;
 
 export const PLACEABLES = [
@@ -25,3 +27,5 @@ export const PLACEABLES = [
   { id: 'door_wood', name: 'Door', door: true, blocks: false, sprite: { d: 'dngn/doors/closed_door' }, cost: [['plank', 2], ['nails', 1]], price: 3, tier: 0 },
   { id: 'floor_packed', name: 'Packed earth floor', floor: true, flat: true, ground: 'clinic_floor', cost: [['mud_brick', 1]], price: 0.3, tier: 0 },
 ];
+// Shown text translates on read (i18n.js); the Korean lives in i18n/ko/items.js.
+localize(PLACEABLES, ['name', 'note']);

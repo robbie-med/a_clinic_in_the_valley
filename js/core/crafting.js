@@ -5,6 +5,11 @@ import { countSpec, removeSpec, remove, addItem, count } from './inventory.js';
 import { makeRng } from './rng.js';
 import { DAY, HOUR } from './time.js';
 import { STATION_RANGE } from './content/build.js';
+import { HERB } from './content/herbs.js';
+import { t, getLang } from './i18n.js';
+
+/** Lower-case a mid-sentence noun in English only (other scripts have no case, or other rules). */
+const lc = (s) => (getLang() === 'en' ? String(s).toLowerCase() : s);
 
 export const level = (xp) => Math.floor(Math.sqrt((xp || 0) / 12));
 export function gainXp(p, skill, n) {
@@ -17,17 +22,24 @@ const hasTool = (G, tool) => !tool || count(G.p.inv, tool) > 0;
 /** Why a recipe cannot be made right now (or null). */
 export function blocker(G, r, times = 1) {
   const { C, p } = G;
-  if (r.station && !G.stations.has(r.station)) return `Needs a ${stationName(r.station)} within ${STATION_RANGE} steps.`;
-  if (r.tool && !hasTool(G, r.tool)) return `Needs a ${C.items.get(r.tool).name.toLowerCase()}.`;
-  for (const [spec, n] of r.in) if (countSpec(p.inv, C, spec) < n * times) return `Not enough ${specName(C, spec)}.`;
+  if (r.station && !G.stations.has(r.station)) return t('Needs a {station} within {n} steps.', { station: stationName(r.station), n: STATION_RANGE });
+  if (r.tool && !hasTool(G, r.tool)) return t('Needs a {tool}.', { tool: lc(C.items.get(r.tool).name) });
+  for (const [spec, n] of r.in) if (countSpec(p.inv, C, spec) < n * times) return t('Not enough {item}.', { item: specName(C, spec) });
   if (r.hours) {
     const jar = G.nearJar?.();
-    if (!jar) return 'Needs a free steeping jar within reach.';
+    if (!jar) return t('Needs a free steeping jar within reach.');
   }
   return null;
 }
-export const stationName = (s) => ({ hearth: 'hearth', rack: 'drying rack', jar: 'steeping jar', bench: 'workbench' }[s] || s);
-export const specName = (C, spec) => (spec.startsWith('#herb_') ? C.items.get('fresh_' + spec.slice(6)).name.split(' (')[0].toLowerCase() : C.items.get(spec)?.name.toLowerCase() || spec);
+/** A station as a mid-sentence noun in the current language ("a hearth"). */
+export const stationName = (s) => ({ hearth: t('hearth'), rack: t('drying rack'), jar: t('steeping jar'), bench: t('workbench') }[s] || s);
+/** A herb's gathered part, any form ("white willow bark"), capitalized as a name: English from the fresh item's name. */
+export function herbPartName(C, herbId) {
+  const h = HERB.get(herbId);
+  if (getLang() !== 'en' && h) return t('{herb} {part}', { herb: h.name, part: h.part });
+  return C.items.get('fresh_' + herbId).name.split(' (')[0];
+}
+export const specName = (C, spec) => (spec.startsWith('#herb_') ? lc(herbPartName(C, spec.slice(6))) : (C.items.get(spec) ? lc(C.items.get(spec).name) : spec));
 
 /** Effective potency of a stack now (fresh herbs wilt after two days). */
 export function stackPotency(C, st, now) {
@@ -82,7 +94,8 @@ export function make(G, r, times = 1) {
     const jar = G.nearJar();
     jar.st.brew = { out: out.id, n: out.n, q: out.q, readyAt: now + r.hours * HOUR, startedAt: now };
     W.setState(jar.x, jar.y, jar.st);
-    ev.push(['msg', `Steeping: ${C.items.get(out.id).name} will be ready in ${r.hours >= 48 ? Math.round(r.hours / 24) + ' days' : r.hours + ' hours'}.`]);
+    const item = C.items.get(out.id).name;
+    ev.push(['msg', r.hours >= 48 ? t('Steeping: {item} will be ready in {n} days.', { item, n: Math.round(r.hours / 24) }) : t('Steeping: {item} will be ready in {n} hours.', { item, n: r.hours })]);
   } else {
     const left = addItem(p.inv, C, out.id, out.n, { q: out.q, t: now });
     if (left) ev.push(['drop', out.id, left, out.q]);
@@ -98,10 +111,10 @@ export function make(G, r, times = 1) {
 /** Collect a finished brew from a jar. */
 export function collectBrew(G, x, y) {
   const st = G.W.state(x, y);
-  if (!st?.brew) return { ok: false, why: 'Nothing steeping.' };
-  if (G.W.time < st.brew.readyAt) return { ok: false, why: `Not ready — ${Math.ceil((st.brew.readyAt - G.W.time) / HOUR)} hours to go.` };
+  if (!st?.brew) return { ok: false, why: t('Nothing steeping.') };
+  if (G.W.time < st.brew.readyAt) return { ok: false, why: t('Not ready — {n} hours to go.', { n: Math.ceil((st.brew.readyAt - G.W.time) / HOUR) }) };
   const left = addItem(G.p.inv, G.C, st.brew.out, st.brew.n, { q: st.brew.q, t: G.W.time });
-  if (left) { st.brew.n = left; return { ok: false, why: 'Bag full.' }; }
+  if (left) { st.brew.n = left; return { ok: false, why: t('Bag full.') }; }
   const out = st.brew;
   delete st.brew;
   G.W.setState(x, y, st);

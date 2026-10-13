@@ -50,6 +50,8 @@
 
 ## Font
 - **Pixelify Sans** (SIL Open Font License 1.1), in `assets/fonts/`.
+- **Galmuri** 2.40.3 by Lee Minseo (quiple), Korean pixel font (SIL Open Font License 1.1), `assets/fonts/Galmuri14.woff2`;
+  licence in `vendor/licenses/galmuri-2.40.3.OFL.txt`. https://github.com/quiple/galmuri
 
 ## Code (vendored, all MIT)
 Phaser 3, simplex-noise, Alea, ZzFX and nipplejs (see `vendor/licenses/`).

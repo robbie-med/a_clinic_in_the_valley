@@ -2,18 +2,20 @@
 // for a baby, a child, an adult and a pregnant woman. Tapping a region offers the examinations that
 // belong there (WTND ch.3 examines by body part); findings you have made are pinned to the body.
 
-/** Regions: id → { label, exams, at:[x,y] for pins }. Coordinates in the 200×420 viewBox. */
+import { t, tc } from '../core/i18n.js';
+
+/** Regions: id → { label (in the current language), exams }. Coordinates in the 200×420 viewBox. */
 export const REGIONS = {
-  head: { label: 'Head', exams: ['x_general', 'x_forehead', 'x_fontanel', 'x_ears', 'x_neck', 'x_stiffneck'] },
-  face: { label: 'Eyes & mouth', exams: ['x_eyes', 'x_throat', 'x_general'] },
-  chest: { label: 'Chest', exams: ['x_chest', 'x_listen', 'x_rr'] },
-  belly: { label: 'Belly & groin', exams: ['x_belly', 'x_pinch', 'x_urine_taste', 'x_genitals'] },
-  arm: { label: 'Upper arm', exams: ['x_thermo', 'x_muac', 'x_bp', 'x_strength'] },
-  wrist: { label: 'Wrist', exams: ['x_pulse'] },
-  hands: { label: 'Hands & skin', exams: ['x_skin', 'x_joints', 'x_limb', 'x_bite', 'x_feeling'] },
-  legs: { label: 'Legs & feet', exams: ['x_feet', 'x_joints', 'x_limb', 'x_bite', 'x_reflex'] },
-  back: { label: 'Back', exams: ['x_back'] },
-  wound: { label: 'Wound / burn', exams: ['x_wound'] },
+  head: { get label() { return t('Head'); }, exams: ['x_general', 'x_forehead', 'x_fontanel', 'x_ears', 'x_neck', 'x_stiffneck'] },
+  face: { get label() { return t('Eyes & mouth'); }, exams: ['x_eyes', 'x_throat', 'x_general'] },
+  chest: { get label() { return t('Chest'); }, exams: ['x_chest', 'x_listen', 'x_rr'] },
+  belly: { get label() { return t('Belly & groin'); }, exams: ['x_belly', 'x_pinch', 'x_urine_taste', 'x_genitals'] },
+  arm: { get label() { return t('Upper arm'); }, exams: ['x_thermo', 'x_muac', 'x_bp', 'x_strength'] },
+  wrist: { get label() { return t('Wrist'); }, exams: ['x_pulse'] },
+  hands: { get label() { return t('Hands & skin'); }, exams: ['x_skin', 'x_joints', 'x_limb', 'x_bite', 'x_feeling'] },
+  legs: { get label() { return t('Legs & feet'); }, exams: ['x_feet', 'x_joints', 'x_limb', 'x_bite', 'x_reflex'] },
+  back: { get label() { return tc('body', 'Back'); }, exams: ['x_back'] },
+  wound: { get label() { return t('Wound / burn'); }, exams: ['x_wound'] },
 };
 /** Where each finding is pinned on the figure. */
 const PIN = {
@@ -88,7 +90,7 @@ export function bodySVG(p, found, woundSite) {
       <g ${r('face')}><ellipse cx="${cx - headR * 0.35}" cy="${top + headR * 1.0}" rx="${headR * 0.15}" ry="${headR * (found.sunken_eyes?.pos ? 0.07 : 0.11)}" fill="#1a1010"/><ellipse cx="${cx + headR * 0.35}" cy="${top + headR * 1.0}" rx="${headR * 0.15}" ry="${headR * (found.sunken_eyes?.pos ? 0.07 : 0.11)}" fill="#1a1010"/><path d="M${cx - headR * 0.3},${top + headR * 1.45} Q${cx},${top + headR * 1.6} ${cx + headR * 0.3},${top + headR * 1.45}" stroke="#3a1a10" stroke-width="2" fill="none"/></g>
       ${swell}${rash}${wound}
     </g>
-    <g ${r('back', 'backtab')}><rect x="150" y="4" width="46" height="22" rx="6"/><text x="173" y="19">Back</text></g>
+    <g ${r('back', 'backtab')}><rect x="150" y="4" width="46" height="22" rx="6"/><text x="173" y="19">${tc('body', 'Back')}</text></g>
     ${pins.join('')}
   </svg>`;
 }

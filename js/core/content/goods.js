@@ -2,6 +2,8 @@
 // of the trade, building materials, and what poor patients pay with. Prices are in shillings (sh).
 // unit: 'g' / 'ml' (stack counts grams or millilitres) or omitted (counted one by one).
 
+import { localize } from '../i18n.js';
+
 export const INGREDIENTS = [
   { id: 'salt', name: 'Salt', unit: 'g', stack: 2000, price: 0.004, icon: 'salt-shaker', color: '#e8e8e8', note: 'For the rehydration drink: half a level teaspoon (about 2.5–3 g) to a litre.' },
   { id: 'sugar', name: 'Sugar', unit: 'g', stack: 5000, price: 0.006, icon: 'powder-bag', color: '#f0e8d0', note: '8 level teaspoons (about 40 g) to a litre of rehydration drink.' },
@@ -52,3 +54,5 @@ export const PRODUCE = [
   { id: 'cassava', name: 'Cassava root', stack: 30, price: 0.5, icon: 'potato', color: '#c0a080' },
   { id: 'firewood', name: 'Firewood bundle', stack: 30, price: 0.5, icon: 'wood-pile', color: '#8a6a40' },
 ];
+// Shown text translates on read (i18n.js); the Korean lives in i18n/ko/items.js.
+for (const rows of [INGREDIENTS, TOOLS, MATERIALS, PRODUCE]) localize(rows, ['name', 'note']);

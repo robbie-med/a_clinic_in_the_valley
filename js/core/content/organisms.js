@@ -10,6 +10,8 @@
 // For the malaria parasite (`parasite: true`) `mic` is a multiplier on each drug's EC50 in actives.js (1 = the
 // wild type), and `fold` is how much a resistant strain raises it.
 
+import { localize } from '../i18n.js';
+
 export const ORGANISMS = [
   {
     id: 's_pneumoniae', name: 'Pneumococcus (Streptococcus pneumoniae)',
@@ -175,6 +177,8 @@ export const ORGANISMS = [
   },
 ];
 
+// Shown text translates on read (i18n.js); the Korean lives in i18n/ko/actives.js. `ref` is a citation (cite()).
+localize(ORGANISMS, ['name']);
 export const ORG = new Map(ORGANISMS.map((o) => [o.id, o]));
 
 /** A fresh resistance index for a new valley: { org: { drug: share resistant } }. */

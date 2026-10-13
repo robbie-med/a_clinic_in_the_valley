@@ -5,6 +5,8 @@
 //
 // `fake` is the share of samples found to be adulterated or substituted in published market surveys.
 
+import { localize } from '../i18n.js';
+
 export const MATERIA = [
   {
     id: 'antler_velvet', name: 'Deer antler velvet (ground)', unit: 'g', stack: 500, price: 0.9, pack: 50,
@@ -29,3 +31,5 @@ export const MATERIA = [
   },
 ];
 export const MATERIA_BY_ID = new Map(MATERIA.map((m) => [m.id, m]));
+// Shown text translates on read (i18n.js); the Korean lives in i18n/ko/items.js. `ref` is a citation (cite()).
+localize(MATERIA, ['name', 'note']);

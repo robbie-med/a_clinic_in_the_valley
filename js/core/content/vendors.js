@@ -2,6 +2,7 @@
 // the market is every seventh day; the herb seller and the tool peddler wander in on their own
 // rhythm (seeded). Herb sellers' wares vary in strength, and now and then are not what they claim.
 // sells: [itemId, [min, max] stock (in the item's unit), price multiplier]
+import { localize } from '../i18n.js';
 
 export const VENDORS = [
   {
@@ -64,3 +65,6 @@ export const VENDOR = new Map(VENDORS.map((v) => [v.id, v]));
 // ——— childbirth and the newborn: the mission stores also carry these (WTND chapter 19; Green Pages)
 VENDOR.get('stores').sells.push(['oxytocin_10iu', [0, 20], 1.2], ['miso_200', [0, 60], 1.2], ['ergometrine_02', [0, 20], 1.2], ['mgso4_5g', [0, 10], 1.2],
   ['diazepam_10inj', [0, 10], 1.2], ['ampicillin_500', [0, 40], 1.2], ['gentamicin_80', [0, 40], 1.2], ['tt_vaccine', [10, 40], 1.2], ['dmpa_150', [0, 20], 1.2]);
+
+// Shown text translates on read (i18n.js); the Korean lives in i18n/ko/items.js.
+localize(VENDORS, ['name', 'who', 'greet']);

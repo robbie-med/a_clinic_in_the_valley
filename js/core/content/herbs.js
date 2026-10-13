@@ -11,7 +11,8 @@
 // Evidence grades: 'strong' (good trials), 'some' (small or mixed trials), 'traditional' (use and
 // lab work only), 'harmful' (more risk than benefit as usually used).
 
-import { FLORA_HERBS } from './flora_herbs.js';
+import { FLORA_HERBS, partName } from './flora_herbs.js';
+import { localize, tc } from '../i18n.js';
 
 export const HERBS = [
   {
@@ -152,3 +153,18 @@ export const HERBS = [
 // The 12 above are hand-written. The world's other medicinal species come from open data
 // (flora.js, built by tools/build_flora.mjs) in the same shape, and share one lookup map.
 export const HERB = new Map([...HERBS, ...FLORA_HERBS].map((h) => [h.id, h]));
+
+// Shown text translates on read (i18n.js); the Korean lives in i18n/ko/items.js. `ref` is a citation (cite()).
+localize(HERBS, ['name', 'unit.name', 'uses[]', 'note', 'harms[]']);
+// the part used, in words (a context key: 'seeds' of a plant, not of the valley)
+for (const h of HERBS) { const p = h.part; Object.defineProperty(h, 'part', { get: () => partName(p), enumerable: true, configurable: true }); }
+/** An evidence grade ('strong', 'some', 'traditional', 'harmful') as words in the current language. */
+export function evidenceName(e) {
+  switch (e) {
+    case 'strong': return tc('evidence', 'strong');
+    case 'some': return tc('evidence', 'some');
+    case 'traditional': return tc('evidence', 'traditional');
+    case 'harmful': return tc('evidence', 'harmful');
+    default: return e;
+  }
+}

@@ -10,8 +10,11 @@ import { INGREDIENTS, TOOLS, MATERIALS, PRODUCE } from './goods.js';
 import { PLACEABLES } from './build.js';
 import { MEDICINES } from './medicines.js';
 import { pixelIcon } from './pixel_icons.js';
+import { t, en, localize, resolver } from '../i18n.js';
 
 const mid = ([a, b]) => (a + b) / 2;
+/** A copy of a table row with its English text (the tables translate on read; items translate on their own, below). */
+const plain = (row) => Object.fromEntries(Object.keys(row).map((k) => [k, en(row, k)]));
 
 /** Nominal mg of each systemic/gut active per unit (g or ml) of a herb preparation. */
 export function nominalActives(herb, method) {
@@ -37,7 +40,7 @@ export function buildContent() {
     if (items.has(it.id)) throw new Error('duplicate item ' + it.id);
     it.tags ||= []; it.stack ??= it.unit ? 5000 : 50; it.price ??= 0.5; it.cat ||= 'misc';
     items.set(it.id, it);
-    for (const t of it.tags) { if (!tags.has(t)) tags.set(t, []); tags.get(t).push(it.id); }
+    for (const tg of it.tags) { if (!tags.has(tg)) tags.set(tg, []); tags.get(tg).push(it.id); }
     return it;
   };
   const gi = (name, c) => ({ gi: name, c });
@@ -49,17 +52,19 @@ export function buildContent() {
     const dryG = h.unit.g * h.dry;
     const rarity = h.flora ? 2 : h.density < 0.01 ? 3 : h.density < 0.02 ? 1.6 : 1;
     const base = { herb: h.id, dryG, contains: h.contains, icon: gi(h.icon, h.color) };
-    add({ ...base, id: 'fresh_' + h.id, name: `${h.name} ${h.part} (fresh)`, cat: 'herb', form: 'fresh', unitName: h.unit.name, stack: 40, price: 0.3 * rarity, shelfDays: 3,
-      tags: ['herb', 'herb_' + h.id, 'fresh'] });
+    // names are whole templates read live, so they follow a language switch
+    add({ ...base, id: 'fresh_' + h.id, get name() { return t('{herb} {part} (fresh)', { herb: h.name, part: h.part }); }, cat: 'herb', form: 'fresh',
+      get unitName() { return h.unit.name; }, stack: 40, price: 0.3 * rarity, shelfDays: 3, tags: ['herb', 'herb_' + h.id, 'fresh'] });
     if (hMethods.includes('dry') || h.id === 'neem' || h.id === 'eucalyptus')
-      add({ ...base, id: 'dried_' + h.id, name: `${h.name} ${h.part} (dried)`, cat: 'herb', form: 'dried', unitName: h.unit.name, stack: 60, price: 0.5 * rarity, shelfDays: 240,
+      add({ ...base, id: 'dried_' + h.id, get name() { return t('{herb} {part} (dried)', { herb: h.name, part: h.part }); }, cat: 'herb', form: 'dried',
+        get unitName() { return h.unit.name; }, stack: 60, price: 0.5 * rarity, shelfDays: 240,
         icon: gi(h.icon, shadeHex(h.color, 0.7)), tags: ['herb', 'herb_' + h.id, 'dried'] });
     for (const m of hMethods) {
       if (m === 'dry') continue;
       const M = METHODS[m];
       const id = (m === 'powder' ? 'powder_' : m + '_') + h.id;
       const actives = nominalActives(h, m);
-      add({ id, name: `${h.name} ${M.name.toLowerCase()}`, cat: 'remedy', herb: h.id, method: m, unit: M.unit, stack: M.unit === 'ml' ? 5000 : 2000,
+      add({ id, get name() { return t('{herb} {method}', { herb: h.name, method: M.name.toLowerCase() }); }, cat: 'remedy', herb: h.id, method: m, unit: M.unit, stack: M.unit === 'ml' ? 5000 : 2000,
         price: (0.5 * rarity) / (m === 'powder' ? dryG : dryG * M.mlPerG) * 1.5, shelfDays: M.shelfDays, actives, route: ['oral'],
         bitter: h.flora ? !!(h.contains.tannin || h.contains.berberine || h.contains.quinine) : h.id === 'cinchona' || h.id === 'artemisia' || h.id === 'willow', icon: gi(m === 'powder' ? 'powder-bag' : m === 'tincture' ? 'vial' : 'teapot-leaves', h.color),
         tags: ['remedy', 'remedy_' + h.id] });
@@ -72,7 +77,7 @@ export function buildContent() {
   }
   // ——— hand preparations
   for (const s of SPECIALS) {
-    const it = { id: s.id, name: s.name, cat: 'remedy', unit: s.unit, stack: s.unit === 'app' ? 40 : 5000, shelfDays: s.shelfDays, note: s.note, icon: gi(s.icon, s.color), tags: ['remedy'] };
+    const it = { id: s.id, name: en(s, 'name'), cat: 'remedy', unit: s.unit, stack: s.unit === 'app' ? 40 : 5000, shelfDays: s.shelfDays, note: en(s, 'note'), icon: gi(s.icon, s.color), tags: ['remedy'] };
     if (s.topical) { it.topical = s.topical; it.route = ['topical']; }
     if (s.fluid) { it.fluid = { na: s.fluid.na ?? 47 }; it.route = ['oral']; }
     if (s.oralFrom) {
@@ -87,13 +92,13 @@ export function buildContent() {
   }
   // ——— goods
   for (const g of INGREDIENTS) {
-    const it = add({ ...g, cat: 'ingredient', icon: gi(g.icon, g.color), tags: ['ingredient'] });
+    const it = add({ ...plain(g), cat: 'ingredient', icon: gi(g.icon, g.color), tags: ['ingredient'] });
     if (g.id === 'honey') { it.actives = { honey: 1000 }; it.topical = { honey: 1 }; it.route = ['oral', 'topical']; it.appG = 15; }
   }
-  for (const m of MEDICINES) add({ ...m, cat: 'medicine', route: m.route ?? (m.topical ? ['topical'] : ['oral']), icon: gi(m.icon, m.color), tags: ['medicine'] });
-  for (const t of TOOLS) add({ ...t, cat: 'tool', stack: 1, tool: t.id, icon: gi(t.icon, t.color), tags: ['tool'] });
-  for (const m of MATERIALS) add({ ...m, cat: 'material', icon: gi(m.icon, m.color), tags: ['material'] });
-  for (const p of PRODUCE) add({ ...p, cat: 'produce', icon: gi(p.icon, p.color), tags: ['produce'] });
+  for (const m of MEDICINES) add({ ...plain(m), cat: 'medicine', route: m.route ?? (m.topical ? ['topical'] : ['oral']), icon: gi(m.icon, m.color), tags: ['medicine'] });
+  for (const x of TOOLS) add({ ...plain(x), cat: 'tool', stack: 1, tool: x.id, icon: gi(x.icon, x.color), tags: ['tool'] });
+  for (const m of MATERIALS) add({ ...plain(m), cat: 'material', icon: gi(m.icon, m.color), tags: ['material'] });
+  for (const p of PRODUCE) add({ ...plain(p), cat: 'produce', icon: gi(p.icon, p.color), tags: ['produce'] });
 
   // ——— garden: seeds and cuttings
   const plantables = [['cutting_aloe', 'Aloe cutting', 'aloe', 6, 'seedling'], ['seed_artemisia', 'Sweet wormwood seed', 'artemisia', 10, 'plant-seed'],
@@ -103,9 +108,9 @@ export function buildContent() {
 
   // ——— buildables: an item you place, an object in the world, a workbench recipe
   for (const b of PLACEABLES) {
-    add({ id: b.id, name: b.name, cat: 'build', stack: 20, price: b.price, note: b.note, place: b.floor ? { ground: b.ground } : { obj: b.id },
+    add({ id: b.id, name: en(b, 'name'), cat: 'build', stack: 20, price: b.price, note: en(b, 'note'), place: b.floor ? { ground: b.ground } : { obj: b.id },
       icon: b.sprite?.gi ? b.sprite : b.sprite?.d ? { d: b.sprite.d, t: b.sprite.t } : gi('stone-path', '#a08060'), tags: ['build'] });
-    if (!b.floor) objects.set(b.id, { key: b.id, name: b.name, kind: b.wall ? 'wall' : b.door ? 'door' : 'built', built: true, item: b.id, ...b });
+    if (!b.floor) objects.set(b.id, { key: b.id, kind: b.wall ? 'wall' : b.door ? 'door' : 'built', built: true, item: b.id, ...plain(b) });
     recipes.push({ id: 'make_' + b.id, out: b.id, build: true, in: b.cost, station: b.id === 'workbench' || b.floor || b.wall || b.id === 'hearth' || b.id === 'herb_bed' ? null : 'bench', tool: null, min: 20, yields: 1, hours: 0 });
   }
 
@@ -120,16 +125,23 @@ export function buildContent() {
       if (!it) continue;
       it.import = true; it.zone = zone; it.price = Math.round(it.price * (1 + 0.35 * zone) * 100) / 100;
     }
-    add({ id: 'seed_' + h.id, name: `${h.name} seed`, cat: 'seed', plant: h.id, growDays: GROW[h.life] || 14, stack: 40,
+    const fit = CLIMATE[h.climate].fit, climate = () => CLIMATE[h.climate].name.replace(/^./, (c) => c.toUpperCase());
+    add({ id: 'seed_' + h.id, get name() { return t('{herb} seed', { herb: h.name }); }, cat: 'seed', plant: h.id, growDays: GROW[h.life] || 14, stack: 40,
       price: Math.round((0.4 + 0.3 * zone) * 100) / 100, import: true, zone, icon: gi('plant-seed', h.color), tags: ['seed'],
-      note: `Sown in a garden bed. ${CLIMATE[h.climate].name.replace(/^./, (c) => c.toUpperCase())} species: here it will grow ${CLIMATE[h.climate].fit >= 0.9 ? 'well' : CLIMATE[h.climate].fit >= 0.6 ? 'fairly well' : CLIMATE[h.climate].fit >= 0.4 ? 'poorly' : 'badly, and weak'}.` });
+      get note() {
+        const v = { climate: climate() };
+        return fit >= 0.9 ? t('Sown in a garden bed. {climate} species: here it will grow well.', v)
+          : fit >= 0.6 ? t('Sown in a garden bed. {climate} species: here it will grow fairly well.', v)
+            : fit >= 0.4 ? t('Sown in a garden bed. {climate} species: here it will grow poorly.', v)
+              : t('Sown in a garden bed. {climate} species: here it will grow badly, and weak.', v);
+      } });
   }
 
   // ——— non-plant materia medica: import only (materia.js)
-  for (const m of MATERIA) add({ ...m, cat: 'materia', route: m.topical ? ['topical'] : ['oral'], import: true, zone: m.distance ?? 3, icon: gi(m.icon, m.color), tags: ['materia'] });
+  for (const m of MATERIA) add({ ...plain(m), cat: 'materia', route: m.topical ? ['topical'] : ['oral'], import: true, zone: m.distance ?? 3, icon: gi(m.icon, m.color), tags: ['materia'] });
 
   // ——— the wild: medicinal plants, scenery, the village
-  for (const h of [...HERBS, ...FLORA_HERBS]) objects.set('plant_' + h.id, { key: 'plant_' + h.id, name: h.name, kind: 'plant', herb: h.id, tree: !!h.tree, blocks: !!h.tree, sprite: { d: h.sprite, t: h.tint },
+  for (const h of [...HERBS, ...FLORA_HERBS]) objects.set('plant_' + h.id, { key: 'plant_' + h.id, get name() { return h.name; }, kind: 'plant', herb: h.id, tree: !!h.tree, blocks: !!h.tree, sprite: { d: h.sprite, t: h.tint },
     harvest: 'fresh_' + h.id, regrowDays: h.regrowDays, tool: h.tool, seasons: h.seasons });
   const O = (key, def) => objects.set(key, { key, ...def });
   for (let i = 1; i <= 13; i++) O('tree_' + i, { name: 'Tree', kind: 'tree', blocks: true, sprite: { d: 'dngn/trees/tree' + i }, gives: ['pole', 1], tool: 'knife', regrowDays: 10 });
@@ -167,6 +179,11 @@ export function buildContent() {
   G('shallow', { name: 'Shallow water', sprites: ['dngn/water/shallow_water', 'dngn/water/shallow_water2'], color: '#4a8ab0', walk: 0.5, water: 'shallow' });
   G('deep', { name: 'Deep water', sprites: ['dngn/water/deep_water', 'dngn/water/deep_water2'], color: '#2a5a8a', walk: 0, water: 'deep' });
   for (const it of items.values()) { const px = pixelIcon(it); if (px) it.icon = px; }  // pixel art where the table has it
+  // Shown text translates on read (i18n.js; Korean in i18n/ko/items.js). Names built above are live getters already.
+  localize([...items.values()], ['name', 'note']);
+  localize([...objects.values()], ['name']);
+  localize([...grounds.values()], ['name']);
+  resolver('item', (id) => items.get(id)?.name); // saved text names items by id (i18n.js thing())
   return C;
 }
 

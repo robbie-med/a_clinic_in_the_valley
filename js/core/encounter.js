@@ -8,7 +8,9 @@ import { ORGANISMS } from './content/organisms.js';
 import { signs } from './signs.js';
 import { count, remove, countSpec } from './inventory.js';
 import { HOUR, DAY, COMPRESS, day } from './time.js';
-import { payment, collect, scheduleReturn, who, selectPressure } from './clinic.js';
+import { payment, collect, scheduleReturn, whoMsg, whoEn, selectPressure } from './clinic.js';
+import { say, withEn } from './patient.js';
+import { t, tm, msg, person, raw, localize, en, getLang } from './i18n.js';
 import { gainXp } from './crafting.js';
 import { stackPotency } from './crafting.js';
 import { makeRng } from './rng.js';
@@ -49,24 +51,37 @@ export const INSTRUCTIONS = [
   { id: 'sunlight', group: 'Birth and the baby', label: 'Feed the baby often; lay it undressed in bright light by a window (not in the sun)', min: 2, for: newborn },
   { id: 'kangaroo', group: 'Birth and the baby', label: 'Carry the baby skin to skin inside your clothes; breastfeed every 2 hours', min: 3, for: newborn },
 ];
+// Shown text translates on read (i18n.js; Korean in i18n/ko/clinic.js). Code that needs the English uses en(row, 'label').
+localize(INSTRUCTIONS, ['group', 'label']);
 export const adviceFor = (p) => INSTRUCTIONS.filter((x) => !x.for || x.for(p));
 export const PROCEDURES = [
   { id: 'clean', label: 'Clean the wound with soap and boiled water, remove dirt', min: 12, needs: [['soap', 1], ['cloth', 1]], station: 'hearth',
     applies: (p) => p.conds.some((c) => c.id.startsWith('wound') || c.id === 'burn_minor') },
 ];
+localize(PROCEDURES, ['label']);
+
+// The consultation log: enc.log = [{ who, text }]. `who`: 'Mother' | 'You' | 'Exam' (English keys) or person(name);
+// `text`: a msg, an English key, or an array of these (one line). Show both with say() (or tm()).
+const MOTHER = msg('Mother').$, YOU = msg('You').$, EXAM = msg('Exam').$;
+// a name in a sentence: lowercased in English only (other languages have no case, or keep it)
+const lc = (s) => (getLang() === 'en' ? s.toLowerCase() : s);
+// one text from several (findings), duplicates dropped; a single one stays as it is
+const parts = (list) => { const seen = new Set(), out = list.filter((x) => { const k = JSON.stringify(x); return !seen.has(k) && seen.add(k); }); return out.length === 1 ? out[0] : out; };
 
 export function startEncounter(G, pid) {
   const p = G.meta.clinic.patients[pid];
   const enc = { pid, t0: G.W.time, log: [], found: {}, done: new Set(), dx: [], rx: [], instr: new Set(), proc: new Set(), refer: false, returnDays: 0 };
-  const opener = p.returnWhy && p.visits.length ? returnLine(p) : p.complaint;
+  const opener = p.returnWhy && p.visits.length ? returnLine(p) : p.complaintMsg ?? p.complaint;
   enc.log.push({ who: speaker(p), text: opener });
   p.status = 'consult';
   return enc;
 }
-const speaker = (p) => (p.age < 13 ? 'Mother' : p.name);
+const speaker = (p) => (p.age < 13 ? MOTHER : person(p.name));
+/** What a returning patient says first (a msg; `en` keeps the English exact). why: an English key or a msg with `en`. */
 function returnLine(p) {
-  if (p.returnWhy === 'thanks') return `We came to thank you — ${p.age < 13 ? 'the child' : 'I'} is well now.`;
-  return `We came back. ${cap(p.returnWhy)}.`;
+  if (p.returnWhy === 'thanks') return p.age < 13 ? msg('We came to thank you — the child is well now.') : msg('We came to thank you — I is well now.');
+  const why = p.returnWhy, whyEn = typeof why === 'string' ? why : why.en ?? why.$; // old saves: an English string
+  return withEn(msg('We came back. {why}.', { why }), `We came back. ${cap(whyEn)}.`);
 }
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -93,15 +108,15 @@ export function ask(G, enc, qid) {
     if (!f || f.v === '—') continue;
     // small children cannot say; parents miss things sometimes — but not what they came about
     const missed = f.pos && !said.has(k) && makeRng(p.seed, 'miss', k, Math.floor(G.W.time / DAY))() < (p.age < 3 ? 0.15 : 0.07);
-    if (missed) { neg.unshift('I have not noticed.'); continue; }
+    if (missed) { neg.unshift(msg('I have not noticed.')); continue; }
     enc.found[k] = f;
-    (f.pos || q.all ? pos : neg).push(f.v);
+    (f.pos || q.all ? pos : neg).push(f.m ?? f.v); // f.m: the finding as a msg (signs.js), re-rendered in any language
   }
-  const text = pos.length ? [...new Set(pos)].join(' ') : neg[0] || 'No, nothing like that.';
-  enc.log.push({ who: 'You', text: q.label });
-  enc.log.push({ who: speaker(p), text });
+  const answer = pos.length ? parts(pos) : neg[0] || msg('No, nothing like that.');
+  enc.log.push({ who: YOU, text: en(q, 'label') });
+  enc.log.push({ who: speaker(p), text: answer });
   enc.done.add(qid);
-  return text;
+  return say(answer);
 }
 // every finding a question can ask about (history, not examination)
 const HISTORY_KEYS = new Set(QUESTIONS.flatMap((q) => q.reveals));
@@ -118,7 +133,7 @@ export function examine(G, enc, xid) {
   const p = G.meta.clinic.patients[enc.pid];
   const x = EXAMS.find((e) => e.id === xid);
   const tools = toolsAt(G);
-  if (x.tool && !tools.has(x.tool)) return { ok: false, text: `You need a ${G.C.items.get(x.tool).name.toLowerCase()}.` };
+  if (x.tool && !tools.has(x.tool)) return { ok: false, text: t('You need a {tool}.', { tool: lc(G.C.items.get(x.tool).name) }) };
   G.meta.time += x.min;
   const F = signs(p, G.W.time, tools);
   const lines = [];
@@ -126,12 +141,12 @@ export function examine(G, enc, xid) {
     const f = F[k];
     if (!f || f.v === '—') continue;
     enc.found[k] = f;
-    lines.push(f.v);
+    lines.push(f.m ?? f.v);
   }
-  const text = lines.length ? lines.join(' ') : 'Nothing remarkable.';
-  enc.log.push({ who: 'Exam', text: `${x.label}: ${text}`, exam: xid });
+  const seen = lines.length ? parts(lines) : msg('Nothing remarkable.');
+  enc.log.push({ who: EXAM, text: msg('{exam}: {text}', { exam: en(x, 'label'), text: seen }), exam: xid });
   enc.done.add(xid);
-  return { ok: true, text };
+  return { ok: true, text: say(seen) };
 }
 
 /** Ranked differential from what you found so far: [{ id, name, score }]. */
@@ -200,12 +215,13 @@ function dispense(G, id, qty) {
  */
 export function injectNow(G, enc, itemId, amount) {
   const p = G.meta.clinic.patients[enc.pid], it = G.C.items.get(itemId);
-  if (!toolsAt(G).has('syringe')) return { ok: false, text: 'You need a syringe.' };
-  if (stockOf(G, itemId) < amount) return { ok: false, text: `Not enough ${it.name.toLowerCase()}.` };
+  if (!toolsAt(G).has('syringe')) return { ok: false, text: t('You need a syringe.') };
+  if (stockOf(G, itemId) < amount) return { ok: false, text: t('Not enough {item}.', { item: lc(it.name) }) };
+  const name = en(it, 'name'); // saved records keep the English name (shown with tm())
   const { q } = dispense(G, itemId, amount);
   G.meta.time += 3;
   const now = G.W.time;
-  p.rx.push({ item: itemId, name: it.name, q, left: amount, amount, perDay: 1, days: 1, start: now, route: 'inj', actives: it.actives, inj: it.inj, counselled: true });
+  p.rx.push({ item: itemId, name, q, left: amount, amount, perDay: 1, days: 1, start: now, route: 'inj', actives: it.actives, inj: it.inj, counselled: true });
   enc.rx.push({ item: itemId, name: it.name, amount, perDay: 1, days: 1, route: 'inj', qty: amount, given: now });
   for (const a of Object.keys(it.actives || {})) { const m = ACTIVE.get(a).abxAs || a; if (ORGANISMS.some((o) => m in o.mic)) selectPressure(G.meta.clinic, m); }
   const boiled = G.stations.has('hearth'), rectal = !!it.inj?.rectal; // a solution squirted into the anus (diazepam) leaves no abscess
@@ -220,25 +236,27 @@ export function injectNow(G, enc, itemId, amount) {
   // status only: tetanus toxoid doses counted (people.js ttProtected); DMPA protects ~3 months, in game days (people.js)
   if (it.vaccine) (p.vacc ||= {})[it.vaccine] = (p.vacc[it.vaccine] || 0) + 1;
   if (it.fp) p.fpUntil = day(now) + it.fp.days / COMPRESS;
-  let text = rectal ? `Gave ${it.name.toLowerCase()} with a syringe without a needle.` : `Injected ${it.name.toLowerCase()}.`;
+  const done = rectal
+    ? withEn(msg('Gave {item} with a syringe without a needle.', { item: name }), `Gave ${name.toLowerCase()} with a syringe without a needle.`)
+    : withEn(msg('Injected {item}.', { item: name }), `Injected ${name.toLowerCase()}.`);
   const al = Object.keys(it.actives || {}).find((id) => reactsTo(p, id, itemId, now));
   // same draw as disease.js, so what you see now is what the body does
-  if (al) text += makeRng(p.seed, 'ana', itemId, now, 0)() < 0.1 ? ' Within minutes: cold grey sweat, a weak fast pulse, wheezing, the lips swelling — allergic shock!' : ' Soon itchy welts rise on the skin.';
-  enc.log.push({ who: 'You', text });
-  return { ok: true, text };
+  const said = !al ? done : [done, makeRng(p.seed, 'ana', itemId, now, 0)() < 0.1 ? msg('Within minutes: cold grey sweat, a weak fast pulse, wheezing, the lips swelling — allergic shock!') : msg('Soon itchy welts rise on the skin.')];
+  enc.log.push({ who: YOU, text: said });
+  return { ok: true, text: say(said) };
 }
 
 export function doProcedure(G, enc, procId) {
   const p = G.meta.clinic.patients[enc.pid];
   const pr = PROCEDURES.find((x) => x.id === procId);
-  if (pr.station && !G.stations.has(pr.station)) return { ok: false, text: 'You need boiled water: a hearth within reach.' };
-  for (const [id, n] of pr.needs) if (stockOf(G, id) < n) return { ok: false, text: `You need ${G.C.items.get(id).name.toLowerCase()}.` };
+  if (pr.station && !G.stations.has(pr.station)) return { ok: false, text: t('You need boiled water: a hearth within reach.') };
+  for (const [id, n] of pr.needs) if (stockOf(G, id) < n) return { ok: false, text: t('You need {item}.', { item: lc(G.C.items.get(id).name) }) };
   for (const [id, n] of pr.needs) dispense(G, id, n);
   G.meta.time += pr.min;
   for (const c of p.conds) if (c.id.startsWith('wound') || c.id === 'burn_minor') { c.dirt = (c.dirt ?? 0.3) * 0.15; c.I = Math.max(0, (c.I ?? 0) - 0.7); }
   enc.proc.add(procId);
-  enc.log.push({ who: 'You', text: pr.label + '.' });
-  return { ok: true, text: 'Done. The wound is clean.' };
+  enc.log.push({ who: YOU, text: msg('{what}.', { what: en(pr, 'label') }) });
+  return { ok: true, text: t('Done. The wound is clean.') };
 }
 
 /** Finish: dispense, counsel, refer, get paid, send home. Returns a summary for the UI. */
@@ -258,7 +276,7 @@ export function finishEncounter(G, enc) {
     charges += qty * it.price;
     if (line.route === 'oral') for (const a of Object.keys(it.actives || {})) if (ORGANISMS.some((o) => a in o.mic)) selectPressure(G.meta.clinic, a);
     p.rx.push({
-      item: line.item, name: it.name, q, left: qty, amount: line.amount, perDay: line.perDay, days: line.days, start: now, route: line.route,
+      item: line.item, name: en(it, 'name'), q, left: qty, amount: line.amount, perDay: line.perDay, days: line.days, start: now, route: line.route,
       actives: line.route === 'oral' ? it.actives : undefined, topical: line.route === 'topical' ? it.topical : undefined,
       fluid: it.fluid ? { na: it.fluid.na * q } : undefined, counselled, bitter: !!it.bitter,
     });
@@ -268,15 +286,15 @@ export function finishEncounter(G, enc) {
   if (enc.gather) {
     const got = gather(G, p, enc.gather, makeRng(p.seed, 'gather', p.visits.length));
     if (got) giveTea(G, p, got, enc.gather, now + 4 * HOUR, 5);
-    enc.log.push({ who: speaker(p), text: got ? 'We will look for it on the way home.' : 'We do not know where that grows.' });
+    enc.log.push({ who: speaker(p), text: got ? msg('We will look for it on the way home.') : msg('We do not know where that grows.') });
   }
   for (const id of enc.instr) {
     if (id === 'finish' || id === 'stop_home') continue;
     const ins = INSTRUCTIONS.find((x) => x.id === id);
-    const line = { instr: id, name: ins.label, start: now, until: now + (ins.days ?? 21) * DAY };
+    const line = { instr: id, name: en(ins, 'label'), start: now, until: now + (ins.days ?? 21) * DAY };
     if (ins.needs) for (const [nid, n] of ins.needs) if (stockOf(G, nid) >= n) {
       const { q } = dispense(G, nid, n);
-      if (ins.atBirth?.item === nid) { const it = C.items.get(nid); line.atBirth = { item: nid, name: it.name, amount: ins.atBirth.amount, left: ins.atBirth.amount, actives: it.actives, q }; charges += n * it.price; }
+      if (ins.atBirth?.item === nid) { const it = C.items.get(nid); line.atBirth = { item: nid, name: en(it, 'name'), amount: ins.atBirth.amount, left: ins.atBirth.amount, actives: it.actives, q }; charges += n * it.price; }
     }
     p.rx.push(line);
   }
@@ -294,16 +312,47 @@ export function finishEncounter(G, enc) {
   const pay = payment(G, p, charges);
   collect(G, p, pay);
   const judged = judge(G, p, enc);
-  p.visits.push({ t: now, burden: p.conds.reduce((a, c) => a + (c.s || 0), 0), dx: enc.dx, rx: enc.rx.map((r) => `${r.name} ${r.amount}${C.items.get(r.item).unit || ''} ×${r.perDay}/day ×${r.days}d`), instr: [...enc.instr], refer: enc.refer, paid: pay.cash, judged });
+  // rx: English lines (old saves have only these); rxMsg: the same as msgs, shown with tm() in any language
+  const rxOf = (r) => ({ item: en(C.items.get(r.item), 'name'), amount: r.amount, unit: C.items.get(r.item).unit || '', perDay: r.perDay, days: r.days });
+  const rxEn = (v) => `${v.item} ${v.amount}${v.unit} ×${v.perDay}/day ×${v.days}d`;
+  // units: symbols stay (g, ml); words translate ('unit|vial')
+  const unitMsg = (u) => (!u || u === 'g' || u === 'ml' ? raw(u) : { $: u, ctx: 'unit' });
+  p.visits.push({ t: now, burden: p.conds.reduce((a, c) => a + (c.s || 0), 0), dx: enc.dx, rx: enc.rx.map((r) => rxEn(rxOf(r))), rxMsg: enc.rx.map((r) => { const v = rxOf(r); return msg('{item} {amount}{unit} ×{perDay}/day ×{days}d', { ...v, unit: unitMsg(v.unit) }); }), instr: [...enc.instr], refer: enc.refer, paid: pay.cash, judged });
   p.trust = Math.min(1, p.trust + 0.1 + (counselled ? 0.05 : 0));
   p.leftBurden = p.conds.reduce((a, c) => a + (c.s || 0), 0);
   p.returnWhy = null;
-  if (enc.returnDays) scheduleReturn(G, p, now + enc.returnDays * DAY, 'come for the check-up as you asked');
+  if (enc.returnDays) scheduleReturn(G, p, now + enc.returnDays * DAY, msg('come for the check-up as you asked'));
   p.status = enc.refer && enc.referWent ? 'hospital' : 'leaving';
   G.meta.clinic.stats.seen++;
   const xp = gainXp(G.p, 'diagnosis', judged.dxRight ? 6 : 2);
-  G.meta.ledger.push({ t: now, kind: 'visit', pid: p.id, text: `Saw ${who(p)}: ${enc.dx.map((d) => COND.get(d).name).join(', ') || 'no diagnosis'}. Paid ${pay.cash} sh${pay.kind.length ? ' and ' + pay.kind.map(([id, n]) => `${n} ${C.items.get(id).name.toLowerCase()}`).join(', ') : ''}${pay.debt ? `, owes ${pay.debt} sh` : ''}.`, amount: pay.cash });
+  G.meta.ledger.push({ t: now, kind: 'visit', pid: p.id, ...visitNote(G, p, enc, pay), amount: pay.cash });
   return { pay, judged, referWent: enc.referWent, levelUp: xp };
+}
+
+/** The ledger line for a visit: { text (English), msg (any language; `en` the exact English) }. */
+function visitNote(G, p, enc, pay) {
+  const { C } = G;
+  const dxNames = enc.dx.map((d) => en(COND.get(d), 'name'));
+  const kindEn = pay.kind.map(([id, n]) => `${n} ${en(C.items.get(id), 'name').toLowerCase()}`);
+  const text = `Saw ${whoEn(p)}: ${dxNames.join(', ') || 'no diagnosis'}. Paid ${pay.cash} sh${kindEn.length ? ' and ' + kindEn.join(', ') : ''}${pay.debt ? `, owes ${pay.debt} sh` : ''}.`;
+  const v = { who: whoMsg(p), dx: dxNames.length ? list(dxNames) : msg('no diagnosis'), cash: pay.cash, debt: pay.debt, kind: list(pay.kind.map(([id, n]) => msg('{n} {item}', { n, item: en(C.items.get(id), 'name') }))) };
+  const m = pay.kind.length
+    ? (pay.debt ? msg('Saw {who}: {dx}. Paid {cash} sh and {kind}, owes {debt} sh.', v) : msg('Saw {who}: {dx}. Paid {cash} sh and {kind}.', v))
+    : pay.debt ? msg('Saw {who}: {dx}. Paid {cash} sh, owes {debt} sh.', v) : msg('Saw {who}: {dx}. Paid {cash} sh.', v);
+  return { text, msg: { ...m, en: text } };
+}
+/** "a, b, c" as one msg (any language). */
+const list = (xs) => xs.reduce((a, x) => (a === null ? x : msg('{a}, {b}', { a, b: x })), null);
+
+/** Names of what judge() lists (helped, harmed, needless: actives, advice, procedures), shown in the current language. */
+export function givenName(id) {
+  const a = ACTIVE.get(id), ins = INSTRUCTIONS.find((x) => x.id === id), pr = PROCEDURES.find((x) => x.id === id);
+  if (a) return a.name;
+  if (ins) return ins.label;
+  if (pr) return pr.label;
+  if (id === 'oral_fluid') return t('rehydration drink');
+  if (id === 'artemisinin_alone') return t('artemisinin given alone');
+  return id;
 }
 
 /** How the visit looks with hindsight (shown later in the ledger, never during the visit). */
@@ -326,5 +375,5 @@ export function judge(G, p, enc) {
   const needless = main.params.org ? [] : antibiotics;
   // a dangerous bacterial illness (dysentery, pneumonia, typhoid) sent home without an antibiotic needed the health centre
   const needsRefer = (main.model === 'bacterial' && main.params.hazard >= 0.001 && !antibiotics.length) || main.id === 'pre_eclampsia' || !!T.mustRefer;
-  return { dxRight, truth: main.name, helped, harmed, needless, referredRight: needsRefer ? enc.refer : null };
+  return { dxRight, truth: en(main, 'name'), helped, harmed, needless, referredRight: needsRefer ? enc.refer : null };
 }

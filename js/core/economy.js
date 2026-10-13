@@ -4,6 +4,15 @@ import { VENDORS, VENDOR } from './content/vendors.js';
 import { makeRng, hash } from './rng.js';
 import { DAY, day, minuteOfDay } from './time.js';
 import { addItem, count, remove } from './inventory.js';
+import { t, tc, msg, en, raw, thing } from './i18n.js';
+
+/** An item unit as a word in the current language (g and ml stay symbols). */
+export const unitWord = (u) => ({ app: tc('unit', 'app'), vial: tc('unit', 'vial'), ampoule: tc('unit', 'ampoule'), sachet: tc('unit', 'sachet'), dose: tc('unit', 'dose') }[u] ?? u);
+/** The same, as a saved msg var (rendered later by tm()). */
+const unitVar = (u) => (u === 'g' || u === 'ml' ? raw(u) : { $: u, ctx: 'unit' });
+/** Vendor names as they read mid-sentence ("from the village shop"), as saved msg vars. */
+const VENDOR_MID = { duka: msg('village shop'), market: msg('market day'), herbalist: msg('travelling herb seller'), peddler: msg('tool peddler'), stores: msg('mission medical stores') };
+const vendorVar = (v) => VENDOR_MID[v.id] ?? en(v, 'name').toLowerCase();
 
 /** Visits of a wandering vendor: [{ from: day, to: day }], deterministic per seed. */
 export function visits(seed, v, uptoDay) {
@@ -63,18 +72,21 @@ export function stock(G, v, key) {
 export function buy(G, v, key, id) {
   const { C, p, meta } = G;
   const row = stock(G, v, key).find((s) => s.id === id);
-  if (!row) return { ok: false, why: 'Sold out.' };
-  if (p.coins < row.price) return { ok: false, why: `You need ${row.price} sh.` };
+  if (!row) return { ok: false, why: t('Sold out.') };
+  if (p.coins < row.price) return { ok: false, why: t('You need {n} sh.', { n: row.price }) };
   const it = C.items.get(id);
   const left = addItem(p.inv, C, id, LOT(it), { q: row.q, t: G.W.time });
-  if (left) { if (left < LOT(it)) remove(p.inv, id, LOT(it) - left); return { ok: false, why: 'Your bag is full.' }; }
+  if (left) { if (left < LOT(it)) remove(p.inv, id, LOT(it) - left); return { ok: false, why: t('Your bag is full.') }; }
   p.coins = Math.round((p.coins - row.price) * 10) / 10;
   if (it.herb || it.plant) (p.known ||= {})[it.herb || it.plant] = 1;   // you have met the plant now
   meta.trade ||= {};
   const k = v.id + ':' + key;
   meta.trade[k] ||= {};
   meta.trade[k][id] = (meta.trade[k][id] || 0) + 1;
-  meta.ledger.push({ t: G.W.time, kind: 'buy', text: `Bought ${it.name}${it.unit ? ` (${LOT(it)} ${it.unit})` : ''} from the ${v.name.toLowerCase()}`, amount: -row.price });
+  const itemEn = en(it, 'name');
+  meta.ledger.push({ t: G.W.time, kind: 'buy', text: `Bought ${itemEn}${it.unit ? ` (${LOT(it)} ${it.unit})` : ''} from the ${en(v, 'name').toLowerCase()}`,
+    msg: it.unit ? msg('Bought {item} ({n} {unit}) from the {vendor}', { item: thing('item', it.id), n: LOT(it), unit: unitVar(it.unit), vendor: vendorVar(v) }) : msg('Bought {item} from the {vendor}', { item: thing('item', it.id), vendor: vendorVar(v) }),
+    amount: -row.price });
   return { ok: true, price: row.price };
 }
 
@@ -88,11 +100,11 @@ export function sell(G, v, id) {
   const { C, p, meta } = G;
   const it = C.items.get(id);
   const price = offer(G, v, id);
-  if (price === null) return { ok: false, why: 'They do not buy that.' };
-  if (count(p.inv, id) < LOT(it)) return { ok: false, why: `You need ${LOT(it)}${it.unit ? ' ' + it.unit : ''} to sell.` };
+  if (price === null) return { ok: false, why: t('They do not buy that.') };
+  if (count(p.inv, id) < LOT(it)) return { ok: false, why: it.unit ? t('You need {n} {unit} to sell.', { n: LOT(it), unit: unitWord(it.unit) }) : t('You need {n} to sell.', { n: LOT(it) }) };
   remove(p.inv, id, LOT(it));
   p.coins = Math.round((p.coins + price) * 10) / 10;
-  meta.ledger.push({ t: G.W.time, kind: 'sell', text: `Sold ${it.name} to the ${v.name.toLowerCase()}`, amount: price });
+  meta.ledger.push({ t: G.W.time, kind: 'sell', text: `Sold ${en(it, 'name')} to the ${en(v, 'name').toLowerCase()}`, msg: msg('Sold {item} to the {vendor}', { item: thing('item', it.id), vendor: vendorVar(v) }), amount: price });
   return { ok: true, price };
 }
 
@@ -119,9 +131,9 @@ export const orderTotal = (C, cart) => {
 export function placeOrder(G, cart) {
   const { C, p, meta } = G;
   const lines = Object.entries(cart).filter(([, n]) => n > 0);
-  if (!lines.length) return { ok: false, why: 'Nothing in the order.' };
+  if (!lines.length) return { ok: false, why: t('Nothing in the order.') };
   const total = orderTotal(C, Object.fromEntries(lines));
-  if (p.coins < total) return { ok: false, why: `The order comes to ${total} sh with postage.` };
+  if (p.coins < total) return { ok: false, why: t('The order comes to {n} sh with postage.', { n: total }) };
   meta.orders ||= [];
   meta.orderSeq = (meta.orderSeq || 0) + 1;
   const rng = makeRng(meta.seed, 'post', meta.orderSeq);
@@ -138,7 +150,9 @@ export function placeOrder(G, cart) {
   });
   meta.orders.push({ n: meta.orderSeq, goods, due, total, posted: G.W.time });
   p.coins = round1(p.coins - total);
-  meta.ledger.push({ t: G.W.time, kind: 'buy', text: `Posted order no. ${meta.orderSeq} to the ${far ? 'town import house' : 'city wholesaler'} (due about day ${day(due)})`, amount: -total });
+  meta.ledger.push({ t: G.W.time, kind: 'buy', text: `Posted order no. ${meta.orderSeq} to the ${far ? 'town import house' : 'city wholesaler'} (due about day ${day(due)})`,
+    msg: far ? msg('Posted order no. {n} to the town import house (due about day {day})', { n: meta.orderSeq, day: day(due) }) : msg('Posted order no. {n} to the city wholesaler (due about day {day})', { n: meta.orderSeq, day: day(due) }),
+    amount: -total });
   return { ok: true, total, due };
 }
 
@@ -156,8 +170,8 @@ export function deliverOrders(G) {
       if (left) left = addItem(G.p.inv, G.C, id, left, { q, t: G.W.time });
       return [id, left, q];
     }).filter(([, n]) => n > 0);
-    if (!o.goods.length) { orders.splice(orders.indexOf(o), 1); news.push({ kind: 'post', text: `The post runner brought order no. ${o.n}. It is on the medicine shelf.` }); }
-    else { o.due = G.W.time + DAY; news.push({ kind: 'post', text: `The post runner came with order no. ${o.n}, but there is no room on the shelf or in your bag. He will come back tomorrow.` }); }
+    if (!o.goods.length) { orders.splice(orders.indexOf(o), 1); news.push({ kind: 'post', text: t('The post runner brought order no. {n}. It is on the medicine shelf.', { n: o.n }) }); }
+    else { o.due = G.W.time + DAY; news.push({ kind: 'post', text: t('The post runner came with order no. {n}, but there is no room on the shelf or in your bag. He will come back tomorrow.', { n: o.n }) }); }
   }
   return news;
 }

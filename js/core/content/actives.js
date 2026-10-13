@@ -14,6 +14,7 @@
 // a clinical effect size rather than measured directly; the note says which trial.
 
 import { FLORA_ACTIVES } from './flora_actives.js';
+import { localize } from '../i18n.js';
 
 export const ACTIVES = [
   {
@@ -841,4 +842,7 @@ export const ACTIVES = [
   },
 ];
 
+// Shown text translates on read (i18n.js); the Korean lives in i18n/ko/actives.js. `ref` is a citation (cite()).
+// The FLORA_ACTIVES rows are already localized in flora_actives.js; localize() skips fields done once.
+localize(ACTIVES, ['name', 'class', 'toxic[].text', 'idio[].text', 'dependence.text', 'cautions[]', 'note']);
 export const ACTIVE = new Map(ACTIVES.map((a) => [a.id, a]));

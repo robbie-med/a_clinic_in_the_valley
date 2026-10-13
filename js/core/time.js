@@ -2,13 +2,20 @@
 // cool dry → hot dry → rains → late rains (10 days each). Malaria follows the rains with a lag,
 // diarrhoea the heat and the first rains, coughs the cool season.
 import { hashf } from './rng.js';
+import { t } from './i18n.js';
 
 export const DAY = 24 * 60;
 export const HOUR = 60;
 export const YEAR_DAYS = 40;
 export const COMPRESS = 365 / YEAR_DAYS; // real days per game day for slow processes (months, years)
 export const SEASONS = ['cool_dry', 'hot_dry', 'rains', 'late_rains'];
-export const SEASON_NAMES = { cool_dry: 'Cool dry season', hot_dry: 'Hot dry season', rains: 'The rains', late_rains: 'Late rains' };
+/** Season names in the current language (getters: they translate on every read). */
+export const SEASON_NAMES = {
+  get cool_dry() { return t('Cool dry season'); },
+  get hot_dry() { return t('Hot dry season'); },
+  get rains() { return t('The rains'); },
+  get late_rains() { return t('Late rains'); },
+};
 export const REAL_SEC_PER_MIN = 0.45;      // a game day ≈ 11 real minutes
 export const START_TIME = (8 + 5) * DAY + 7 * 60; // day 14 (hot dry season), 07:00
 

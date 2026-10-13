@@ -5,6 +5,8 @@
 // Prices are per tablet / ml in shillings, from the median supplier prices in the MSH International Medical
 // Products Price Guide (2015), at about 1 sh ≈ US$0.80 (a chicken is 6 sh), before the trader's markup.
 
+import { localize } from '../i18n.js';
+
 const tab = (id, name, actives, price, color, extra = {}) => ({ id, name, actives, price, pack: 100, stack: 1000, icon: 'pill', color, ...extra });
 const syr = (id, name, actives, price, color, extra = {}) => ({ id, name, actives, price, unit: 'ml', pack: 100, stack: 2000, icon: 'medicines', color, shelfDays: 14, ...extra });
 
@@ -123,3 +125,5 @@ export const MEDICINES = [
   { id: 'gv_paint', name: 'Gentian violet 0.5% (one painting)', topical: { gentian_violet: 1 }, price: 0.008, pack: 50, stack: 500, icon: 'medicines', color: '#8040c0', ref: 'WTND p.370',
     note: 'Paint impetigo sores after washing off the crusts, 3 times a day.' },
 ];
+// Shown text translates on read (i18n.js); the Korean lives in i18n/ko/items.js. `ref` is a citation (cite()).
+localize(MEDICINES, ['name', 'note']);

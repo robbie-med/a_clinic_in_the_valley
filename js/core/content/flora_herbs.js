@@ -3,6 +3,7 @@
 // unchanged. Nothing here is per species: every number comes from the species' life form, the part
 // used, or its measured content. Art is generic: one sprite per life form, tinted from the id.
 import { FLORA } from './flora.js';
+import { t, tc, en, localize } from '../i18n.js';
 
 /** Which valley habitats a climate suits, and how well the valley suits it at all (0–1). */
 export const CLIMATE = {
@@ -76,6 +77,51 @@ export const USE_NAMES = {
   anaemia: 'weak blood', poison: 'a poison (for fish, arrows or worse)',
 };
 
+// Shown words translate on read (i18n.js); the Korean lives in i18n/ko/items.js (the species' common names, `cn`,
+// in i18n/ko/flora.js). Latin names stay Latin.
+localize(Object.values(CLIMATE), ['name']);
+localize(Object.values(PART), ['unit']);
+localize([USE_NAMES], Object.keys(USE_NAMES));
+localize(FLORA, ['cn']);
+/** A life form ('tree', 'herb'…) in words. Single words carry a context: the life form "herb" is not the medicine. */
+export function lifeName(l) {
+  switch (l) {
+    case 'tree': return tc('life', 'tree');
+    case 'shrub': return tc('life', 'shrub');
+    case 'climber': return tc('life', 'climber');
+    case 'succulent': return tc('life', 'succulent');
+    case 'epiphyte': return tc('life', 'epiphyte');
+    case 'geophyte': return tc('life', 'geophyte');
+    case 'herb': return tc('life', 'herb');
+    case 'grass': return tc('life', 'grass');
+    default: return l;
+  }
+}
+/** The part of a plant that is used ('leaf', 'bark'…, also the hand-written herbs' 'seeds' and 'silk') in words. */
+export function partName(p) {
+  switch (p) {
+    case 'leaf': return tc('part', 'leaf');
+    case 'shoot': return tc('part', 'shoot');
+    case 'plant': return tc('part', 'plant');
+    case 'flower': return tc('part', 'flower');
+    case 'bark': return tc('part', 'bark');
+    case 'wood': return tc('part', 'wood');
+    case 'stem': return tc('part', 'stem');
+    case 'root': return tc('part', 'root');
+    case 'rhizome': return tc('part', 'rhizome');
+    case 'tuber': return tc('part', 'tuber');
+    case 'bulb': return tc('part', 'bulb');
+    case 'seed': return tc('part', 'seed');
+    case 'seeds': return tc('part', 'seeds');
+    case 'fruit': return tc('part', 'fruit');
+    case 'silk': return tc('part', 'silk');
+    default: return p;
+  }
+}
+
+const cap = (w) => w.replace(/^./, (c) => c.toUpperCase());
+const useName = (u) => USE_NAMES[u] || u;
+
 function toHerb(s) {
   const L = LIFE_FORM[s.l] || LIFE_FORM.herb, P = PART[s.p];
   const pool = LIFE_SPRITES[s.l] || LIFE_SPRITES.herb;
@@ -83,17 +129,26 @@ function toHerb(s) {
   const contains = {};
   for (const [cl, v] of Object.entries(s.k)) contains[cl] = [v[0], v[1]];
   return {
-    id: s.i, flora: true, name: s.cn || s.n, latin: s.n, family: s.f, part: s.p, life: s.l, climate: s.c,
+    id: s.i, flora: true, name: en(s, 'cn') || s.n, latin: s.n, family: s.f, get part() { return partName(s.p); }, life: s.l, climate: s.c,
     estimated: Object.values(s.k).some((v) => v[2]),
     habitat: CLIMATE[s.c].habitat, seasons: L.seasons, density: 0, tree: !!L.tree,
     sprite: pool[h % pool.length], tint: TINTS[(h >>> 5) % TINTS.length], icon: P.icon, color: TINTS[(h >>> 5) % TINTS.length],
-    unit: { name: P.unit, g: P.g }, dry: P.dry, tool: P.tool || null, regrowDays: L.regrow,
+    unit: { name: en(P, 'unit'), g: P.g }, dry: P.dry, tool: P.tool || null, regrowDays: L.regrow,
     contains, methods: ['dry', ...P.methods],
-    evidence: 'traditional', uses: (s.u || []).map((u) => USE_NAMES[u] || u), folk: s.u || [],
-    note: `${CLIMATE[s.c].name.replace(/^./, (c) => c.toUpperCase())} ${s.l}. People use the ${s.p}${s.u?.length ? ' for ' + (s.u || []).slice(0, 4).map((u) => USE_NAMES[u] || u).join(', ') : ' in their own traditions'}. What it can actually do here is whatever its compounds do.`,
+    evidence: 'traditional', uses: (s.u || []).map((u) => en(USE_NAMES, u) || u), folk: s.u || [],
+    // a whole sentence per case, so it reads naturally in every language
+    get note() {
+      const v = { climate: cap(CLIMATE[s.c].name), life: lifeName(s.l), part: partName(s.p) };
+      return s.u?.length
+        ? t('{climate} {life}. People use the {part} for {uses}. What it can actually do here is whatever its compounds do.', { ...v, uses: s.u.slice(0, 4).map(useName).join(', ') })
+        : t('{climate} {life}. People use the {part} in their own traditions. What it can actually do here is whatever its compounds do.', v);
+    },
     harms: [],
     ref: 'Duke JA, USDA Dr. Duke\'s Phytochemical and Ethnobotanical Databases (public domain); WCVP (Kew, CC BY 4.0)',
   };
 }
 
 export const FLORA_HERBS = FLORA.map(toHerb);
+// the unit and the folk uses are table words (above); the name is the species' common name where it has one
+localize(FLORA_HERBS, ['unit.name', 'uses[]']);
+localize(FLORA_HERBS.filter((h, i) => FLORA[i].cn), ['name']);

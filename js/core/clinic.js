@@ -10,6 +10,9 @@ import { deliverOrders } from './economy.js';
 import { ORGANISMS, baseResistance } from './content/organisms.js';
 import { tickPeople, drawResident, personNow, hold, patientEvents } from './people.js';
 import { homeRemedyOnArrival } from './homecare.js';
+import { t, tc, tm, msg, person, en } from './i18n.js';
+import { say, withEn, withCtx } from './patient.js';
+export { say };
 
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 export const OPEN = 7 * 60, CLOSE = 18 * 60, LAST_ARRIVAL = 15.5 * 60;
@@ -129,30 +132,34 @@ export function tickHome(G) {
         cl.stats.died++;
         if (poison) cl.stats.harmed++;
         cl.rep = clamp(cl.rep - (poison ? 0.12 : ours ? 0.04 : 0.01), 0, 1);
-        news.push({ kind: 'death', pid: p.id, text: `${who(p)} from ${hamletOf(G, p.hamlet).name} died — ${p.cause}.`, poison });
-        G.meta.ledger.push({ t: e.t, kind: 'death', pid: p.id, text: `${who(p)} died (${p.cause}).` });
+        const cause = p.causeMsg ?? p.cause, place = hamletOf(G, p.hamlet).name;
+        news.push({ kind: 'death', pid: p.id, text: say(withEn(msg('{who} from {place} died — {cause}.', { who: whoMsg(p), place: person(place), cause }), `${whoEn(p)} from ${place} died — ${p.cause}.`)), poison });
+        const text = `${whoEn(p)} died (${p.cause}).`;
+        G.meta.ledger.push({ t: e.t, kind: 'death', pid: p.id, text, msg: withEn(msg('{who} died ({cause}).', { who: whoMsg(p), cause }), text) });
       } else if (e.kind === 'tox' && !p.toxReturn) {
         p.toxReturn = true;
-        scheduleReturn(G, p, e.t + 6 * HOUR, `complains: ${e.text}`);
+        scheduleReturn(G, p, e.t + 6 * HOUR, withEn(msg('complains: {what}', { what: e.msg ?? e.text }), `complains: ${e.text}`));
       } else if (e.kind === 'onset' && COND.get(e.id).params.urgent) {
         // an emergency at home (bleeding after the birth, fits, a stuck labour): the family carries her in
-        scheduleReturn(G, p, e.t + HOUR, `brought in: ${COND.get(e.id).name.toLowerCase()}`);
+        const what = en(COND.get(e.id), 'name');
+        scheduleReturn(G, p, e.t + HOUR, withEn(msg('brought in: {what}', { what }), `brought in: ${what.toLowerCase()}`));
       } else if (e.kind === 'birth' || e.kind === 'stillbirth' || e.kind === 'miscarriage') {
-        news.push({ kind: 'birth', pid: p.id, text: `${p.name} of ${hamletOf(G, p.hamlet).name}: ${e.text}.` });
+        const place = hamletOf(G, p.hamlet).name;
+        news.push({ kind: 'birth', pid: p.id, text: say(withEn(msg('{name} of {place}: {what}.', { name: person(p.name), place: person(place), what: e.msg ?? e.text }), `${p.name} of ${place}: ${e.text}.`)) });
       }
     }
     if (p.status === 'dead') continue;
     // a resistant strain bred in this patient spreads through the household
     for (const c of p.conds) for (const id of Object.keys(c.res || {})) if (!c.spread?.[id]) { (c.spread ||= {})[id] = 1; selectPressure(cl, id, 6, c.org); }
-    if (p.status === 'hospital' && t > p.hospital.until) { p.status = 'home'; G.meta.ledger.push({ t, kind: 'note', pid: p.id, text: `${who(p)} is back from the health centre.` }); }
+    if (p.status === 'hospital' && t > p.hospital.until) { p.status = 'home'; G.meta.ledger.push({ t, kind: 'note', pid: p.id, text: `${whoEn(p)} is back from the health centre.`, msg: msg('{who} is back from the health centre.', { who: whoMsg(p) }) }); }
     // recovered?
     if (!p.conds.length && !p.recovered) {
       p.recovered = t;
       cl.stats.recovered++;
       if (p.visits.length) {
         cl.rep = clamp(cl.rep + 0.025, 0, 1);
-        news.push({ kind: 'recovered', pid: p.id, text: `${who(p)} from ${hamletOf(G, p.hamlet).name} is well again.` });
-        G.meta.ledger.push({ t, kind: 'recovered', pid: p.id, text: `${who(p)} recovered.` });
+        news.push({ kind: 'recovered', pid: p.id, text: t('{who} from {place} is well again.', { who: whoMsg(p), place: person(hamletOf(G, p.hamlet).name) }) });
+        G.meta.ledger.push({ t, kind: 'recovered', pid: p.id, text: `${whoEn(p)} recovered.`, msg: msg('{who} recovered.', { who: whoMsg(p) }) });
         // the grateful (and those who owe) bring something
         if (p.debt > 0 || p.wealth < 0.4) scheduleReturn(G, p, t + DAY * (0.5 + Math.random()), 'thanks');
       }
@@ -170,7 +177,7 @@ export function tickHome(G) {
       // told the danger signs (IMCI counselling), they notice a turn for the worse sooner and come at once (estimates)
       const warned = p.rx.some((r) => r.instr === 'danger_signs' && !r.stopped && r.until > t);
       if ((b > left * (warned ? 1.15 : 1.35) && b > (warned ? 0.25 : 0.35)) || back || ranOut) {
-        if (rngR() < 0.35 + p.trust * 0.5 + (warned ? 0.35 : 0)) scheduleReturn(G, p, t + DAY * (warned ? 0.1 : 0.3), back ? 'the fever came back' : ranOut ? 'still unwell, the medicine is finished' : 'getting worse');
+        if (rngR() < 0.35 + p.trust * 0.5 + (warned ? 0.35 : 0)) scheduleReturn(G, p, t + DAY * (warned ? 0.1 : 0.3), back ? msg('the fever came back') : ranOut ? msg('still unwell, the medicine is finished') : msg('getting worse'));
         else p.leftBurden = b; // gives up on you for now
       }
     }
@@ -179,6 +186,7 @@ export function tickHome(G) {
   return news;
 }
 
+/** why: 'thanks', or what they say brought them back: a msg (saved; `en` when its English is not the plain key). */
 export function scheduleReturn(G, p, t, why) {
   const cl = G.meta.clinic;
   if (cl.returns.some((r) => r.pid === p.id)) return;
@@ -189,8 +197,13 @@ export function scheduleReturn(G, p, t, why) {
   cl.returns.push({ pid: p.id, t: tt, why });
 }
 
-export const who = (p) => (p.age < 13 ? `${p.name} (${ageWords(p.age)})` : p.name);
-export function ageWords(a) { return a < 1 ? `${Math.max(1, Math.round(a * 12))} months` : `${Math.floor(a)} years`; }
+/** The patient as named in lists: "Name (3 years)" for a child. whoMsg: the same as a msg (for saved text); who: shown now. */
+export const whoMsg = (p) => (p.age < 13 ? msg('{name} ({age})', { name: person(p.name), age: ageMsg(p.age) }) : person(p.name));
+export const who = (p) => tm(whoMsg(p));
+const ageMsg = (a) => (a < 1 ? msg('{n} months', { n: Math.max(1, Math.round(a * 12)) }) : withCtx(msg('{n} years', { n: Math.floor(a) }), 'age'));
+export function ageWords(a) { return tm(ageMsg(a)); }
+// English for the `text` kept beside each saved msg
+export const whoEn = (p) => (p.age < 13 ? `${p.name} (${p.age < 1 ? `${Math.max(1, Math.round(p.age * 12))} months` : `${Math.floor(p.age)} years`})` : p.name);
 
 /** What the visit costs, and how it is paid: { total, cash, kind:[[id,n]], debt }. */
 export function payment(G, p, charges) {
@@ -223,5 +236,14 @@ export function collect(G, p, pay) {
 /** One line per patient for the ledger. */
 export function patientSummary(p) {
   const cond = COND.get(p.mainCond);
-  return { name: who(p), cond: cond?.name, status: p.dead ? 'died' : p.recovered ? 'well' : p.status, visits: p.visits.length, cause: p.cause };
+  return { name: who(p), cond: cond?.name, status: statusWord(p.dead ? 'died' : p.recovered ? 'well' : p.status), visits: p.visits.length, cause: p.cause && say(p.causeMsg ?? p.cause) };
+}
+/** A patient's status in words (status ids: arriving, waiting, consult, leaving, home, hospital, dead; died, well). */
+export function statusWord(s) {
+  const W = {
+    died: () => tc('status', 'died'), dead: () => tc('status', 'died'), well: () => tc('status', 'well'), arriving: () => tc('status', 'arriving'),
+    waiting: () => tc('status', 'waiting'), consult: () => tc('status', 'consult'), leaving: () => tc('status', 'leaving'), home: () => tc('status', 'home'),
+    hospital: () => tc('status', 'hospital'),
+  };
+  return W[s] ? W[s]() : s;
 }

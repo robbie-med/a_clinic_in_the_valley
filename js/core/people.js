@@ -15,6 +15,7 @@ import { DAY, HOUR, YEAR_DAYS, COMPRESS, day } from './time.js';
 import { COND } from './content/conditions.js';
 import { vitals } from './signs.js';
 import { PYRAMID, personName } from './patient.js';
+import { msg } from './i18n.js';
 
 const lerp = (a, b, t) => a + (b - a) * t;
 const gauss = (rng) => Math.sqrt(-2 * Math.log(Math.max(1e-9, rng()))) * Math.cos(2 * Math.PI * rng());
@@ -150,8 +151,9 @@ export function onLabour(p, t) {
   roll(out.kind === 'miscarriage' ? 'loss' : 'birth');
   if (out.baby) out.baby.nn += ntRisk(ttProtected(p.vacc, p.who ?? p.seed), !!p.rx?.some((r) => r.instr === 'clean_birth'));
   p.pregnant = 0; p.delivered = t; delete p.foetus; delete p.labour; delete p.induce;
-  const text = out.kind === 'birth' ? `gave birth to a ${out.baby.sex === 'm' ? 'boy' : 'girl'}` : out.kind === 'stillbirth' ? 'the baby was born dead' : 'lost the pregnancy';
-  return [{ t, kind: out.kind, text, baby: out.baby }];
+  // text: English; msg: the same, shown in any language
+  const m = out.kind === 'birth' ? (out.baby.sex === 'm' ? msg('gave birth to a boy') : msg('gave birth to a girl')) : out.kind === 'stillbirth' ? msg('the baby was born dead') : msg('lost the pregnancy');
+  return [{ t, kind: out.kind, text: m.$, msg: m, baby: out.baby }];
 }
 
 // ————————————————————————————————————————————— the newborn
