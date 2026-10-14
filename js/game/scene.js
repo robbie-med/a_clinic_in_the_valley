@@ -164,7 +164,7 @@ export class ClinicScene extends Phaser.Scene {
     const { G } = this, q = population(G).L.get(a.id);
     if (!q) return;
     const who = personNow(G, q, G.W.time), place = hamletRow(G.W.R, q.h).name;
-    const doing = { water: t('fetching water'), field: t('working in the field'), bush: t('gathering firewood'), market: t('at the market'), cook: t('cooking'), yard: t('at home'), walk: t('on the way') }[a.act] || t('at home');
+    const doing = { water: t('fetching water'), field: t('working in the field'), bush: t('gathering firewood'), forage: t('looking for wild food'), market: t('at the market'), cook: t('cooking'), yard: t('at home'), walk: t('on the way') }[a.act] || t('at home');
     G.ui.toast(t('{name} of {place}: {doing}.', { name: personName(who.name), place: personName(place), doing }));
   }
   villagerAt(wx, wy, r = 0.7) {

@@ -97,7 +97,8 @@ export function householdDay(hh, members, ctx) {
   hh.cass = Math.min(FARM.cassava.cap * scale, hh.cass + (lerp(FARM.cassava.kgYear[0], FARM.cassava.kgYear[1], hashf(seed, d, 3, 5011)) * scale) / YEAR_DAYS);
   // ——— income: casual work for neighbours, more in the dry months; wages from the clinic (ctx.extra)
   // (a wage a real day, so COMPRESS of them in a game day, for the share of days there is work)
-  hh.cash += able * WAGE.labour * COMPRESS * (season === 'cool_dry' || season === 'hot_dry' ? WAGE.dry : WAGE.wet) + (ctx.extra || 0);
+  const income = able * WAGE.labour * COMPRESS * (season === 'cool_dry' || season === 'hot_dry' ? WAGE.dry : WAGE.wet);
+  hh.cash += income + (ctx.extra || 0);
   // what is not needed for food goes on the rest of life (school fees, clothes, soap, salt, funerals): a household
   // keeps only a small buffer of cash (WAGE.keep, more for the better off; an estimate)
   const keep = WAGE.keep[0] + WAGE.keep[1] * (hh.ha / 1.1);
@@ -111,11 +112,27 @@ export function householdDay(hh, members, ctx) {
   const eat = { greens: Math.min(need * 0.03, GREENS_KG[season] * eaters.length * COMPRESS * FOOD.get('greens').kcal) };
   let left = need - eat.greens;
   const take = (id, stock, cap) => { const f = FOOD.get(id), kc = Math.min(left, cap, hh[stock] * f.kcal); hh[stock] -= kc / f.kcal; left -= kc; eat[id] = (eat[id] || 0) + kc; };
+  // food you sent home with a patient (encounter.js giveFood) is eaten first
+  const extra = { kcal: 0, fe: 0, haem: 0, folate: 0 };
+  if (hh.gift?.kcal > 0) {
+    const kc = Math.min(left, hh.gift.kcal), f = kc / hh.gift.kcal;
+    for (const k of ['kcal', 'fe', 'haem', 'folate']) { extra[k] += hh.gift[k] * f; hh.gift[k] -= hh.gift[k] * f; }
+    left -= kc;
+    if (hh.gift.kcal < 1) delete hh.gift;
+  }
   take('maize', 'maize', need * 0.72);
   take('beans', 'beans', need * 0.2);
   take('maize', 'maize', Infinity);
   take('beans', 'beans', Infinity);
   take('cassava', 'cass', Infinity);
+  // the store is empty: gather wild food near home before spending the little cash (ctx.wild from village.js: what the
+  // household's hands can bring from the hamlet's share of what grows; a day spent foraging is a day not paid)
+  if (left > 1 && ctx.wild?.kcal > 0) {
+    const kc = Math.min(left, ctx.wild.kcal), D = ctx.wild.dens;
+    extra.kcal += kc; extra.fe += (D.fe * kc) / 1000; extra.haem += (D.haem * kc) / 1000; extra.folate += (D.folate * kc) / 1000;
+    left -= kc; notes.foraged = kc;
+    hh.cash = Math.max(0, hh.cash - income * 0.5 * (kc / ctx.wild.kcal));
+  }
   // buying grain, then selling animals to buy more
   const buy = () => {
     const price = PRICE.maize * pm, f = FOOD.get('maize');
@@ -130,8 +147,12 @@ export function householdDay(hh, members, ctx) {
   notes.short = Math.max(0, left);
   const eaten = need - Math.max(0, left);
   hh.r = eaters.length ? clamp(eaten / (need / (thin && stockKcal > 30 * need ? 1.08 : 1)), 0, 1.08) : 1;
-  const total = Object.values(eat).reduce((a, b) => a + b, 0);
-  hh.dens = total > 0 ? densityOf(Object.fromEntries(Object.entries(eat).map(([k, v]) => [k, v / total]))) : hh.dens;
+  // what was eaten, per 1000 kcal: the household's own foods, and gifts and wild food with their own iron and folate
+  const own = Object.values(eat).reduce((a, b) => a + b, 0), total = own + extra.kcal;
+  if (total > 0) {
+    const D = own > 0 ? densityOf(Object.fromEntries(Object.entries(eat).map(([k, v]) => [k, v / own]))) : { fe: 0, haem: 0, folate: 0 };
+    hh.dens = { fe: (D.fe * own + extra.fe * 1000) / total, haem: (D.haem * own + extra.haem * 1000) / total, folate: (D.folate * own + extra.folate * 1000) / total };
+  }
   hh.cash = Math.round(hh.cash * 10) / 10; hh.maize = Math.round(hh.maize * 10) / 10; hh.beans = Math.round(hh.beans * 10) / 10; hh.cass = Math.round(hh.cass * 10) / 10;
   return notes;
 }
@@ -175,17 +196,6 @@ export function share(homes, d) {
   return given;
 }
 const SHARE_DAYS = 3;
-
-/** Relief food: once a hamlet has gone hungry for a while, a distribution brings each hungry house half a ration of
- *  maize a day (Sphere Handbook 2018: a full ration ~2100 kcal a person a day; half is what partial distributions give;
- *  the delay and share are estimates). homes: [{ hh, need }]. Returns kg given. */
-export function relief(homes) {
-  const kc = FOOD.get('maize').kcal;
-  let given = 0;
-  for (const h of homes) if (h.hh.r < 0.85) { const kg = (0.5 * h.need) / kc; h.hh.maize += kg; given += kg; }
-  return given;
-}
-export const RELIEF_AFTER = 5; // game days of hunger before the trucks come
 
 /** Payment in kind from the household's own stores: what a family can give when coins run out (clinic.js payment). */
 export function kindFrom(hh, rest, rng) {

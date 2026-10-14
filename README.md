@@ -27,7 +27,11 @@ compound, with sources.
   - Households grow maize and beans (sown with the rains, lifted at the end of the rains and the start of the cool
     dry season), keep cassava in the ground, buy grain while they have money, sell a chicken or a goat, then eat
     less. One year in six the rains fail; illness in the growing season costs the next harvest. Hunger thins people,
-    lowers fertility, weakens defence against infection and, past ~75% of the median weight, kills.
+    lowers fertility, weakens defence against infection and, past ~75% of the median weight, kills, the ill as well
+    as the well. A house that runs out forages: the valley's wild foods (`content/wild_foods.js`: amaranth, jute
+    mallow, black nightshade, moringa, tamarind, figs, wild yams… where the seed grew them) feed it a little and bring
+    iron and folate; foragers are seen in the bush, and now and then a hungry one eats a poisonous lookalike, which
+    acts through its real compounds. Neighbours share; there is no relief food. You can send food home with a patient.
   - Blood (`blood.js`): haemoglobin, the iron store, folate, red cell size and turnover, and the genes that shape
     them (sickle trait and disease, α-thalassaemia, inherited by Mendel). Iron comes from food (a few per cent of it
     from maize and beans, more when the store is empty, less while inflammation raises hepcidin) and from tablets;

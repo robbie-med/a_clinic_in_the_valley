@@ -69,3 +69,17 @@ test('genes pass by Mendel: two trait parents have an SS child about 1 in 4', ()
   for (let i = 0; i < 4000; i++) if (Math.floor(inheritGenes(3, 3, rng) / 3) === 2) ss++;
   assert.ok(ss / 4000 > 0.22 && ss / 4000 < 0.28, 'SS ' + ss / 4000);
 });
+test('someone ill and starving can die of hunger itself', async () => {
+  const { residentRecord } = await import('../js/core/patient.js');
+  const { simulate } = await import('../js/core/disease.js');
+  const { DAY } = await import('../js/core/time.js');
+  let starved = 0;
+  for (let i = 0; i < 30; i++) {
+    const who = { id: 's' + i, sex: 'm', age: 30, pregnant: 0, name: 'A', kg: 39, kgRel: 0.62, nutrition: 0, blood: { hb: 13, fe: 100, fol: 15, mcv: 88, r: 1, g: 0, menses: 1 }, adh: 0.8, allergy: null, nausea: 0.8, immF: 1, wealth: 0.2, trust: 0.5 };
+    const p = residentRecord({ seed: 5, who, t: 0, hamlet: null });
+    p.diet = { r: 0.4, nonHaem: 5, haem: 0, folate: 0.1, abs: 0 };
+    simulate(p, 10 * DAY);
+    if (p.dead && p.cause === 'starvation') starved++;
+  }
+  assert.ok(starved > 15, 'starved ' + starved + '/30');
+});

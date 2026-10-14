@@ -18,7 +18,7 @@ import { stock, buy, sell, offer, LOT, lotPrice, nextVisit, CATALOGUE, IMPORT, c
 import { lookalikes, climateFit } from '../core/flora.js';
 import { teaOf } from '../core/homecare.js';
 import { CLIMATE } from '../core/content/flora_herbs.js';
-import { startEncounter, ask, examine, differential, questionsFor, examsFor, remedies, rxLine, doseInfo, stockOf, finishEncounter, doProcedure, injectNow, toolsAt, adviceFor, PROCEDURES, INSTRUCTIONS, labTests, labWhyNot, runLab, labReady, recheck } from '../core/encounter.js';
+import { startEncounter, ask, examine, differential, questionsFor, examsFor, remedies, rxLine, doseInfo, stockOf, finishEncounter, doProcedure, injectNow, toolsAt, adviceFor, PROCEDURES, INSTRUCTIONS, labTests, labWhyNot, runLab, labReady, recheck, foods, giveFood } from '../core/encounter.js';
 import { candidates, hire, dismiss, ROLES, skillMsg, roleMsg, labStaff, wildOf } from '../core/staff.js';
 import { population, hamletRow, householdKey, personNow } from '../core/people.js';
 import { LAB_TEST } from '../core/content/lab.js';
@@ -243,6 +243,8 @@ export function makeUI(G) {
     if (it.fluid) lines.push(h('li', {}, t('Replaces water and salt lost in diarrhoea and vomiting.')));
     if (stack?.t !== undefined && it.shelfDays && it.form !== 'fresh') { const age = (G.W.time - stack.t) / DAY; if (age > it.shelfDays) lines.push(h('li', { class: 'bad' }, t('Past its keeping time — weak or spoiled.'))); else if (it.shelfDays < 5) lines.push(h('li', {}, it.shelfDays < 1 ? t('Keeps about {n} hours.', { n: Math.round(it.shelfDays * 24) }) : t('Keeps about {n} days.', { n: it.shelfDays }))); }
     if (it.note) lines.push(h('li', {}, it.note));
+    if (it.eatHow) lines.push(h('li', {}, t('Food: {how}', { how: it.eatHow })));
+    if (it.food) lines.push(h('li', { class: 'dim' }, t('About {kcal} kcal, {fe} mg of iron each.', { kcal: fmt(it.food.kcal), fe: fmt(it.food.fe) })));
     if (it.plant) lines.push(h('li', {}, t('Plant in a garden bed: ready in about {n} days.', { n: it.growDays })));
     if (it.place) lines.push(h('li', {}, t('Hold it and tap a spot near you to place it.')));
     d.append(h('ul', {}, lines));
@@ -509,6 +511,16 @@ export function makeUI(G) {
     const teas = Object.keys(G.p.known).filter((id) => teaOf(G.C, id)).sort((a, b) => HERB.get(a).name.localeCompare(HERB.get(b).name));
     if (teas.length) treat.append(h('h4', {}, t('Send them to gather')), h('select', { onchange: (e) => { enc.gather = e.target.value || null; } },
       [h('option', { value: '' }, t('Nothing')), ...teas.map((id) => h('option', { value: id, selected: enc.gather === id }, t('{herb}: a cup of tea 3 times a day, 5 days', { herb: HERB.get(id).name })))]));
+    // food to take home: the whole household eats it (encounter.js giveFood)
+    const food = foods(G);
+    if (food.length) {
+      S.foodItem = food.some((f) => f.id === S.foodItem) ? S.foodItem : food[0].id;
+      const n = S.foodN ?? 5;
+      treat.append(h('h4', {}, t('Send food home')), h('div', { class: 'row' },
+        h('select', { onchange: (e) => { S.foodItem = e.target.value; render(); } }, food.map((f) => h('option', { value: f.id, selected: f.id === S.foodItem }, t('{item} — {amount} in stock', { item: f.name, amount: amt(f, stockOf(G, f.id)) })))),
+        h('span', { class: 'chips' }, [1, 5, 10, 20].map((k) => h('button', { class: n === k ? 'on' : '', onclick: () => { S.foodN = k; render(); } }, k))),
+        h('button', { disabled: stockOf(G, S.foodItem) < n, onclick: () => { const r = giveFood(G, enc, S.foodItem, n); ui.toast(r.text); render(); } }, t('Give'))));
+    }
     treat.append(h('h4', {}, t('Advice')), h('div', { class: 'checks' }, byGroup(adviceFor(p)).map(([g, list]) => [h('small', { class: 'qhead' }, g), ...list.map((ins) => h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: enc.instr.has(ins.id), onchange: (e) => { if (e.target.checked) enc.instr.add(ins.id); else enc.instr.delete(ins.id); } }), ins.label))]).flat()));
     treat.append(h('div', { class: 'row' }, h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: enc.refer, onchange: (e) => { enc.refer = e.target.checked; } }), t('Refer to the health centre (two days\' walk)'))),
       h('div', { class: 'row' }, h('span', {}, t('Come back in:')), h('span', { class: 'chips' }, [0, 1, 2, 3, 7].map((n) => h('button', { class: enc.returnDays === n ? 'on' : '', onclick: () => { enc.returnDays = n; render(); } }, n ? t('{n} d', { n }) : t('only if worse'))))),
@@ -646,7 +658,8 @@ export function makeUI(G) {
             j.harmed.length ? t('What harmed: {list}.', { list: names(j.harmed) }) : '',
             j.needless?.length ? t('No germ to kill: the {list} only bred resistance.', { list: lc(names(j.needless)) }) : '',
             j.causes?.length ? t('Why the blood was thin: {list}.', { list: j.causes.map(causeName).join(', ') }) : '',
-            j.caught?.length ? t('Caught on your waiting bench: {list}.', { list: j.caught.map((c) => COND.get(c)?.name ?? c).join(', ') }) : ''].filter(Boolean).join(' ');
+            j.caught?.length ? t('Caught on your waiting bench: {list}.', { list: j.caught.map((c) => COND.get(c)?.name ?? c).join(', ') }) : '',
+            j.ate?.length ? t('Ate by mistake, thinking it food: {list}.', { list: j.ate.map((id) => HERB.get(id)?.name ?? id).join(', ') }) : ''].filter(Boolean).join(' ');
           detail.append(h('div', { class: 'entry' }, h('small', {}, `${t('Day {n}', { n: day(v.t) })} ${clock(v.t)}`), h('b', {}, t('You thought: {dx}', { dx: v.dx.map((d) => COND.get(d)?.name ?? d).join(', ') || '—' })),
             h('p', {}, v.rx.length ? t('Gave: {list}', { list: v.rx.map(tm).join('; ') }) : t('No medicine.')), v.instr.length ? h('p', { class: 'dim' }, t('Advice: {list}', { list: v.instr.map(gaveName).join(', ') })) : null, v.refer ? h('p', {}, t('Referred.')) : null,
             (p.dead || p.recovered) ? h('p', { class: j.dxRight ? 'good' : 'bad' }, hindsight) : null));

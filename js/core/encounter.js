@@ -8,9 +8,9 @@ import { ORGANISMS } from './content/organisms.js';
 import { signs } from './signs.js';
 import { count, remove, countSpec } from './inventory.js';
 import { HOUR, DAY, COMPRESS, day } from './time.js';
-import { payment, collect, scheduleReturn, whoMsg, whoEn, selectPressure } from './clinic.js';
+import { payment, collect, scheduleReturn, whoMsg, whoEn, selectPressure, householdOf } from './clinic.js';
 import { say, withEn } from './patient.js';
-import { t, tm, msg, person, raw, localize, en, getLang } from './i18n.js';
+import { t, tm, msg, person, raw, localize, en, getLang, thing } from './i18n.js';
 import { gainXp } from './crafting.js';
 import { stackPotency } from './crafting.js';
 import { makeRng } from './rng.js';
@@ -239,6 +239,28 @@ function showLab(G, enc, p, sample, skill, who) {
 function removeTool(G, id) {
   if (count(G.p.inv, id)) { remove(G.p.inv, id, 1); return; }
   for (const sh of G.W.shelves()) if (count(sh.inv, id)) { remove(sh.inv, id, 1); return; }
+}
+
+/** Food you have that a family can take home (maize, beans, meat, eggs, wild foods): items with a food value. */
+export function foods(G) {
+  const ids = new Set();
+  for (const s of G.p.inv.slots) if (s && G.C.items.get(s.id)?.food) ids.add(s.id);
+  for (const sh of G.W.shelves()) for (const s of sh.inv.slots) if (s && G.C.items.get(s.id)?.food) ids.add(s.id);
+  return [...ids].map((id) => G.C.items.get(id));
+}
+/** Send food home with them: it goes into their household's pot and is eaten first (food.js), feeding the whole house,
+ *  with its iron and folate. A stranger from outside the valley takes it away. */
+export function giveFood(G, enc, itemId, n) {
+  const p = G.meta.clinic.patients[enc.pid], it = G.C.items.get(itemId);
+  if (!it?.food || n <= 0) return { ok: false, text: '' };
+  if (stockOf(G, itemId) < n) return { ok: false, text: t('Not enough {item}.', { item: lc(it.name) }) };
+  dispense(G, itemId, n);
+  const hh = householdOf(G, p);
+  if (hh) { const g = (hh.gift ||= { kcal: 0, fe: 0, haem: 0, folate: 0 }); for (const k of Object.keys(g)) g[k] += (it.food[k] || 0) * n; }
+  (enc.food ||= []).push([itemId, n]);
+  const said = msg('Gave {n} {item} to take home.', { n, item: thing('item', itemId) });
+  enc.log.push({ who: YOU, text: said });
+  return { ok: true, text: say(said) };
 }
 
 /** Ranked differential from what you found so far: [{ id, name, score }]. */
@@ -472,5 +494,6 @@ export function judge(G, p, enc) {
   const anaemic = main.id === 'anaemia' || main.id === 'hookworm' || p.hb < 9;
   const causes = anaemic ? anaemiaCauses(p) : undefined;
   const caught = (p.caught || []).filter((c) => c.where === 'bench').map((c) => c.cond);
-  return { dxRight, truth: en(main, 'name'), helped, harmed, needless, referredRight: needsRefer ? enc.refer : null, causes, caught: caught.length ? caught : undefined };
+  const ate = (p.ate || []).map((x) => x.ate); // a poisonous plant mistaken for food (village.js mispick)
+  return { dxRight, truth: en(main, 'name'), helped, harmed, needless, referredRight: needsRefer ? enc.refer : null, causes, caught: caught.length ? caught : undefined, ate: ate.length ? ate : undefined };
 }

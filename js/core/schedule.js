@@ -69,8 +69,9 @@ export function dayOf(G, q, d, ctx) {
   if ((female && age >= 8) || (child && age >= 8 && r(seed, q.id, d, 2) < 0.3)) go(S.water, 'water', t + 20);
   go(S.door, 'yard', t + 15);
   const farming = season !== 'hot_dry'; // sowing and weeding in the rains, the harvest in the cool dry months
-  const morning = (adult || (age >= 10 && r(seed, q.id, d, 3) < 0.5)) ? (ctx.market && r(seed, q.id, d, 4) < 0.35 ? 'market' : farming ? 'field' : r(seed, q.id, d, 5) < 0.4 ? 'bush' : 'yard') : 'yard';
-  go(S[morning === 'market' ? 'market' : morning === 'field' ? 'field' : morning === 'bush' ? 'bush' : 'door'], morning, 12 * 60 + jitter(6, 30));
+  // a hungry house sends everyone who can walk out to forage for wild food (food.js)
+  const morning = ctx.hungry && age >= 8 ? 'forage' : (adult || (age >= 10 && r(seed, q.id, d, 3) < 0.5)) ? (ctx.market && r(seed, q.id, d, 4) < 0.35 ? 'market' : farming ? 'field' : r(seed, q.id, d, 5) < 0.4 ? 'bush' : 'yard') : 'yard';
+  go(S[morning === 'market' ? 'market' : morning === 'field' ? 'field' : morning === 'bush' || morning === 'forage' ? 'bush' : 'door'], morning, 12 * 60 + jitter(6, 30));
   go(S.door, ctx.fed ? 'cook' : 'yard', 13 * 60 + 30 + jitter(7, 30));
   const afternoon = morning === 'market' ? 'market' : morning === 'field' && adult ? 'field' : 'yard';
   go(S[afternoon === 'field' ? 'field' : afternoon === 'market' ? 'market' : 'door'], afternoon, 17 * 60 + jitter(8, 40));
@@ -106,7 +107,7 @@ export function villagersIn(G, box, now = G.W.time) {
     if (!plan) {
       const rec = P.rec[q.id], sick = Math.max(0, ...(rec?.conds || []).map((c) => c.s || 0));
       const hh = P.hh[householdKey(q)];
-      plan = dayOf(G, q, d, { sick, fed: !hh || hh.r > 0.6, market, pregnant: q.conc != null ? weeksOf(q, d) : 0 });
+      plan = dayOf(G, q, d, { sick, fed: !hh || hh.r > 0.6, hungry: !!hh && hh.r < 0.95, market, pregnant: q.conc != null ? weeksOf(q, d) : 0 });
       C.plans.set(q.id, plan);
     }
     const w = whereIn(plan, m);

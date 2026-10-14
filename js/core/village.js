@@ -17,7 +17,13 @@ import { simulate, addCondition, stepSlow, inflamOf, bleedOf } from './disease.j
 import { COND, CONDITIONS } from './content/conditions.js';
 import { BACKGROUND, CHRONIC, NONE, FROM_BODY, WINDOW, SLOW_MODELS, SEEK, ELSEWHERE, RARE, HOME_ORS } from './content/village.js';
 import { CONTAGIOUS } from './content/contagion.js';
-import { householdDay, newHousehold, dietOf, seasonOf, yday, rainOf, yearOf, share, relief, RELIEF_AFTER } from './food.js';
+import { householdDay, newHousehold, dietOf, seasonOf, yday, rainOf, yearOf, share } from './food.js';
+import { WILD_FOOD, TOXIC_CLASSES, FORAGE_KG, MISPICK_FOOD, MEAL_G } from './content/wild_foods.js';
+import { lookalikes } from './flora.js';
+import { HABITATS } from './region.js';
+import { HERB } from './content/herbs.js';
+import { ACTIVE } from './content/actives.js';
+import { inSeason } from './time.js';
 import { bloodStep, absorbIron, basalLoss, hbSet, cellLife, bloodVolume, MENSES_MG, menstruating, FOLATE_BIO, sickle } from './blood.js';
 import { kcalNeed, KCAL_PER_KG, starveHazard, fertilityOf, nutritionOf } from './content/food.js';
 import { infectious, immune, IDX } from './contagion.js';
@@ -98,13 +104,14 @@ function villageDay(G, d) {
   const meals = new Map(), hamletFood = {};
   // kin and neighbours share grain with a house that has run out (food.js share)
   const byHamlet = {};
-  for (const [key, members] of homes) if (P.hh[key]) (byHamlet[members[0].h] ||= []).push({ hh: P.hh[key], need: members.reduce((a, q) => a + kcalNeed(ageOf(q, d), q.sex), 0) * COMPRESS });
+  for (const [key, members] of homes) if (P.hh[key]) (byHamlet[members[0].h] ||= []).push({ key, hh: P.hh[key], need: members.reduce((a, q) => a + kcalNeed(ageOf(q, d), q.sex), 0) * COMPRESS });
+  for (const list of Object.values(byHamlet)) share(list, d);
+  // the wild food each settlement's land gives today, shared among the houses that have run short (foraging)
+  const forage = {};
   for (const [hid, list] of Object.entries(byHamlet)) {
-    share(list, d);
-    // relief food, once hunger has lasted (food.js relief)
-    const E = P.epi[hid];
-    if (E?.hungry && d - E.hungry >= RELIEF_AFTER && relief(list) > 0 && !E.relief) { E.relief = d; P.news.push({ kind: 'hunger', msg: msg('Relief food has reached {place}.', { place: person(hamletRow(G.W.R, hid).name) }) }); }
-    if (E && !E.hungry) delete E.relief;
+    const pool = wildPool(G, hid, t0), short = list.filter((h) => stockKcal(h.hh) < h.need);
+    if (pool.kcal > 0 && short.length) for (const h of short) forage[h.key] = pool;
+    forage[hid + ':n'] = short.length;
   }
   for (const [key, members] of homes) {
     const info = members.map((q) => {
@@ -114,7 +121,12 @@ function villageDay(G, d) {
     const hh = (P.hh[key] ||= newHousehold(seed, key, wealthOf(G, members[0]), d, info.reduce((a, m) => a + kcalNeed(m.age, m.sex), 0) * 365, members.length));
     const staff = (cl.staff || []).filter((s) => members.some((q) => q.id === s.who));
     // staff are paid straight into the house (staff.js); their days at your work are days away from the field
-    const notes = householdDay(hh, info, { seed, d, key, away: staff.length * 0.5, meat: hh.meat || 0 });
+    // foraging: the hamlet's day of wild food split among the houses that ran short, up to what their hands can carry
+    const pool = forage[key];
+    const hands = info.filter((m) => m.age >= 8 && m.age < 65).reduce((a, m) => a + (1 - m.sick), 0);
+    const wild = pool ? { kcal: Math.min(pool.kcal / Math.max(1, forage[members[0].h + ':n']), hands * pool.perHand * COMPRESS), dens: pool.dens } : null;
+    const notes = householdDay(hh, info, { seed, d, key, away: staff.length * 0.5, meat: hh.meat || 0, wild });
+    if (notes.foraged) mispick(G, members, d, t0);
     hh.meat = 0;
     meals.set(key, { hh, info });
     const hf = (hamletFood[members[0].h] ||= { r: 0, n: 0, harvest: null, rain: null });
@@ -142,6 +154,75 @@ function villageDay(G, d) {
   }
   P.stats.days = (P.stats.days || 0) + 1;
 }
+// ————————————————————————————————————————————— wild food
+const stockKcal = (hh) => hh.maize * 3650 + hh.beans * 3330 + hh.cass * 1600;
+const nearCache = new WeakMap();
+/**
+ * The wild land within a walk of a settlement (20 tiles), as tiles of each habitat, and the species of this valley that
+ * grow there (region.js floraHere, by their habitat weights): the plants on the map are the notable ones; the bush holds
+ * many more of the same. Cached per region. Without a world (tests) there is none.
+ */
+function bushNear(G, hid) {
+  const R = G.W.R;
+  if (!R?.hab || !R.floraHere) return null;
+  let m = nearCache.get(R);
+  if (!m) nearCache.set(R, (m = new Map()));
+  if (m.has(hid)) return m.get(hid);
+  const s = hamletRow(R, hid), tiles = {};
+  for (let y = Math.max(0, s.y - 20); y <= Math.min(R.N - 1, s.y + 20); y++) for (let x = Math.max(0, s.x - 20); x <= Math.min(R.N - 1, s.x + 20); x++) {
+    const hab = HABITATS[R.hab[y * R.N + x]];
+    if (hab !== 'village' && hab !== 'field') tiles[hab] = (tiles[hab] || 0) + 1;
+  }
+  const grows = (id) => { const h = HERB.get(id); return h ? Object.entries(h.habitat || {}).reduce((a, [hab, w]) => a + (tiles[hab] || 0) * w, 0) : 0; };
+  const species = R.floraHere.map((id) => ({ id, n: grows(id) })).filter((x) => x.n > 0);
+  const out = { tiles, species, ids: new Set(species.map((x) => x.id)) };
+  m.set(hid, out);
+  return out;
+}
+// How many plants of an edible species a tile of its habitat holds, at its habitat weight (an estimate, set so that the
+// bush around a hamlet can feed a tenth or two of its people in a hungry season, as wild foods do in East Africa)
+const WILD_DENSITY = 0.25;
+/** A settlement's wild food for a game day: each edible species in season gives its plants' picking (`harvest` kg each)
+ *  over its regrowth (game days). Returns { kcal, dens (per 1000 kcal), perHand (kcal a forager carries a real day) }. */
+function wildPool(G, hid, t) {
+  let kcal = 0, fe = 0, haem = 0, folate = 0, hand = 0;
+  const bush = bushNear(G, hid);
+  for (const s of bush?.species || []) {
+    const w = WILD_FOOD.get(s.id), h = HERB.get(s.id);
+    if (!w || !h || !inSeason(h.seasons, t)) continue;
+    const kg = (s.n * WILD_DENSITY * w.harvest) / Math.max(1, h.regrowDays), kc = kg * w.food.kcal;
+    kcal += kc; fe += kg * w.food.fe; haem += kg * w.food.fe * w.food.haem; folate += kg * w.food.folate;
+    hand = Math.max(hand, FORAGE_KG[w.part] * w.food.kcal);
+  }
+  return { kcal, dens: kcal ? { fe: (fe * 1000) / kcal, haem: (haem * 1000) / kcal, folate: (folate * 1000) / kcal } : null, perHand: hand };
+}
+/**
+ * Hunger makes foragers less careful: now and then someone in a house that foraged eats a poisonous plant mistaken for
+ * a food (a same-genus or same-family lookalike growing nearby, flora.js lookalikes, with a dangerous compound class).
+ * A meal (MEAL_G of the fresh plant) goes into their body as doses of its real compounds (content/flora_actives.js), so
+ * what follows is pharmacology, not a script.
+ */
+function mispick(G, members, d, t0) {
+  const seed = G.meta.seed, q0 = members[0], bush = bushNear(G, q0.h);
+  if (!bush || roll(seed, householdKey(q0), d, STREAM.gather + 50) >= MISPICK_FOOD) return;
+  const here = bush.ids, foods = bush.species.filter((s) => WILD_FOOD.has(s.id));
+  const bad = [];
+  for (const f of foods) for (const l of lookalikes(f.id)) if (here.has(l.id) && Object.keys(HERB.get(l.id)?.contains || {}).some((k) => TOXIC_CLASSES.includes(k))) bad.push([f.id, l.id]);
+  if (!bad.length) return;
+  const [meant, ate] = bad[Math.floor(roll(seed, householdKey(q0), d, STREAM.gather + 51) * bad.length)];
+  const who = members[Math.floor(roll(seed, householdKey(q0), d, STREAM.gather + 52) * members.length)];
+  const cl = G.meta.clinic, t = t0 + 12 * HOUR, h = HERB.get(ate);
+  const p = who.held ? cl.patients[who.held] : recordFor(G, who, t0);
+  for (const [cls, [lo, hi]] of Object.entries(h.contains)) {
+    const a = ACTIVE.get(cls);
+    if (!a) continue;
+    const mg = ((lo + hi) / 2) * 10 * h.dry * MEAL_G; // % of dry weight → mg in a meal of fresh plant
+    if (a.channel === 'systemic') (p.doses.sys[cls] ||= []).push([t, mg]);
+    else if (a.channel === 'gut') p.doses.gut.push([t, cls, mg]);
+  }
+  (p.ate ||= []).push({ t, ate, meant });
+}
+
 /** How much a feverish acute illness takes off the appetite now, 0..1 (long, mild illness does not: disease.js). */
 function feverish(b) {
   let s = 0;
@@ -401,6 +482,7 @@ function settle(G, q, p) {
   const { P } = population(G);
   if (p.dead || p.pregnant || p.pending?.length) return;
   if (p.rx?.some((r) => !r.stopped && r.start + r.days * DAY > p.t)) return; // a home remedy being taken
+  if (Object.values(p.doses?.sys || {}).some((l) => l.some(([t]) => p.t - t < 72 * HOUR)) || (p.doses?.gut || []).some(([t]) => p.t - t < 72 * HOUR)) return; // something swallowed still acting
   if (!p.conds.length) { storeBody(G, q, p); delete P.rec[q.id]; return; }
   const attack = (c) => ['asthma', 'fits'].includes(modelOf(c.id)) && (c.s || 0) >= 0.35;
   if (p.conds.every((c) => SLOW_MODELS.has(modelOf(c.id)) && !attack(c))) { storeBody(G, q, p); P.ill[q.id] = p.conds; delete P.rec[q.id]; }

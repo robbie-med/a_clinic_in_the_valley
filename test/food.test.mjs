@@ -42,3 +42,16 @@ test('grain costs most in the hungry season and after a drought', () => {
   assert.ok(priceMult(ok, YEAR_DAYS + 38) > priceMult(ok, YEAR_DAYS + 2));
   assert.ok(priceMult(bad, 2 * YEAR_DAYS + 10) > priceMult(ok, 2 * YEAR_DAYS + 10)); // year 2 eats year 1's crop
 });
+test('an empty house forages before it goes without, and food you give is eaten first', () => {
+  const seed = seedWith((r) => r > 0.85 && r < 1.1), ms = family();
+  const empty = () => Object.assign(newHousehold(seed, 'e', 0.2, 1, kYear(ms), 5), { maize: 0, beans: 0, cass: 0, cash: 0, chick: 0, goat: 0 });
+  const a = empty(), b = empty(), c = empty();
+  const wild = { kcal: 30000, dens: { fe: 60, haem: 0, folate: 1.5 } };
+  householdDay(a, ms, { seed, d: 12, key: 'e' });
+  householdDay(b, ms, { seed, d: 12, key: 'e', wild });
+  c.gift = { kcal: 40000, fe: 200, haem: 0, folate: 2 };
+  householdDay(c, ms, { seed, d: 12, key: 'e', wild });
+  assert.ok(b.r > a.r, `foraging ${b.r} vs none ${a.r}`);
+  assert.ok(b.dens.fe > a.dens.fe || a.r === 0, 'wild leaves bring iron');
+  assert.ok(c.r > b.r, `a gift ${c.r} vs foraging alone ${b.r}`);
+});

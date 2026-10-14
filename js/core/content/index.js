@@ -8,6 +8,8 @@ import { ACTIVE } from './actives.js';
 import { METHODS, EXTRACT, HERB_METHODS, SPECIALS } from './preparations.js';
 import { INGREDIENTS, TOOLS, MATERIALS, PRODUCE, WORKS } from './goods.js';
 import { LAB_TOOLS, LAB_SUPPLIES } from './lab.js';
+import { FOOD } from './food.js';
+import { WILD_FOOD } from './wild_foods.js';
 import { PLACEABLES } from './build.js';
 import { MEDICINES } from './medicines.js';
 import { pixelIcon } from './pixel_icons.js';
@@ -186,6 +188,13 @@ export function buildContent() {
   G('swamp', { name: 'Swamp', sprites: range('dngn/floor/swamp', 4), color: '#4a5a3a', walk: 0.6 });
   G('shallow', { name: 'Shallow water', sprites: ['dngn/water/shallow_water', 'dngn/water/shallow_water2'], color: '#4a8ab0', walk: 0.5, water: 'shallow' });
   G('deep', { name: 'Deep water', sprites: ['dngn/water/deep_water', 'dngn/water/deep_water2'], color: '#2a5a8a', walk: 0, water: 'deep' });
+  // ——— what can be eaten: per item, kg and the food in it (content/food.js FOOD, wild_foods.js) — given to a family
+  // (encounter.js giveFood). Eggs: USDA FoodData Central, whole raw egg ~60 g; smoked meat about 1.6× the energy of fresh.
+  const per = (f, kg, mult = 1) => ({ kg, kcal: f.kcal * kg * mult, fe: f.fe * kg, haem: f.fe * f.haem * kg, folate: f.folate * kg });
+  for (const id of ['maize', 'beans', 'cassava', 'meat']) { const f = FOOD.get(id); items.get(id).food = per(f, f.perItem ?? 1); }
+  items.get('smoked_meat').food = per(FOOD.get('meat'), 1, 1.6);
+  items.get('eggs').food = { kg: 0.06, kcal: 86, fe: 1.1, haem: 0, folate: 0.03 };
+  for (const [id, w] of WILD_FOOD) { const it = items.get('fresh_' + id); if (it) { const kg = HERB.get(id).unit.g / 1000; it.food = { kg, kcal: w.food.kcal * kg, fe: w.food.fe * kg, haem: 0, folate: w.food.folate * kg }; Object.defineProperty(it, 'eatHow', { get: () => w.how, enumerable: false }); } }
   for (const it of items.values()) { const px = pixelIcon(it); if (px) it.icon = px; }  // pixel art where the table has it
   // Shown text translates on read (i18n.js; Korean in i18n/ko/items.js). Names built above are live getters already.
   localize([...items.values()], ['name', 'note']);

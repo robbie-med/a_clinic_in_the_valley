@@ -15,7 +15,7 @@ import { makeRng, hashf } from './rng.js';
 import { COMPRESS } from './time.js';
 import { pregnancyHour, newbornHazard } from './people.js';
 import { bloodStep, absorbIron, basalLoss, hbSet, cellLife, bloodVolume, pregnancyIron, MENSES_MG, menstruating, FOLATE_BIO, FOLIC_BIO, FE_PER_G_HB, slowDays } from './blood.js';
-import { kcalNeed, KCAL_PER_KG, nutritionOf } from './content/food.js';
+import { kcalNeed, KCAL_PER_KG, nutritionOf, starveHazard } from './content/food.js';
 import { medianWeight } from './patient.js';
 import { YEAR_DAYS } from './time.js';
 import { msg, en } from './i18n.js';
@@ -825,7 +825,10 @@ export function simulate(p, toT, C) {
         ev.push({ t: t1, kind: 'healed', id: c.id, text: `${en(def, 'name')} is gone`, msg: msg('{cond} is gone', { cond: en(def, 'name') }) });
       }
     }
-    if (p.blood) bodyHour(p, x, t1, ev);
+    if (p.blood) {
+      const starve = bodyHour(p, x, t1, ev);
+      if (starve > 0) { hazard += starve; if (starve > (p.killer?.t === t1 ? p.killer.h : 0)) p.killer = { id: 'starvation', h: starve, t: t1 }; }
+    }
     // water: the sick drink some on their own; the rehydration drink does the real work
     const selfDrink = loss * (p.age < 2 ? 0.58 : p.age < 5 ? 0.66 : 0.78) * (p.hyd / p.weight > 0.08 ? 0.5 : 1);
     const absorbed = fluidIn * 0.9 * (1 - 0.3 * vomiting(p) * (1 - (ds.relief.nausea || 0)));
@@ -920,6 +923,9 @@ function bodyHour(p, x, t, ev) {
     p.weight = Math.round((own + 0.3 * weeks) * 100) / 100;
     p.nutrition = nutritionOf(own / med);
   }
+  // starving while ill: the same risk as anyone this thin (content/food.js starveHazard, a real day's risk; an hour of
+  // the slow calendar is COMPRESS/24 real days)
+  return starveHazard(ownKg(p) / medianWeight(p.age, p.sex)) * days;
 }
 
 /** A day (or `hours`) of slow illness in someone up and about (village.js): each condition steps hour by hour with no
@@ -1020,6 +1026,7 @@ function causeOfDeath(p, tox, d) {
     return said(msg('poisoned by {drug}', { drug }), 'poisoned by ' + drug.split(' (')[0].toLowerCase());
   }
   if (d > 0.1) return said(msg('dehydration'), 'dehydration');
+  if (p.killer?.id === 'starvation' && p.killer.t === p.t + HOUR) return said(msg('starvation'), 'starvation');
   if (p.killer?.t === p.t + HOUR && p.killer.h > 0 && COND.has(p.killer.id)) return said(condName(p.killer.id), condName(p.killer.id).toLowerCase());
   const worst = [...p.conds].sort((a, b) => (b.sev ?? b.s ?? 0) - (a.sev ?? a.s ?? 0))[0];
   return worst ? said(condName(worst.id), condName(worst.id).toLowerCase()) : said(msg('unknown'), 'unknown');
