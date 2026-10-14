@@ -375,6 +375,7 @@ export class ClinicScene extends Phaser.Scene {
       const closed = minuteOfDay(G.W.time) > CLOSE + 60;
       if (G.W.time - pt.arrivedAt > 4 * HOUR || closed) {
         pt.status = 'leaving';
+        (cl.walkouts ||= []).push(G.W.time); // left without being seen (metrics.js)
         cl.rep = Math.max(0, cl.rep - 0.015);
         G.ui.toast(t('{name} got tired of waiting and went home.', { name: personName(pt.name) }));
         this.sendHome(pt.id);

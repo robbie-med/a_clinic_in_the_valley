@@ -218,6 +218,9 @@ kbd { font: inherit; font-size: var(--fs-s); padding: 0 5px; border: 1px solid #
 .is-touch .sidebtns { bottom: auto; top: calc(130px + var(--safe-t)); }
 .trow, .lrow { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-bottom: 1px solid #2a241c; }
 .trow img { width: 30px; } .trow span, .lrow span { flex: 1; } .trow small, .lrow small { color: var(--dim); }
+.kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin: 8px 0; }
+.kpi { padding: 8px 10px; background: #1c1813; border-radius: 6px; border-left: 3px solid var(--accent); }
+.kpi b { display: block; font-size: 1.5em; } .kpi small { color: var(--dim); font-size: var(--fs-s); }
 .lrow.death span { color: #ff9a7a; } .lrow.recovered span { color: var(--good); }
 .recipe.dead span { color: #ff9a7a; } .recipe.well span { color: var(--good); }
 .bigmap { width: 100%; height: auto; max-height: 100%; object-fit: contain; }

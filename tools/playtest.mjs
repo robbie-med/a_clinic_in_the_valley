@@ -156,6 +156,11 @@ try {
   console.log('import rows', imports);
   if (!imports) throw new Error('the import catalogue found nothing');
   await shot(page, '9-imports');
+  // the metrics tab: KPI tiles and every section, after the first consultation
+  await page.click(`.panel .chips button:has-text("${await tr(page, 'Metrics')}")`);
+  await sleep(200);
+  if ((await page.locator('.panel .kpi').count()) !== 4) throw new Error('the metrics tab shows no KPI tiles');
+  await shot(page, '9-metrics');
   await page.evaluate(() => window.nd.ui.close());
 
   // a trader

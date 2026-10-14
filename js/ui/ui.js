@@ -20,6 +20,7 @@ import { teaOf } from '../core/homecare.js';
 import { CLIMATE } from '../core/content/flora_herbs.js';
 import { startEncounter, ask, examine, differential, questionsFor, examsFor, remedies, rxLine, doseInfo, stockOf, finishEncounter, doProcedure, injectNow, toolsAt, adviceFor, PROCEDURES, INSTRUCTIONS } from '../core/encounter.js';
 import { who, hamletOf, ageWords, OPEN, CLOSE, healthReport } from '../core/clinic.js';
+import { clinicMetrics } from '../core/metrics.js';
 import { medianWeight, say } from '../core/patient.js';
 import { bodySVG, REGIONS } from './body.js';
 import { makeRng } from '../core/rng.js';
@@ -605,7 +606,7 @@ export function makeUI(G) {
   // ———————————————————————————————————— ledger
   PANELS.ledger = () => {
     const cl = G.meta.clinic;
-    const tabs = h('div', { class: 'chips' }, [['patients', t('Patients')], ['money', t('Money')], ['market', t('Traders')], ['post', t('Order by post')], ['report', t('Health office')]].map(([k, l]) => h('button', { class: S.ledTab === k ? 'on' : '', onclick: () => { S.ledTab = k; S.ledSel = null; render(); } }, l)));
+    const tabs = h('div', { class: 'chips' }, [['patients', t('Patients')], ['money', t('Money')], ['market', t('Traders')], ['post', t('Order by post')], ['report', t('Health office')], ['metrics', t('Metrics')]].map(([k, l]) => h('button', { class: S.ledTab === k ? 'on' : '', onclick: () => { S.ledTab = k; S.ledSel = null; render(); } }, l)));
     const list = h('div', { class: 'rlist' });
     const detail = h('div', { class: 'detail' });
     const st = cl.stats;
@@ -666,6 +667,62 @@ export function makeUI(G) {
         h('p', { class: 'hint' }, t('Imported herbs come weeks later, and about one sack in three holds another species altogether — far more for antler.') + ' ', h('span', { class: 'cite' }, cite(IMPORT.ref))));
       const pend = G.meta.orders || [];
       if (pend.length) detail.append(h('h4', {}, t('On the way')), h('ul', {}, pend.map((o) => h('li', {}, o.goods.length > 1 ? t('No. {n}: {count} items, due day {day}', { n: o.n, count: o.goods.length, day: day(o.due) }) : t('No. {n}: {count} item, due day {day}', { n: o.n, count: o.goods.length, day: day(o.due) })))));
+    } else if (S.ledTab === 'metrics') {
+      const days = S.kpiDays === undefined ? 10 : S.kpiDays;
+      const M = clinicMetrics(cl, G.W.time, days);
+      const V = M.volume, F = M.flow, Ct = M.continuity, Q = M.quality, Mo = M.money;
+      const none = '—';
+      const pct = (x) => (x.v == null ? none : `${Math.round(x.v * 100)}%`);
+      const of = (x) => (x.n ? t('{k} of {n}', { k: fmt(x.k), n: fmt(x.n) }) : '');
+      const num = (v) => (v == null ? none : fmt(v));
+      const mins = (v) => (v == null ? none : t('{n} min', { n: Math.round(v) }));
+      // [label, value, note, good?]: good true/false colours the value (green/red); null leaves it plain
+      const okIf = (x, lo, hi) => (x.v == null ? null : x.v >= hi ? true : x.v < lo ? false : null);
+      const badIf = (x, lo, hi) => (x.v == null ? null : x.v <= lo ? true : x.v > hi ? false : null);
+      const sections = [
+        [t('Volume and access'), [
+          [t('Visits'), V.visits, ''], [t('Patients'), V.patients, ''], [t('Visits per day'), num(V.perDay), t('over {n} days', { n: M.span })],
+          [t('New patients'), pct(V.newShare), of(V.newShare)],
+          [t('Left without being seen'), pct(V.lwbs), V.walkouts ? t('{n} walked out', { n: V.walkouts }) : '', badIf(V.lwbs, 0.02, 0.1)],
+          ...(V.missed != null ? [[t('Came while you were away'), V.missed, '']] : [])]],
+        [t('Throughput'), [
+          [t('Time per visit'), mins(F.minPerVisit), F.timed < V.visits ? t('{k} of {n} timed', { k: F.timed, n: V.visits }) : ''],
+          [t('Median wait, door to doctor'), mins(F.medianWait), ''],
+          [t('Seen within an hour'), pct(F.within1h), of(F.within1h), okIf(F.within1h, 0.5, 0.8)],
+          [t('Patients per consulting hour'), num(F.perHour), '']]],
+        [t('Continuity of care'), [
+          [t('Return visits'), pct(Ct.returnShare), of(Ct.returnShare)],
+          [t('Patients seen more than once'), pct(Ct.repeatPatients), of(Ct.repeatPatients)],
+          [t('Visits per patient'), num(Ct.visitsPerPatient), ''],
+          [t('Check-ups kept'), pct(Ct.followUpKept), of(Ct.followUpKept), okIf(Ct.followUpKept, 0.5, 0.75)],
+          [t('Unplanned returns (bounce-backs)'), pct(Ct.bounceBacks), of(Ct.bounceBacks), badIf(Ct.bounceBacks, 0.1, 0.25)]]],
+        [t('Clinical quality (closed cases, with hindsight)'), [
+          [t('Treatment success'), pct(Q.success), of(Q.success), okIf(Q.success, 0.7, 0.9)],
+          [t('Mortality'), pct(Q.mortality), of(Q.mortality), badIf(Q.mortality, 0.03, 0.1)],
+          [t('Deaths from a remedy'), Q.harmDeaths, '', Q.harmDeaths ? false : null],
+          [t('Diagnostic accuracy'), pct(Q.dxRight), of(Q.dxRight), okIf(Q.dxRight, 0.6, 0.85)],
+          [t('Visits with a harmful choice'), pct(Q.harmful), of(Q.harmful), badIf(Q.harmful, 0.02, 0.1)],
+          [t('Needless antibiotics'), pct(Q.needlessAbx), of(Q.needlessAbx), badIf(Q.needlessAbx, 0.05, 0.2)],
+          [t('Right call on referral'), pct(Q.referRight), of(Q.referRight), okIf(Q.referRight, 0.6, 0.85)],
+          [t('Referral rate'), pct(Q.referRate), of(Q.referRate)]]],
+        [t('Revenue cycle'), [
+          [t('Cash collected'), sh(Mo.cash), ''], [t('Revenue per visit'), Mo.perVisit == null ? none : sh(Mo.perVisit), ''],
+          [t('Collection rate'), pct(Mo.collection), Mo.billed ? t('of {billed} billed', { billed: sh(Mo.billed) }) : '', okIf(Mo.collection, 0.6, 0.9)],
+          [t('Owed to you'), sh(Mo.owed), t('everyone, all time')]]],
+      ];
+      for (const [title, rows] of sections) {
+        list.append(h('h4', {}, title));
+        for (const [l, v, note, good] of rows) list.append(h('div', { class: 'lrow' }, h('span', {}, l), note ? h('small', {}, note) : null, h('b', { class: good === true ? 'good' : good === false ? 'bad' : '' }, String(v))));
+      }
+      detail.append(h('h3', {}, t('Key performance indicators')),
+        h('div', { class: 'chips' }, [[10, t('Last {n} days', { n: 10 })], [40, t('Last {n} days', { n: 40 })], [null, t('All time')]].map(([d, l]) => h('button', { class: days === d ? 'on' : '', onclick: () => { S.kpiDays = d; render(); } }, l))),
+        h('div', { class: 'kpis' },
+          h('div', { class: 'kpi' }, h('b', { class: M.nps >= 30 ? 'good' : M.nps < 0 ? 'bad' : '' }, (M.nps > 0 ? '+' : '') + M.nps), h('small', {}, t('Net Promoter Score'))),
+          h('div', { class: 'kpi' }, h('b', {}, pct(Q.success)), h('small', {}, t('Treatment success'))),
+          h('div', { class: 'kpi' }, h('b', {}, mins(F.minPerVisit)), h('small', {}, t('Time per visit'))),
+          h('div', { class: 'kpi' }, h('b', {}, pct(Ct.returnShare)), h('small', {}, t('Return visits')))),
+        h('p', { class: 'hint' }, t('The Net Promoter Score is your name in the valley, put the way a consultant would put it. Quality counts only people whose illness has ended, well or dead, judged with hindsight; the rest are still in the pipeline.')),
+        F.timed < V.visits ? h('p', { class: 'hint' }, t('Time and wait figures start from the visits after this update; older visits were never timed.')) : '');
     } else if (S.ledTab === 'report') {
       const r = healthReport(G);
       list.append(h('p', { class: 'note' }, t('District health office, laboratory bulletin for {season} (day {day}). Share of germs from the valley that resist each medicine, from {n} samples of each. A new bulletin comes each season.', { season: lc(SEASON_NAMES[r.season]), day: r.day, n: r.n })));

@@ -16,6 +16,7 @@ import { stackPotency } from './crafting.js';
 import { makeRng } from './rng.js';
 import { gather, giveTea } from './homecare.js';
 import { reactsTo } from './disease.js';
+import { visitKind } from './metrics.js';
 
 // Advice, one thing each, grouped. `for`: who it can apply to (age, sex, pregnancy, a newborn), never the diagnosis, so
 // the list gives nothing away. `days`: how long it is kept (game days; prevention is a habit that lasts longer). What each
@@ -71,6 +72,9 @@ const parts = (list) => { const seen = new Set(), out = list.filter((x) => { con
 export function startEncounter(G, pid) {
   const p = G.meta.clinic.patients[pid];
   const enc = { pid, t0: G.W.time, log: [], found: {}, done: new Set(), dx: [], rx: [], instr: new Set(), proc: new Set(), refer: false, returnDays: 0 };
+  // for the metrics (metrics.js): why they came, and how long they sat waiting first
+  enc.kind = visitKind(p);
+  enc.wait = p.status === 'waiting' && p.arrivedAt != null ? Math.max(0, G.W.time - p.arrivedAt) : null;
   const opener = p.returnWhy && p.visits.length ? returnLine(p) : p.complaintMsg ?? p.complaint;
   enc.log.push({ who: speaker(p), text: opener });
   p.status = 'consult';
@@ -317,7 +321,8 @@ export function finishEncounter(G, enc) {
   const rxEn = (v) => `${v.item} ${v.amount}${v.unit} ×${v.perDay}/day ×${v.days}d`;
   // units: symbols stay (g, ml); words translate ('unit|vial')
   const unitMsg = (u) => (!u || u === 'g' || u === 'ml' ? raw(u) : { $: u, ctx: 'unit' });
-  p.visits.push({ t: now, burden: p.conds.reduce((a, c) => a + (c.s || 0), 0), dx: enc.dx, rx: enc.rx.map((r) => rxEn(rxOf(r))), rxMsg: enc.rx.map((r) => { const v = rxOf(r); return msg('{item} {amount}{unit} ×{perDay}/day ×{days}d', { ...v, unit: unitMsg(v.unit) }); }), instr: [...enc.instr], refer: enc.refer, paid: pay.cash, judged });
+  p.visits.push({ t: now, burden: p.conds.reduce((a, c) => a + (c.s || 0), 0), dx: enc.dx, rx: enc.rx.map((r) => rxEn(rxOf(r))), rxMsg: enc.rx.map((r) => { const v = rxOf(r); return msg('{item} {amount}{unit} ×{perDay}/day ×{days}d', { ...v, unit: unitMsg(v.unit) }); }), instr: [...enc.instr], refer: enc.refer, paid: pay.cash, judged,
+    kind: enc.kind, min: Math.round(G.W.time - enc.t0), wait: enc.wait == null ? undefined : Math.round(enc.wait), billed: pay.total, back: enc.returnDays || undefined });
   p.trust = Math.min(1, p.trust + 0.1 + (counselled ? 0.05 : 0));
   p.leftBurden = p.conds.reduce((a, c) => a + (c.s || 0), 0);
   p.returnWhy = null;
