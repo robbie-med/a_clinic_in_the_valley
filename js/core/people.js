@@ -10,14 +10,19 @@
 // and harm to the foetus accrues per gestational hour. While the clinic holds someone's record (`held`), the
 // record owns the body; the daily tick leaves that person alone.
 import { ACTIVE } from './content/actives.js';
-import { makeRng, hashf } from './rng.js';
+import { makeRng, hashf, strHash, STREAM } from './rng.js';
 import { DAY, HOUR, YEAR_DAYS, COMPRESS, day } from './time.js';
 import { COND } from './content/conditions.js';
 import { vitals } from './signs.js';
-import { PYRAMID, personName } from './patient.js';
+import { PYRAMID, personName, medianWeight } from './patient.js';
+import { seededGenes, inheritGenes, mensesOf, seedBlood } from './blood.js';
+import { kcalNeed, nutritionOf } from './content/food.js';
+import { densityOf } from './food.js';
+import { tickVillage, immunise } from './village.js';
 import { msg } from './i18n.js';
 
 const lerp = (a, b, t) => a + (b - a) * t;
+const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const gauss = (rng) => Math.sqrt(-2 * Math.log(Math.max(1e-9, rng()))) * Math.cos(2 * Math.PI * rng());
 const rate = (table, x) => (table.find(([b]) => x < b) || [0, 0])[1];
 
@@ -69,7 +74,8 @@ export function pregnancyHour(p, ds, t) {
   for (const [td, id, mg] of p.doses?.gut || []) { const a = ACTIVE.get(id); if (a?.foetal && td <= t && t - td < a.gut.duration * HOUR) gut[id] = (gut[id] || 0) + mg / p.weight; }
   for (const [id, x] of Object.entries(gut)) for (const e of ACTIVE.get(id).foetal) add(e, x);
   for (const e of ILLNESS) if (w >= e.weeks[0] && w < e.weeks[1] && e.when(p, t)) add(e, 1);
-  if (ds.relief.iron) p.hb = Math.min(12.5, p.hb + (ds.relief.iron * IRON_WEEK * COMPRESS) / 168);
+  // a body with its own blood (blood.js) takes the tablets' iron through its store; the rest use the trial's net effect
+  if (ds.relief.iron && !p.blood) p.hb = Math.min(12.5, p.hb + (ds.relief.iron * IRON_WEEK * COMPRESS) / 168);
   if (hashf(p.seed, Math.floor(t / HOUR), 0, 4021) < baseLoss(w) * COMPRESS + (f.harm.loss || 0) - loss0) f.alive = false;
   // obstructed labour (anything with blocksBirth) holds the birth back until it resolves or the hospital operates
   if (!f.alive || w >= 40 || p.induce) return p.conds.some((c) => COND.get(c.id).params.blocksBirth) ? [] : onLabour(p, t);
@@ -120,10 +126,11 @@ export const LABOUR = [
   // heavy bleeding that goes on after a miscarriage (incomplete): an estimate, ~1 in 10
   { id: 'miscarriage', at: 'loss', p: 0.1, ref: 'WTND p.281 (estimate)' },
 ];
-// Maternal deaths among the valley's women the clinic does not hold: ~600 per 100 000 births, between Uganda's
-// ~340 with today's partial care (WHO Trends in maternal mortality 2000–2017) and ~1000+ with none (Ronsmans C,
-// Graham WJ. Lancet 2006;368:1189). The complications above, untreated, add up to about that (test/birth.test.mjs).
-const MATERNAL = 0.006;
+// Maternal deaths: ~600 per 100 000 births in the valley, between Uganda's ~340 with today's partial care (WHO Trends in
+// maternal mortality 2000–2017) and ~1000+ with none (Ronsmans C, Graham WJ. Lancet 2006;368:1189). Every pregnancy
+// runs as a record (village.js), so they come through the complications above, untreated (test/birth.test.mjs); an
+// anaemic woman dies of less bleeding (disease.js bleeding: severe anaemia aOR ~2.4 for maternal death, Daru J et al.
+// Lancet Glob Health 2018;6:e548).
 // Newborn tetanus: ~1 in 100 babies of unprotected mothers born at home with unclean cord care died of it (Roper MH et
 // al. Lancet 2007;370:1947); two doses of tetanus toxoid in pregnancy prevent ~94% (Blencowe H et al. Int J Epidemiol
 // 2010;39:i102), clean birth and cord care ~40% (Blencowe H et al. BMC Public Health 2011;11 Suppl 3:S11). About 3 in
@@ -149,7 +156,8 @@ export function onLabour(p, t) {
   if (!p.labour) { p.labour = t; if (f.alive && p.pregnant >= 28 && roll('labour')) return []; }
   const out = birthOutcome(f, p.pregnant, makeRng(p.seed, 'birth', Math.floor(t)));
   roll(out.kind === 'miscarriage' ? 'loss' : 'birth');
-  if (out.baby) out.baby.nn += ntRisk(ttProtected(p.vacc, p.who ?? p.seed), !!p.rx?.some((r) => r.instr === 'clean_birth'));
+  if (out.baby) { out.baby.ntR = ntRisk(ttProtected(p.vacc, p.who ?? p.seed), !!p.rx?.some((r) => r.instr === 'clean_birth')); out.baby.nn += out.baby.ntR; } // ntR: tetanus's part (people in the valley: an illness instead, village.js)
+  if (out.baby) out.baby.clean = !!p.rx?.some((r) => r.instr === 'clean_birth');
   p.pregnant = 0; p.delivered = t; delete p.foetus; delete p.labour; delete p.induce;
   // text: English; msg: the same, shown in any language
   const m = out.kind === 'birth' ? (out.baby.sex === 'm' ? msg('gave birth to a boy') : msg('gave birth to a girl')) : out.kind === 'stillbirth' ? msg('the baby was born dead') : msg('lost the pregnancy');
@@ -176,11 +184,28 @@ export function newbornHazard(p, ds) {
 // Annual chance of dying by age, rural East Africa (rounded from WHO Global Health Observatory life tables,
 // Uganda and Tanzania 2019). Deaths in the first weeks are rolled at birth (birthOutcome's nn).
 const DEATH = [[1, 0.025], [5, 0.006], [15, 0.0015], [50, 0.004], [65, 0.012], [80, 0.04], [90, 0.12], [Infinity, 0.3]];
+// Share of the deaths at each age that the game's own illnesses now cause in the valley (malaria, pneumonia, diarrhoea,
+// measles, malnutrition, HIV, TB, childbirth, high blood pressure…): those come through bodies (village.js), so the age
+// table keeps only the rest: cancers, accidents, old age (GBD 2019 cause fractions for Uganda, rounded; an estimate).
+const MODELLED = [[1, 0.5], [5, 0.65], [15, 0.45], [50, 0.45], [65, 0.35], [Infinity, 0.3]];
+/** The chance a year of dying of what no illness in the game covers. */
+export const deathRate = (age) => rate(DEATH, age) * (1 - rate(MODELLED, age));
 // Births per woman per year by age (rural Uganda, Uganda DHS 2016, rounded: total fertility ~6).
 const ASFR = [[15, 0], [20, 0.14], [25, 0.28], [30, 0.27], [35, 0.23], [40, 0.17], [45, 0.08], [50, 0.03], [Infinity, 0]];
 // A woman can conceive only when neither pregnant (0.73 y) nor in postpartum amenorrhoea (~1 y while breastfeeding,
 // Uganda DHS 2016): the chance per available year that gives these birth rates.
 const conceive = (asfr) => (asfr > 0 ? 1 / (1 / asfr - 1.75) : 0);
+/** Births a woman had before the valley began: about the sum of the age-specific rates up to her age then (her own
+ *  hashed share of it). Then each birth adds one (q.parity). */
+export function parityOf(G, q) {
+  if (q.parity != null || q.sex !== 'f') return q.parity || 0;
+  const { P } = population(G), age0 = Math.max(0, (P.day0 - q.born) / YEAR_DAYS);
+  let n = 0;
+  for (let a = 15; a < age0; a++) n += rate(ASFR, a);
+  return Math.floor(n * (0.5 + makeRng(G.meta.seed, 'parity', q.id)()) + 0.5);
+}
+/** Chance a year that a woman who could conceive does. */
+export const conceiveRate = (age) => conceive(rate(ASFR, age));
 const GEST = (38 * 7) / COMPRESS; // game days from conception (week 2) to term (week 40), as pregnancyHour runs
 export const weeksOf = (q, d) => 2 + ((d - q.conc) * 38) / GEST;
 /** The week a pregnancy will be lost at (baseline hazard, inverted), or 0 if it reaches term. */
@@ -212,84 +237,152 @@ function seeded(seed, R, d0) {
 }
 // Family planning (WTND pp.283–294, 395): a DMPA injection protects ~3 months (encounter.js sets fpUntil); typical
 // use lets ~6 in 100 women a year conceive, against ~85 with no method (Trussell J. Contraception 2011;83:397).
-const FP_FAIL = 0.06 / 0.85;
+export const FP_FAIL = 0.06 / 0.85;
 const pick = (bands, r) => { let t = r; for (let i = 0; i < bands.length; i++) { t -= bands[i][2]; if (t < 0) return i; } return bands.length - 1; };
 
-// Saved: clinic.pop = { day0, day, seq, diff, stats }. The seeded people are regenerated on load; diff holds
-// each changed or new person by id (0 for a seeded person who has died). The living are cached per pop object.
+// Saved: clinic.pop = { v, day0, day, seq, diff, stats, body, ill, rec, imm, hh, epi, news }. The seeded people are
+// regenerated on load; diff holds each changed or new person by id (0 for a seeded person who has died). Beside it, by
+// person id: body (their blood and weight, blood.js), ill (slow illnesses of people otherwise up and about), rec (the
+// record of anyone whose body the game runs hour by hour: an acute illness or a pregnancy; village.js), imm (immunity
+// left by an illness), and by household: hh (food, money, animals; food.js). The living are cached per pop object.
 const cache = new WeakMap();
 export function population(G) {
   const cl = G.meta.clinic, d = day(G.W.time);
   const P = (cl.pop ||= { day0: d, day: d, seq: 0, diff: {}, stats: { births: 0, deaths: 0 } });
-  let L = cache.get(P);
-  if (!L) {
-    L = new Map();
-    for (const q of seeded(G.meta.seed, G.W.R, P.day0)) if (!(q.id in P.diff)) L.set(q.id, q);
-    for (const [id, q] of Object.entries(P.diff)) if (q) L.set(id, q);
-    cache.set(P, L);
+  let X = cache.get(P);
+  if (!X) {
+    const L = new Map();
+    // the same order as when the people were live (seeded, then babies by birth), so a reload changes no index pick
+    for (const q of seeded(G.meta.seed, G.W.R, P.day0)) { const v = q.id in P.diff ? P.diff[q.id] : q; if (v) L.set(q.id, v); }
+    for (const [id, q] of Object.entries(P.diff)) if (q && !L.has(id)) L.set(id, q);
+    // v2 (the living valley): bodies, slow illness, live records, immunity, households, the news the village makes
+    P.v ??= 2; P.body ||= {}; P.ill ||= {}; P.rec ||= {}; P.imm ||= {}; P.hh ||= {}; P.epi ||= {}; P.news ||= [];
+    X = { L, traits: new Map() };
+    cache.set(P, X);
   }
-  return { P, L };
+  return { P, L: X.L, X };
 }
-const touch = (P, q) => { P.diff[q.id] = q; };
-const endPregnancy = (q) => { delete q.conc; delete q.lossW; };
-function die(P, L, q) {
+export const touch = (P, q) => { P.diff[q.id] = q; };
+export const endPregnancy = (q) => { delete q.conc; delete q.lossW; };
+export function die(P, L, q) {
   L.delete(q.id);
   if (q.id.startsWith('b')) delete P.diff[q.id]; else P.diff[q.id] = 0;
+  for (const m of [P.body, P.ill, P.rec, P.imm]) if (m) delete m[q.id];
   P.stats.deaths++;
   for (const k of L.values()) if (k.mother === q.id && k.bf) { k.bf = false; touch(P, k); } // no mother, no breast milk
 }
-/** A baby joins the mother's household (or dies in the first weeks, with chance baby.nn). */
-function addBaby(P, L, mother, baby, d, rng) {
+// A newborn's death in the first weeks is rolled at birth (nn). Infections of the newborn (blood infection, a dirty
+// cord, tetanus) now come as illnesses in the valley (village.js), so the roll keeps only the rest: prematurity, birth
+// asphyxia, malformations. Infections are ~a quarter to a third of newborn deaths (Lawn JE et al. Lancet
+// 2014;384:189), so 0.75 of the roll stays; tetanus at birth (ntR) is taken out whole.
+const NN_REST = 0.75;
+/** A baby joins the mother's household (or dies in the first weeks, with chance baby.nn). It inherits genes from its
+ *  mother and her partner, and its iron store from her: an iron-poor mother has an iron-poor baby (estimate). */
+export function addBaby(G, P, L, mother, baby, d, rng, motherFe) {
   P.stats.births++;
-  if (rng() < baby.nn) { P.stats.deaths++; return null; }
+  if (rng() < Math.max(0, baby.nn - (baby.ntR || 0)) * NN_REST) { P.stats.deaths++; return null; }
   const b = { id: 'b' + P.seq++, h: mother.h, hh: mother.hh, sex: baby.sex, born: d, mother: mother.id, bw: baby.bw, bf: true };
   if (baby.marks.length) b.marks = baby.marks;
+  const father = partnerOf(G, mother);
+  b.g = inheritGenes(traitsOf(G, mother).g, father ? traitsOf(G, father).g : null, rng);
+  if (father) b.father = father.id;
+  const fe = (motherFe ?? (P.body[mother.id]?.[1] ?? 150)) < 50 ? 0.7 : 1;
+  P.body[b.id] = [16.5, Math.round(50 * fe * (baby.bw / 3.2) * 10) / 10, 5, Math.round((baby.bw / medianWeight(0, b.sex)) * 1000) / 1000, 100, 1];
   L.set(b.id, b); touch(P, b);
   return b;
 }
 
-/** Live every whole day since the last tick: age, conceive, give birth, die. Cheap: one pass a day. */
-export function tickPeople(G) {
-  const { P, L } = population(G), today = day(G.W.time);
-  for (; P.day < today; P.day++) {
-    const d = P.day + 1, rng = makeRng(G.meta.seed, 'people', d);
-    for (const q of [...L.values()]) {
-      if (q.held) continue;
-      const age = (d - q.born) / YEAR_DAYS;
-      if (rng() < rate(DEATH, age) / YEAR_DAYS) { die(P, L, q); continue; }
-      if (q.conc != null) {
-        const w = weeksOf(q, d);
-        if (q.lossW && w >= q.lossW) { endPregnancy(q); q.pp = d + 3; touch(P, q); }
-        else if (w >= 40) {
-          const baby = birthOutcome({ alive: true, harm: {} }, 40, rng).baby;
-          baby.nn += ntRisk(ttProtected(q.vacc, q.id), false);
-          const b = addBaby(P, L, q, baby, d, rng);
-          endPregnancy(q); q.pp = d + (b ? YEAR_DAYS : 3); q.lastBirth = d; touch(P, q);
-          if (makeRng(G.meta.seed, 'maternal', q.id, d)() < MATERNAL) die(P, L, q);
-        }
-      } else if (q.sex === 'f' && d >= (q.pp || 0) && rng() < (conceive(rate(ASFR, age)) / YEAR_DAYS) * (q.fpUntil > d ? FP_FAIL : 1)) {
-        q.conc = d; q.lossW = lossWeek(rng()); touch(P, q);
-      }
-    }
+/** The household's key, and its partner: the first adult of the other sex in the house of an age to be one. */
+export const householdKey = (q) => `${q.h}.${q.hh}`;
+export function partnerOf(G, q) {
+  const { L } = population(G), d = day(G.W.time), age = (d - q.born) / YEAR_DAYS;
+  if (age < 15) return null;
+  for (const k of L.values()) if (k.h === q.h && k.hh === q.hh && k.sex !== q.sex && k.id !== q.mother && k.mother !== q.id) {
+    const a = (d - k.born) / YEAR_DAYS;
+    if (a >= 15 && Math.abs(a - age) < 20) return k;
   }
+  return null;
 }
+export const hamletRow = (R, id) => (id === 'village' ? R.village : R.hamlets.find((h) => h.id === id)) || R.village;
+
+/** Each person's own makings, the same every time they are asked for (never saved): genes, how heavily she bleeds each
+ *  month, how well they keep to medicine, allergy, how sick pregnancy makes her, malaria immunity, how much their diet
+ *  varies from the household's. */
+export function traitsOf(G, q) {
+  const { P, X } = population(G);
+  let tr = X.traits.get(q.id);
+  if (tr) return tr;
+  const seed = G.meta.seed, r = makeRng(seed, 'trait', q.id);
+  const age0 = Math.max(0, (P.day0 - q.born) / YEAR_DAYS);
+  tr = {
+    g: q.g ?? seededGenes(seed, q.id, age0), menses: mensesOf(seed, q.id),
+    adh: lerp(0.6, 0.95, r()), allergy: ((u) => (u < 0.02 ? 'penicillin' : u < 0.03 ? 'aspirin' : null))(r()),
+    nausea: lerp(0.5, 1, r()), immF: lerp(0.35, 1.45, r()), diet: Math.exp(gauss(r) * 0.2), wealth: r(),
+  };
+  X.traits.set(q.id, tr);
+  return tr;
+}
+/** How well off a household is (0..1): its hamlet, its own lot, and how much cash it holds now (food.js). */
+export function wealthOf(G, q) {
+  const { P } = population(G), h = hamletRow(G.W.R, q.h), hh = P.hh[householdKey(q)];
+  const lot = makeRng(G.meta.seed, 'lot', householdKey(q))();
+  const base = clamp((h?.wealth ?? 0.5) + (lot - 0.5) * 0.5, 0.02, 1);
+  return hh ? clamp(0.6 * base + 0.4 * clamp(hh.cash / 150, 0, 1), 0.02, 1) : base;
+}
+/** The baseline diet: kcal shares of a maize-and-beans valley (FOODS in content/food.js); its iron and folate per
+ *  1000 kcal. Households refine this every day (food.js). */
+export const DIET0 = densityOf({ maize: 0.75, beans: 0.15, cassava: 0.08, greens: 0.02 });
+/** A person's blood and weight [hb, fe, fol, kgRel, mcv, r], seeded the first time anyone asks (blood.js seedBlood). */
+export function bodyOf(G, q, d) {
+  const { P } = population(G);
+  let B = P.body[q.id];
+  if (B) return B;
+  const tr = traitsOf(G, q), age = Math.max(0, (d - q.born) / YEAR_DAYS), r = makeRng(G.meta.seed, 'body', q.id);
+  const kgRel = clamp(0.97 + gauss(r) * 0.07 + (wealthOf(G, q) - 0.5) * 0.08, 0.78, 1.2);
+  const kg = medianWeight(age, q.sex) * kgRel, k = (kcalNeed(age, q.sex) / 1000) * tr.diet;
+  const weeks = q.conc != null ? weeksOf(q, d) : 0;
+  const b = age < 0.5 ? { hb: 12, fe: 40, fol: 5, mcv: 90, r: 1 } : seedBlood({ age, sex: q.sex, kg, weeks, g: tr.g, menses: tr.menses, diet: { nonHaem: DIET0.fe * k, haem: 0, folate: DIET0.folate * k } });
+  B = P.body[q.id] = [b.hb, b.fe, b.fol, kgRel, b.mcv ?? 88, b.r].map((v) => Math.round(v * 1000) / 1000);
+  return B;
+}
+/** Write a record's body back to the person (when the game stops running it hour by hour). */
+export function storeBody(G, q, p) {
+  const { P } = population(G);
+  const b = p.blood;
+  if (!b) return;
+  // weight against the median at the age the record knew them by (a child grows on; kgRel carries over)
+  const kgRel = (p.weight - 0.3 * (p.pregnant || 0)) / medianWeight(p.age, q.sex);
+  P.body[q.id] = [b.hb, b.fe, b.fol, clamp(kgRel, 0.5, 1.3), b.mcv ?? 88, b.r ?? 1].map((v) => Math.round(v * 1000) / 1000);
+}
+
+/** Live every whole day since the last tick, and run every live record to now (village.js). Returns news. */
+export function tickPeople(G) { return tickVillage(G); }
 
 /** Someone from this hamlet who is not already in the clinic's hands (null if nobody). Its own stream per arrival. */
 export function drawResident(G, hamletId, key) {
   const here = [...population(G).L.values()].filter((q) => q.h === hamletId && !q.held);
   return here.length ? here[Math.floor(makeRng(G.meta.seed, 'who', key)() * here.length)] : null;
 }
-/** The person as makePatient wants them at time t. */
+/** The person as a patient record wants them at time t: who they are, their body and their own makings. */
 export function personNow(G, q, t) {
-  const d = t / DAY + 1;
-  return { id: q.id, sex: q.sex, age: (d - q.born) / YEAR_DAYS, pregnant: q.conc != null ? weeksOf(q, d) : 0, name: personName(makeRng(G.meta.seed, 'name', q.id), q.sex), bw: q.bw, mother: q.mother, bf: q.bf, marks: q.marks,
+  const d = t / DAY + 1, age = Math.max(0, (d - q.born) / YEAR_DAYS);
+  const B = bodyOf(G, q, Math.floor(d)), tr = traitsOf(G, q);
+  return { id: q.id, sex: q.sex, age, pregnant: q.conc != null ? weeksOf(q, d) : 0, name: personName(makeRng(G.meta.seed, 'name', q.id), q.sex), bw: q.bw, mother: q.mother, bf: q.bf, marks: q.marks,
     pp: q.lastBirth != null ? Math.max(0, (d - q.lastBirth) * COMPRESS) : null, vacc: q.vacc, fpUntil: q.fpUntil,
-    advice: q.advice && Object.fromEntries(Object.entries(q.advice).filter(([, until]) => until > t)) };
+    advice: q.advice && Object.fromEntries(Object.entries(q.advice).filter(([, until]) => until > t)),
+    kg: Math.round(medianWeight(age, q.sex) * B[3] * 10) / 10, kgRel: B[3], nutrition: nutritionOf(B[3]),
+    blood: { hb: B[0], fe: B[1], fol: B[2], mcv: B[4], r: B[5], g: tr.g, menses: tr.menses },
+    adh: clamp(tr.adh + (age < 12 ? 0.03 : 0), 0.4, 0.98), allergy: tr.allergy, nausea: tr.nausea, immF: tr.immF, wealth: wealthOf(G, q), trust: q.trust ?? 0.5 };
 }
-/** The clinic now holds this person's body (their patient record runs it, hour by hour). */
+/** The clinic now holds this person's body (their patient record runs it, hour by hour). Their slow illnesses and any
+ *  record the valley was running become the clinic's. */
 export function hold(G, p) {
   const { P, L } = population(G), q = L.get(p.who);
-  if (q) { q.held = p.id; touch(P, q); }
+  if (!q) return;
+  q.held = p.id; touch(P, q);
+  if (P.ill[q.id]) { for (const c of P.ill[q.id]) if (!p.conds.some((x) => x.id === c.id)) p.conds.push(c); delete P.ill[q.id]; }
+  if (P.rec[q.id] && P.rec[q.id] !== p) delete P.rec[q.id];
+  if (P.rec[q.id] === p) delete P.rec[q.id];
 }
 
 /** Keep the population in step with a held patient's events: births, deaths, and letting go when done. */
@@ -300,13 +393,14 @@ export function patientEvents(G, p, ev) {
   const d = day(G.W.time);
   for (const e of ev) {
     if (e.kind === 'died') return die(P, L, q);
-    if (e.kind === 'birth') q.pp = d + (addBaby(P, L, q, e.baby, d, makeRng(p.seed, 'nn', Math.floor(e.t))) ? YEAR_DAYS : 3);
+    if (e.kind === 'birth') q.pp = d + (addBaby(G, P, L, q, e.baby, d, makeRng(p.seed, 'nn', Math.floor(e.t)), p.blood?.fe) ? YEAR_DAYS : 3);
     if (e.kind === 'stillbirth' || e.kind === 'miscarriage') q.pp = d + 3;
-    if (e.kind === 'birth' || e.kind === 'stillbirth') q.lastBirth = d;
+    if (e.kind === 'birth' || e.kind === 'stillbirth') { q.lastBirth = d; q.parity = parityOf(G, q) + 1; }
+    if (e.kind === 'healed') immunise(G, q, e.id, d);
   }
   if (p.vacc || p.fpUntil) { q.vacc = p.vacc; q.fpUntil = p.fpUntil; touch(P, q); }
   // advice they took home (a net, boiled water): kept until it lapses, it lowers what they catch next (patient.js)
   const adv = (p.rx || []).filter((r) => r.instr && !r.stopped);
   if (adv.length) { q.advice = { ...q.advice, ...Object.fromEntries(adv.map((r) => [r.instr, r.until])) }; touch(P, q); }
-  if (q.held && p.recovered && !p.pregnant) { q.held = null; endPregnancy(q); touch(P, q); }
+  if (q.held && p.recovered && !p.pregnant) { storeBody(G, q, p); q.held = null; q.trust = p.trust; endPregnancy(q); touch(P, q); }
 }

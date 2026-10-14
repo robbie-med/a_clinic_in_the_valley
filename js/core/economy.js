@@ -1,6 +1,7 @@
 // economy.js — traders: when they are in the village, what they carry this visit, buying and selling.
 // Stock is a pure function of (seed, vendor, visit); what you bought is remembered per visit.
 import { VENDORS, VENDOR } from './content/vendors.js';
+import { PLACEABLES } from './content/build.js';
 import { makeRng, hash } from './rng.js';
 import { DAY, day, minuteOfDay } from './time.js';
 import { addItem, count, remove } from './inventory.js';
@@ -118,7 +119,8 @@ export const CATALOGUE = { mult: 1.05, postage: 2, days: [4, 8], fakes: 0.03 };
 export const IMPORT = { mult: 1.1, postage: 6, baseDays: 14, perZone: 7, adulterate: 0.3,
   ref: 'Newmaster SG et al. BMC Med 2013;11:222; Ichim MC. Front Pharmacol 2019;10:1227' };
 const round1 = (n) => Math.round(n * 10) / 10;
-export const catalogueItems = (C) => [...C.items.values()].filter((it) => it.cat === 'medicine' || (it.cat === 'tool' && it.price >= 2));
+export const catalogueItems = (C) => [...C.items.values()].filter((it) => it.cat === 'medicine' || it.cat === 'lab' || (it.cat === 'tool' && it.price >= 2) || (it.cat === 'build' && PLACE.get(it.id)?.post));
+const PLACE = new Map(PLACEABLES.map((b) => [b.id, b]));
 export const importItems = (C) => [...C.items.values()].filter((it) => it.import);
 const multOf = (it) => (it.import ? IMPORT.mult : CATALOGUE.mult);
 export const orderTotal = (C, cart) => {

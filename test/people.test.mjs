@@ -58,11 +58,29 @@ test('the valley: households grow over 10 game years at rural East African rates
   const cbr = (P.stats.births / mean / years) * 1000, cdr = (P.stats.deaths / mean / years) * 1000;
   assert.ok(n0 > 400 && n0 < 900, 'people ' + n0);
   assert.ok(cbr > 28 && cbr < 50, 'crude birth rate ' + cbr);
-  assert.ok(cdr > 4 && cdr < 16, 'crude death rate ' + cdr);
-  assert.ok(L.size / n0 > 1.05 && L.size / n0 < 1.6, `grew ${n0} → ${L.size}`);
+  // Every illness now runs untreated in the valley (village.js) unless you treat it: with no health care at all, deaths
+  // come near those of rural East Africa before clinics reached it (Uganda 1950–55 ~25 per 1000: UN World Population
+  // Prospects 2022), above today's 5–8; drought years add a famine's toll. Births stay at rural rates.
+  assert.ok(cdr > 4 && cdr < 35, 'crude death rate ' + cdr);
+  assert.ok(L.size / n0 > 0.85 && L.size / n0 < 1.6, `grew ${n0} → ${L.size}`);
   // a save holds only the diff; loading regenerates the seeded people and lays the diff over them
   const saved = JSON.parse(JSON.stringify(G.meta.clinic));
   assert.ok(Object.keys(saved.pop.diff).length < L.size * 1.2, 'diff ' + Object.keys(saved.pop.diff).length);
   const G2 = { meta: { seed: 42, clinic: saved }, W: G.W };
   assert.deepEqual([...population(G2).L.keys()].sort(), [...L.keys()].sort());
+});
+test('a save and reload changes nothing about who lives, dies, conceives or walks in', async () => {
+  const { drawResident } = await import('../js/core/people.js');
+  const houses = (k) => Array.from({ length: k }, () => ({}));
+  const R = { village: { id: 'village', houses: houses(6) }, hamlets: [3, 4, 5].map((k, i) => ({ id: 'h' + i, houses: houses(k) })) };
+  const run = (reloadAt) => {
+    let G = { meta: { seed: 7, clinic: newClinic() }, W: { R, time: 14 * DAY } };
+    for (let y = 1; y <= 6; y++) {
+      G.W.time += YEAR_DAYS * DAY; tickPeople(G);
+      if (y === reloadAt) G = { meta: JSON.parse(JSON.stringify(G.meta)), W: G.W };
+    }
+    const { L } = population(G);
+    return JSON.stringify([[...L.keys()].sort(), [...L.values()].map((q) => q.conc ?? null).sort(), drawResident(G, 'h1', 'k1')?.id]);
+  };
+  assert.equal(run(3), run(0));
 });

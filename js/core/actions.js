@@ -12,7 +12,7 @@ import { t, getLang } from './i18n.js';
 const lc = (s) => (getLang() === 'en' ? String(s).toLowerCase() : s);
 
 export function newPlayer(x, y) {
-  return { x, y, face: 0, inv: { slots: Array(24).fill(null) }, hot: 0, coins: 40, skills: { herbal: 0, diagnosis: 0, build: 0 }, stats: { walked: 0 }, known: {} };
+  return { x, y, face: 0, inv: { slots: Array(24).fill(null) }, hot: 0, coins: 40, skills: { herbal: 0, diagnosis: 0, build: 0, glass: 0, lab: 0 }, stats: { walked: 0 }, known: {} };
 }
 
 export function useTile(G, x, y, slot = G.p.hot) {
@@ -40,11 +40,11 @@ export function useTile(G, x, y, slot = G.p.hot) {
     if (st?.regrowAt && W.time < st.regrowAt) return [['msg', t('Already harvested. It will be ready again in {n} days.', { n: Math.ceil((st.regrowAt - W.time) / DAY) })]];
     if (!inSeason(od.seasons, W.time)) return [['msg', t('{herb}: nothing to gather in this season.', { herb: herb.name })]];
     if (od.tool && !count(p.inv, od.tool)) return [['msg', t('You need a {tool} to take the {part}.', { tool: lc(C.items.get(od.tool).name), part: herb.part })]];
-    const n = herb.tree ? 2 : 1;
-    // a species out of its climate grows thin: a temperate herb in this valley is a weak one
-    const left = addItem(p.inv, C, od.harvest, n, { q: W.plantPotency(x, y) * climateFit(od.herb), t: W.time });
-    if (left === n) return [['msg', t('Your bag is full.')]];
+    const got = plantYield(W, x, y);
+    const left = addItem(p.inv, C, got.id, got.n, { q: got.q, t: W.time });
+    if (left === got.n) return [['msg', t('Your bag is full.')]];
     W.setState(x, y, { regrowAt: W.time + herb.regrowDays * DAY });
+    const n = got.n;
     G.meta.time += 4;
     p.known[herb.id] = 1;
     const lv = gainXp(p, 'herbal', 1);
@@ -80,6 +80,13 @@ export function useTile(G, x, y, slot = G.p.hot) {
   if (od?.built && od.item) return [['msg', t('{name}. (Hold nothing and use "Pick up" from the menu to move it.)', { name: od.name })]];
   if (od?.kind === 'crop') return [['msg', t('Someone\'s maize field.')]];
   return ev;
+}
+
+/** What a ripe plant gives when picked: { id, n, q }. A species out of its climate grows thin: a temperate herb in this
+ *  valley is a weak one. Shared by your hands and a hired gatherer's (staff.js). */
+export function plantYield(W, x, y) {
+  const od = W.objDef(x, y), herb = HERB.get(od.herb);
+  return { id: od.harvest, n: herb.tree ? 2 : 1, q: W.plantPotency(x, y) * climateFit(od.herb) };
 }
 
 /** Pick a built object back up (with its contents spilled into your bag). */

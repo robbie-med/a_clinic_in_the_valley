@@ -164,10 +164,12 @@ export function createRegion(seed, C) {
   }
 
   // ——— fields around settlements
+  const fields = [];
   for (const s of [village, ...hamlets]) {
     for (let k = 0; k < 3; k++) {
       const fx = s.x + Math.round((rng() - 0.5) * 34), fy = s.y + Math.round((rng() - 0.5) * 34);
       const fw = 6 + Math.floor(rng() * 6), fh = 5 + Math.floor(rng() * 5);
+      fields.push({ s: s.id, x: fx, y: fy, w: fw, h: fh });
       for (let y = fy; y < fy + fh; y++) for (let x = fx; x < fx + fw; x++) {
         if (!inb(x, y)) continue;
         const g = getG(x, y);
@@ -223,10 +225,12 @@ export function createRegion(seed, C) {
       setO(x, y, 'plant_' + h.id); count[h.id]++; k++;
     }
   }
+  // sand banks along the river, where clean sand can be dug (glass, content/goods.js); placed last so nothing else moves
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (!obj[I(x, y)] && getG(x, y) === 'sand' && hashf(S, x, y, 41) < 0.05) setO(x, y, 'sand_bank');
   const spawn = { x: clinic.out.x + 0.5, y: clinic.out.y + 1.5 };
   // which of the world's species actually came up in this valley (the rest are trade-only)
   const floraHere = flora.filter((h) => count[h.id] > 0).map((h) => h.id);
-  return { seed: S, N, ground, obj, hab, gKeys, gIdx, oKeys, oIdx, village, hamlets, clinic, duka, square, stalls, spawn, count, floraHere, riverDist };
+  return { seed: S, N, ground, obj, hab, gKeys, gIdx, oKeys, oIdx, village, hamlets, clinic, duka, square, stalls, spawn, count, floraHere, riverDist, fields };
 }
 
 /** The stable per-plant strength factor: plants of one species really differ in content. */

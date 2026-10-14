@@ -14,6 +14,9 @@ import { drugState, toxSigns, gutExposure, hill } from './pk.js';
 import { makeRng, hashf } from './rng.js';
 import { COMPRESS } from './time.js';
 import { pregnancyHour, newbornHazard } from './people.js';
+import { bloodStep, absorbIron, basalLoss, hbSet, cellLife, bloodVolume, pregnancyIron, MENSES_MG, menstruating, FOLATE_BIO, FOLIC_BIO, FE_PER_G_HB, slowDays } from './blood.js';
+import { kcalNeed, KCAL_PER_KG, nutritionOf } from './content/food.js';
+import { medianWeight } from './patient.js';
 import { YEAR_DAYS } from './time.js';
 import { msg, en } from './i18n.js';
 
@@ -100,7 +103,7 @@ const MODELS = {
       c.phase = rng() * 48;
       c.mf = P.mf * Math.exp((rng() - 0.5) * 1.6);   // strains and hosts differ: ~6× to ~27× per cycle
       c.age = since;
-      c.hb = p.hb;
+      if (!p.blood) c.hb = p.hb;
     },
     step(p, c, dt, x) {
       const P = COND.get(c.id).params;
@@ -117,10 +120,16 @@ const MODELS = {
       const para = 10 ** (c.P - blood);                                   // parasites per µL
       c.para = para;
       selectParasite(c, x, dt);
-      // anaemia: haemolysis with parasitaemia, slow recovery when low
-      c.hb += dt * ((-P.hbDrop / 24) * clamp(para / 1e5, 0, 3) ** 0.8 + (para < 500 ? 0.0012 * (p.hb - c.hb) : 0));
-      c.hb = clamp(c.hb, 2, p.hb + 0.5);
-      const severe = clamp(Math.log10(para / 2e4) / 1.2, 0, 1.5) + clamp((6 - c.hb) / 2.5, 0, 1);
+      // anaemia: haemolysis with parasitaemia, slow recovery when low. A body with its own blood (blood.js) loses the
+      // cells there, and its marrow (with or without iron) rebuilds them; the iron of the broken cells is kept.
+      const lysis = dt * (P.hbDrop / 24) * clamp(para / 1e5, 0, 3) ** 0.8;
+      if (p.blood) { x.lysis = (x.lysis || 0) + lysis; delete c.hb; }
+      else {
+        c.hb += dt * (-lysis / dt + (para < 500 ? 0.0012 * (p.hb - c.hb) : 0));
+        c.hb = clamp(c.hb, 2, p.hb + 0.5);
+      }
+      const hbv = p.blood ? p.hb : c.hb;
+      const severe = clamp(Math.log10(para / 2e4) / 1.2, 0, 1.5) + clamp((6 - hbv) / 2.5, 0, 1);
       c.sev = clamp(severe, 0, 1.5);
       c.s = clamp(Math.log10(Math.max(1, para) / lerp(P.pyro[0], P.pyro[1], I)) / 2.5, 0, 1);
       const vuln = (p.age < 5 ? 1.8 : 1) * (p.pregnant ? 1.6 : 1);
@@ -206,7 +215,7 @@ const MODELS = {
       const P = COND.get(c.id).params;
       c.W = Math.round(lerp(P.worms[0], P.worms[1], rng() ** 1.5));
       c.age = since;
-      if (P.bloodLoss) c.hb = Math.max(3, p.hb - wormBloodDrop(p, P, c.W, 0)); // months of it already
+      if (P.bloodLoss && !p.blood) c.hb = Math.max(3, p.hb - wormBloodDrop(p, P, c.W, 0)); // months of it already (a body with its own blood: blood.js)
     },
     step(p, c, dt, x) {
       const P = COND.get(c.id).params;
@@ -220,6 +229,12 @@ const MODELS = {
         c.W += Math.floor(add) + (x.rng() < add % 1 ? 1 : 0);
       }
       c.s = clamp(c.W / (P.heavy < 1e8 ? 30 : 60), 0, 1);
+      if (P.bloodLoss && p.blood) {
+        // the worms take their blood every day (bleedOf): the blood itself shows what that leaves (blood.js)
+        const def = hbSet(p.age, p.sex, p.pregnant, p.blood.g) - p.hb;
+        c.s = Math.max(c.s, clamp(def / 5, 0, 1));
+        return { loss: 0, hazard: p.hb < 5 ? 0.0006 * (5 - p.hb) ** 2 : 0, done: c.W === 0 };
+      }
       if (P.bloodLoss) {
         // blood creeps toward what the worms allow; the marrow rebuilds ~0.04 g/dL a day, 3× that with iron
         const iron = x.ds.relief.iron || 0;
@@ -299,6 +314,10 @@ const MODELS = {
     init(p, c, rng) {
       const P = COND.get(c.id).params;
       c.L = c.L0 = P.hbTo ? p.hb - lerp(P.hbTo[0], P.hbTo[1], rng()) : lerp(P.level[0], P.level[1], rng()); // hbTo: the Hb they walk in with
+      // a body with its own blood: the anaemia is what the blood shows, its causes are in the blood (blood.js)
+      if (P.hb && p.blood) { c.L = c.L0 = Math.max(0, hbSet(p.age, p.sex, p.pregnant, p.blood.g) - p.hb); delete c.hb; return; }
+      // a villager wasted by hunger: as thin as they are (village.js)
+      if (P.nut && p.res) c.L = c.L0 = clamp(P.nut - p.nutrition, P.level[0], P.nut);
       if (Array.isArray(P.self)) c.self = lerp(P.self[0], P.self[1], rng());
       if (P.need) c.by = rng() < P.need ? P.by[0] : P.by[1];
       if (P.nut) setNutrition(p, P.nut - c.L);
@@ -306,7 +325,14 @@ const MODELS = {
     step(p, c, dt, x) {
       const P = COND.get(c.id).params, R = x.ds.relief;
       c.age += dt;
+      if (P.hb && p.blood) {
+        c.L = Math.max(0, hbSet(p.age, p.sex, p.pregnant, p.blood.g) - p.hb);
+        c.s = clamp(c.L / P.full, 0, 1.5);
+        return { loss: 0, hazard: p.hb < 5 ? P.hazard * (5 - p.hb) ** 2 : 0, done: c.L < P.heal };
+      }
       let keep = 1 - (c.self ?? P.self ?? 0);
+      // the household's pot: eating enough helps a wasted child back, hunger holds it down (food.js)
+      if (P.nut && p.diet) keep *= clamp(1.6 - p.diet.r, 0.6, 1.2);
       for (const k of c.by ? [c.by] : P.by || []) keep *= 1 - (R[k] || 0);
       if (P.instr && x.instr.has(P.instr)) keep *= 1 - P.instrCut;
       c.L += (c.L0 * keep * (1 + (R[P.worse] || 0)) - c.L) * Math.min(1, dt / (P.tau * 24));
@@ -338,7 +364,8 @@ const MODELS = {
       c.st += ((R.steroid || 0) - c.st) * Math.min(1, dt / 6);
       c.left -= dt * (1 + P.steroidFaster * c.st);
       const cold = p.conds.some((q) => q.id === 'common_cold' || q.id === 'cough_child') ? 3 : 1;
-      if (c.left <= 0 && x.rng() < (P.perWeek / 168) * dt * (c.base / 0.3) * cold * (1 - P.steroidFewer * c.st) * (x.instr.has('no_smoke') ? 1 - P.smoke : 1)) {
+      // most asthma in the valley is mild and intermittent; those who reach a clinic are the worse (p.res: an estimate)
+      if (c.left <= 0 && x.rng() < (P.perWeek / 168) * dt * (c.base / 0.3) * cold * (p.res ? 0.3 : 1) * (1 - P.steroidFewer * c.st) * (x.instr.has('no_smoke') ? 1 - P.smoke : 1)) {
         c.peak = lerp(P.attack[0], P.attack[1], x.rng()); c.left = lerp(P.hours[0], P.hours[1], x.rng());
       }
       c.att += ((c.left > 0 ? c.peak : c.base) - c.att) * Math.min(1, dt / 2);
@@ -739,6 +766,7 @@ export function simulate(p, toT, C) {
       }
       const c = addCondition(p, q.id, rng, 0);
       if (q.mic) { c.org = q.org; c.mic = { ...q.mic }; }
+      if (q.mild != null && c.sev != null && ['viral', 'bacterial'].includes(COND.get(q.id).model)) c.sev *= q.mild; // caught in the valley (village.js)
       ev.push({ t: q.t, kind: 'onset', id: q.id, text: `${en(COND.get(q.id), 'name')} began`, msg: msg('{cond} began', { cond: en(COND.get(q.id), 'name') }) });
     }
     for (const rx of p.rx || []) {
@@ -797,6 +825,7 @@ export function simulate(p, toT, C) {
         ev.push({ t: t1, kind: 'healed', id: c.id, text: `${en(def, 'name')} is gone`, msg: msg('{cond} is gone', { cond: en(def, 'name') }) });
       }
     }
+    if (p.blood) bodyHour(p, x, t1, ev);
     // water: the sick drink some on their own; the rehydration drink does the real work
     const selfDrink = loss * (p.age < 2 ? 0.58 : p.age < 5 ? 0.66 : 0.78) * (p.hyd / p.weight > 0.08 ? 0.5 : 1);
     const absorbed = fluidIn * 0.9 * (1 - 0.3 * vomiting(p) * (1 - (ds.relief.nausea || 0)));
@@ -829,6 +858,86 @@ export function simulate(p, toT, C) {
   }
   if (!p.dead) p.t = Math.max(p.t, Math.min(toT, p.t));
   return ev;
+}
+
+// ————————————————————————————————————————————— the body's own blood and weight (blood.js, food.js)
+/** Blood lost a real day (ml): blood-sucking worms (`bloodLoss` per worm a day). */
+export function bleedOf(p) {
+  let ml = 0;
+  for (const c of p.conds) { const P = COND.get(c.id).params; if (P.bloodLoss && c.W) ml += c.W * P.bloodLoss; }
+  return ml;
+}
+/** Inflammation 0..1: what raises hepcidin and slows the marrow (Prentice AM et al. Blood 2012;119:1922): parasites in
+ *  the blood, HIV, TB, a bacterial infection. Weights are estimates. */
+export function inflamOf(p) {
+  let v = 0;
+  for (const c of p.conds) {
+    const m = COND.get(c.id).model;
+    if (m === 'malaria') v = Math.max(v, clamp(Math.log10(Math.max(1, c.para || 0)) / 5, 0, 1) * 0.8);
+    else if (m === 'hiv') v = Math.max(v, 0.2 + 0.5 * (c.s || 0));
+    else if (m === 'mycobacterial') v = Math.max(v, 0.8 * (c.s || 0));
+    else if (m === 'bacterial') v = Math.max(v, 0.5 * clamp(c.s || 0, 0, 1));
+  }
+  return v;
+}
+/** mg of an active swallowed in the 24 game hours before t (iron tablets, folic acid). */
+function swallowed(p, id, t) {
+  let mg = 0;
+  for (const [td, a, m] of p.doses?.gut || []) if (a === id && td <= t && t - td < 24 * HOUR) mg += m;
+  return mg;
+}
+/** Kg of the body itself (a pregnancy's weight aside). */
+const ownKg = (p) => p.weight - 0.3 * (p.pregnant || 0);
+/** One game hour of the body's blood and weight, for a body with its own blood (residents; blood.js). The marrow works
+ *  on the game calendar (slowDays); a malaria crisis (x.lysis) and a haemorrhage (p.hb lowered by a bleeding model)
+ *  land at once. Tablets: what was swallowed in the last 24 game hours is a day's dose (a course on the game calendar).
+ *  At the health centre severe anaemia is transfused: ~1 g/dL a unit, two units (estimates), with a small risk of a
+ *  reaction and of an infection carried in the blood (WHO Blood transfusion safety; estimates). */
+function bodyHour(p, x, t, ev) {
+  const B = p.blood, days = slowDays(1), kg = ownKg(p), bv = bloodVolume(kg, p.age, p.sex), weeks = p.pregnant || 0;
+  if (x.lysis) { B.hb -= x.lysis; B.fe += x.lysis * bv * FE_PER_G_HB; }
+  if (p.hb < B.hb - 1e-6) B.hb = p.hb; // a haemorrhage: the iron left with the blood
+  if (x.hosp && B.hb < 7 && !(p.flags.transfused >= p.hospital.from)) {
+    p.flags.transfused = t;
+    B.hb += 2; B.fe += 2 * bv * FE_PER_G_HB;
+    const r = makeRng(p.seed, 'transfusion', Math.floor(t));
+    if (r() < 0.01) ev.push({ t, kind: 'tox', text: 'shivering and fever during the transfusion', msg: msg('shivering and fever during the transfusion') });
+    if (r() < 0.002 && !p.conds.some((c) => c.id === 'hiv')) (p.pending ||= []).push({ id: 'hiv', t: t + 30 * 24 * HOUR / COMPRESS });
+  }
+  const inflam = inflamOf(p), d = p.diet || { r: 1, nonHaem: 12 * (kcalNeed(p.age, p.sex, weeks) / 1000), haem: 0, folate: 0.18 * (kcalNeed(p.age, p.sex, weeks) / 1000), abs: 0 };
+  const sinceBirth = p.delivered != null ? ((t - p.delivered) / (24 * HOUR)) * COMPRESS : null;
+  const menses = menstruating(p.sex, p.age, weeks, sinceBirth, (p.fpUntil || 0) > t / (24 * HOUR) + 1) ? MENSES_MG * (B.menses ?? 1) : 0;
+  const feIn = absorbIron({ nonHaem: d.nonHaem, haem: d.haem, supp: swallowed(p, 'iron', t) }, B.fe, inflam, weeks) + (d.abs || 0);
+  const folIn = d.folate * FOLATE_BIO + swallowed(p, 'folic_acid', t) * FOLIC_BIO;
+  bloodStep(B, { set: hbSet(p.age, p.sex, weeks, B.g), life: cellLife(B.g), bv, feIn, feOut: basalLoss(kg, B.fe) + menses + pregnancyIron(weeks), bleed: bleedOf(p), inflam, folIn, weeks, g: B.g, age: p.age }, days);
+  p.hb = B.hb;
+  // weight follows what they eat (a wasting illness sets it itself)
+  if (p.diet && !p.conds.some((c) => COND.get(c.id).params.nut)) {
+    // the household's share (game calendar) and, in real hours, what being ill takes off the appetite
+    const ano = 0.5 * Math.max(0, ...p.conds.filter((c) => { const def = COND.get(c.id); return ['viral', 'malaria'].includes(def.model) || (def.model === 'bacterial' && !def.params.pace); }).map((c) => clamp(c.s || 0, 0, 1)));
+    const med = medianWeight(p.age, p.sex), dk = (((p.diet.r - kg / med) * days - ano / 24) * kcalNeed(p.age, p.sex, weeks)) / KCAL_PER_KG(p.age);
+    const own = clamp(kg + dk, med * 0.5, med * (p.diet.r > 1 ? 1.05 : 1.25));
+    p.weight = Math.round((own + 0.3 * weeks) * 100) / 100;
+    p.nutrition = nutritionOf(own / med);
+  }
+}
+
+/** A day (or `hours`) of slow illness in someone up and about (village.js): each condition steps hour by hour with no
+ *  medicine, no drink, no pregnancy. Returns { die (chance of dying in that time), killer, done: ids healed }. */
+export function stepSlow(p, t, hours, instr = new Set()) {
+  const x = { ds: { relief: {}, worse: {}, prr: {}, heart: 0, conc: {} }, rng: makeRng(p.seed, 'slow', Math.floor(t)), t, hosp: false, instr, topical: {}, wormKills: {} };
+  let live = 1, killer = null, top = 0;
+  const done = [];
+  for (let h = 0; h < hours; h++) {
+    x.t = t + h * HOUR;
+    for (const c of [...p.conds]) {
+      const r = MODELS[COND.get(c.id).model].step(p, c, 1, x);
+      live *= 1 - Math.min(1, r.hazard);
+      if (r.hazard > top) { top = r.hazard; killer = c.id; }
+      if (r.done) { p.conds.splice(p.conds.indexOf(c), 1); done.push(c.id); }
+    }
+  }
+  return { die: 1 - live, killer, done };
 }
 
 /** Is some antibiotic in the blood above this strain's MIC? */

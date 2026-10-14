@@ -6,7 +6,8 @@ import { FLORA_HERBS, CLIMATE } from './flora_herbs.js';
 import { MATERIA } from './materia.js';
 import { ACTIVE } from './actives.js';
 import { METHODS, EXTRACT, HERB_METHODS, SPECIALS } from './preparations.js';
-import { INGREDIENTS, TOOLS, MATERIALS, PRODUCE } from './goods.js';
+import { INGREDIENTS, TOOLS, MATERIALS, PRODUCE, WORKS } from './goods.js';
+import { LAB_TOOLS, LAB_SUPPLIES } from './lab.js';
 import { PLACEABLES } from './build.js';
 import { MEDICINES } from './medicines.js';
 import { pixelIcon } from './pixel_icons.js';
@@ -99,6 +100,11 @@ export function buildContent() {
   for (const x of TOOLS) add({ ...plain(x), cat: 'tool', stack: 1, tool: x.id, icon: gi(x.icon, x.color), tags: ['tool'] });
   for (const m of MATERIALS) add({ ...plain(m), cat: 'material', icon: gi(m.icon, m.color), tags: ['material'] });
   for (const p of PRODUCE) add({ ...plain(p), cat: 'produce', icon: gi(p.icon, p.color), tags: ['produce'] });
+  // ——— the laboratory (lab.js): instruments are tools; what the tests use up is `lab`
+  for (const x of LAB_TOOLS) add({ ...plain(x), cat: 'tool', stack: 1, tool: x.id, icon: gi(x.icon, x.color), tags: ['tool', 'lab'] });
+  for (const x of LAB_SUPPLIES) add({ ...plain(x), cat: 'lab', icon: gi(x.icon, x.color), tags: ['lab'] });
+  // ——— ash, lime, glass, slides, bellows, smoked meat (goods.js WORKS)
+  for (const w of WORKS) recipes.push({ ...w, tool: w.tool || null, hours: 0, work: true });
 
   // ——— garden: seeds and cuttings
   const plantables = [['cutting_aloe', 'Aloe cutting', 'aloe', 6, 'seedling'], ['seed_artemisia', 'Sweet wormwood seed', 'artemisia', 10, 'plant-seed'],
@@ -111,7 +117,8 @@ export function buildContent() {
     add({ id: b.id, name: en(b, 'name'), cat: 'build', stack: 20, price: b.price, note: en(b, 'note'), place: b.floor ? { ground: b.ground } : { obj: b.id },
       icon: b.sprite?.gi ? b.sprite : b.sprite?.d ? { d: b.sprite.d, t: b.sprite.t } : gi('stone-path', '#a08060'), tags: ['build'] });
     if (!b.floor) objects.set(b.id, { key: b.id, kind: b.wall ? 'wall' : b.door ? 'door' : 'built', built: true, item: b.id, ...plain(b) });
-    recipes.push({ id: 'make_' + b.id, out: b.id, build: true, in: b.cost, station: b.id === 'workbench' || b.floor || b.wall || b.id === 'hearth' || b.id === 'herb_bed' ? null : 'bench', tool: null, min: 20, yields: 1, hours: 0 });
+    if (b.post) continue; // bought by post, never made (the blood counter)
+    recipes.push({ id: 'make_' + b.id, out: b.id, build: true, in: b.cost, station: b.id === 'workbench' || b.floor || b.wall || b.id === 'hearth' || b.id === 'kiln' || b.id === 'herb_bed' ? null : 'bench', tool: null, min: b.id === 'kiln' ? 120 : 20, yields: 1, hours: 0 });
   }
 
   // ——— the import trade: dried material and seed of every species in the world table, priced by how
@@ -148,7 +155,8 @@ export function buildContent() {
   O('mangrove', { name: 'Swamp tree', kind: 'tree', blocks: true, sprite: { d: 'dngn/trees/mangrove1' } });
   O('bush', { name: 'Bush', kind: 'bush', blocks: false, sprite: { d: 'mon/fungi_plants/bush3' } });
   O('tall_grass', { name: 'Tall grass', kind: 'grass', blocks: false, sprite: { d: 'mon/fungi_plants/plant_01', t: '#d8c878' }, gives: ['thatch', 1], tool: 'knife', regrowDays: 5 });
-  O('rock', { name: 'Rock', kind: 'rock', blocks: true, sprite: { gi: 'stone-pile', c: '#8a8478' } });
+  O('rock', { name: 'Rock', kind: 'rock', blocks: true, sprite: { gi: 'stone-pile', c: '#8a8478' }, gives: ['stone', 1], regrowDays: 20 });
+  O('sand_bank', { name: 'Sand bank', kind: 'sand', blocks: false, sprite: { gi: 'stone-pile', c: '#e0c888' }, gives: ['sand', 1], regrowDays: 1 });
   O('house_wall', { name: 'House wall', kind: 'wall', blocks: true, sprite: { d: 'dngn/wall/sandstone_wall0', t: '#c89870' } });
   O('house_door', { name: 'Door', kind: 'door', door: true, blocks: false, sprite: { d: 'dngn/doors/open_door' } });
   O('clinic_wall', { name: 'Clinic wall', kind: 'wall', blocks: true, built: true, sprite: { d: 'dngn/wall/sandstone_wall1', t: '#f4ece0' } });

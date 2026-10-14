@@ -299,3 +299,8 @@ li.abn { color: #ffd0a0; }
 :lang(ko) { word-break: keep-all; overflow-wrap: anywhere; }
 :lang(ko) .banner small { letter-spacing: 0.08em; }
 :lang(ko) .hudbtn span { letter-spacing: -0.03em; white-space: nowrap; }
+
+/* the laboratory box in the consultation (ui.js) */
+.labbox { margin-top: 8px; border-top: 1px solid rgba(255,255,255,0.12); padding-top: 6px; }
+.labbox .labtest { display: inline-flex; align-items: center; gap: 2px; }
+.labbox button.miss { opacity: 0.55; }

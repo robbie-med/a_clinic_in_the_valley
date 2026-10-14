@@ -18,7 +18,10 @@ import { stock, buy, sell, offer, LOT, lotPrice, nextVisit, CATALOGUE, IMPORT, c
 import { lookalikes, climateFit } from '../core/flora.js';
 import { teaOf } from '../core/homecare.js';
 import { CLIMATE } from '../core/content/flora_herbs.js';
-import { startEncounter, ask, examine, differential, questionsFor, examsFor, remedies, rxLine, doseInfo, stockOf, finishEncounter, doProcedure, injectNow, toolsAt, adviceFor, PROCEDURES, INSTRUCTIONS } from '../core/encounter.js';
+import { startEncounter, ask, examine, differential, questionsFor, examsFor, remedies, rxLine, doseInfo, stockOf, finishEncounter, doProcedure, injectNow, toolsAt, adviceFor, PROCEDURES, INSTRUCTIONS, labTests, labWhyNot, runLab, labReady, recheck } from '../core/encounter.js';
+import { candidates, hire, dismiss, ROLES, skillMsg, roleMsg, labStaff, wildOf } from '../core/staff.js';
+import { population, hamletRow, householdKey, personNow } from '../core/people.js';
+import { LAB_TEST } from '../core/content/lab.js';
 import { who, hamletOf, ageWords, OPEN, CLOSE, healthReport } from '../core/clinic.js';
 import { clinicMetrics } from '../core/metrics.js';
 import { medianWeight, say } from '../core/patient.js';
@@ -59,6 +62,9 @@ const lifeName = (k) => ({ herb: tc('life', 'herb'), shrub: tc('life', 'shrub'),
 const statusName = (s) => ({ waiting: tc('status', 'waiting'), arriving: tc('status', 'arriving'), consult: tc('status', 'consult'), leaving: tc('status', 'leaving'), home: tc('status', 'home'),
   dead: tc('status', 'dead'), hospital: tc('status', 'hospital') })[s] ?? s;
 // what a hindsight note names (actives, advice, procedures: conditions.js teach.treat/helps/harms)
+// why someone's blood was thin (signs.js anaemiaCauses), for hindsight
+const causeName = (k) => ({ iron: t('too little iron'), folate: t('too little folate'), malaria: t('malaria breaking the red cells'), hookworm: t('hookworms drinking blood'), sickle: t('sickle cell disease'),
+  thal: t('thalassaemia trait (small cells, not from want of iron)'), hiv: t('HIV'), inflammation: t('a long infection holding the iron back'), bleeding: t('bleeding'), pregnancy: t('the pregnancy\'s demands') })[k] ?? k;
 const gaveName = (id) => ACTIVE.get(id)?.name ?? INSTRUCTIONS.find((x) => x.id === id)?.label ?? PROCEDURES.find((x) => x.id === id)?.label ?? (id === 'artemisinin_alone' ? t('artemisinin alone') : id);
 // what a compound's effect acts on (actives.js `effects[].on`), as the handbook names it
 const effectName = (k) => ({ acid: t('Stomach acid'), airway: t('Opening the airways'), antitoxin: t('Neutralising venom'), bp: t('Lowering blood pressure'), burn: t('Healing burns'),
@@ -313,7 +319,7 @@ export function makeUI(G) {
   // ——— make
   PANELS.make = () => {
     const list = h('div', { class: 'rlist' });
-    const groups = [[t('Herbal remedies'), G.C.recipes.filter((r) => r.herb && !r.hours)], [t('Hand preparations'), G.C.recipes.filter((r) => r.special)], [t('Soaks & tinctures (at a steeping jar)'), G.C.recipes.filter((r) => r.hours)]];
+    const groups = [[t('Herbal remedies'), G.C.recipes.filter((r) => r.herb && !r.hours)], [t('Hand preparations'), G.C.recipes.filter((r) => r.special)], [t('Soaks & tinctures (at a steeping jar)'), G.C.recipes.filter((r) => r.hours)], [t('Ash, lime, glass and slides'), G.C.recipes.filter((r) => r.work)]];
     for (const [title, rs] of groups) {
       list.append(h('h3', {}, title));
       const mine = rs.filter((r) => !r.herb || G.p.known[r.herb] || count(G.p.inv, 'fresh_' + r.herb) || count(G.p.inv, 'dried_' + r.herb));
@@ -345,6 +351,7 @@ export function makeUI(G) {
   PANELS.build = () => {
     const list = h('div', { class: 'rlist' });
     for (const b of PLACEABLES) {
+      if (b.post) continue; // comes by post (Ledger → Order by post), never built
       const r = G.C.recipes.find((x) => x.id === 'make_' + b.id);
       const why = blocker(G, r);
       list.append(h('button', { class: 'recipe' + (why ? ' miss' : '') + (S.sel === b.id ? ' sel' : ''), onclick: () => { S.sel = b.id; render(); } }, icon(G.C.items.get(b.id).icon, 30), h('span', {}, b.name), h('small', {}, b.cost.map(([id, n]) => t('{n} {item}', { n, item: lc(G.C.items.get(id).name) })).join(', '))));
@@ -429,7 +436,18 @@ export function makeUI(G) {
     } else regMenu.append(h('p', { class: 'hint' }, t('Tap a part of the body to examine it.')));
     const tray = h('div', { class: 'tray' }, h('small', {}, t('Your tools:') + ' '), ...[...tools].map((tl) => h('span', { class: 'tool', title: G.C.items.get(tl).name }, icon(G.C.items.get(tl).icon, 26))),
       tools.has('scale') ? h('button', { onclick: () => { examine(G, enc, 'x_weigh'); render(); } }, icon({ gi: 'scales', c: '#c0b080' }, 20), t('Weigh')) : h('small', { class: 'dim' }, ' (' + t('no scale — weight is a guess') + ')'));
-    const exam = h('section', { class: 'exam' }, h('h3', {}, t('Examine')), h('div', { class: 'examgrid' }, svgWrap, regMenu), tray);
+    // the laboratory: tests you can do with what you have (content/lab.js); an assistant's results come as time passes
+    for (const r of labReady(G, enc)) ui.toast(r);
+    const haveLab = labTests().some((x) => x.needs.some((id) => tools.has(id)) || (x.station && G.stations.has(x.station))), aide = labStaff(G)[0];
+    const labBox = !haveLab ? null : h('div', { class: 'labbox' }, h('h4', {}, t('Laboratory')),
+      h('div', { class: 'chips' }, labTests().filter((x) => x.needs.every((id) => tools.has(id)) || (x.station && !x.needs.length)).map((x) => {
+        const why = labWhyNot(G, x.id);
+        return h('span', { class: 'labtest' }, h('button', { class: (enc.done.has(x.id) ? 'done ' : '') + (why ? 'miss' : ''), title: why || '', onclick: () => { const r = runLab(G, enc, x.id, 'you'); ui.toast(r.text); if (r.level) G.scene.handle([['level', 'lab', r.level]]); render(); } }, x.label),
+          aide && LAB_TEST.get(x.id).bench ? h('button', { class: 'link', disabled: !!why, title: t('Send to {name}', { name: personName(personNow(G, population(G).L.get(aide.who), G.W.time).name) }), onclick: () => { const r = runLab(G, enc, x.id, 'staff'); ui.toast(r.text); render(); } }, ' ' + t('send')) : null);
+      })),
+      enc.labQ?.length ? h('p', { class: 'hint' }, t('{n} at the laboratory, not ready yet.', { n: enc.labQ.length })) : null,
+      (enc.samples || []).some((x) => LAB_TEST.get(x.test).bench) ? h('div', { class: 'chips' }, h('small', {}, t('Look again yourself:') + ' '), (enc.samples || []).map((x, i) => LAB_TEST.get(x.test).bench ? h('button', { class: 'link', onclick: () => { const r = recheck(G, enc, i); ui.toast(r.text); render(); } }, LAB_TEST.get(x.test).label) : null)) : null);
+    const exam = h('section', { class: 'exam' }, h('h3', {}, t('Examine')), h('div', { class: 'examgrid' }, svgWrap, regMenu), tray, labBox);
     // notes / differential
     const notes = h('div', { class: 'notesbox' });
     const ab = Object.entries(enc.found).filter(([, f]) => f.pos), nm = Object.entries(enc.found).filter(([, f]) => !f.pos && f.v !== '—');
@@ -606,7 +624,7 @@ export function makeUI(G) {
   // ———————————————————————————————————— ledger
   PANELS.ledger = () => {
     const cl = G.meta.clinic;
-    const tabs = h('div', { class: 'chips' }, [['patients', t('Patients')], ['money', t('Money')], ['market', t('Traders')], ['post', t('Order by post')], ['report', t('Health office')], ['metrics', t('Metrics')]].map(([k, l]) => h('button', { class: S.ledTab === k ? 'on' : '', onclick: () => { S.ledTab = k; S.ledSel = null; render(); } }, l)));
+    const tabs = h('div', { class: 'chips' }, [['patients', t('Patients')], ['money', t('Money')], ['market', t('Traders')], ['post', t('Order by post')], ['report', t('Health office')], ['metrics', t('Metrics')], ['village', t('The valley')], ['staff', t('Staff')]].map(([k, l]) => h('button', { class: S.ledTab === k ? 'on' : '', onclick: () => { S.ledTab = k; S.ledSel = null; render(); } }, l)));
     const list = h('div', { class: 'rlist' });
     const detail = h('div', { class: 'detail' });
     const st = cl.stats;
@@ -626,7 +644,9 @@ export function makeUI(G) {
           const hindsight = [t('In hindsight it was {truth}.', { truth: tm(j.truth) }),
             j.helped.length ? t('What helped: {list}.', { list: names(j.helped) }) : '',
             j.harmed.length ? t('What harmed: {list}.', { list: names(j.harmed) }) : '',
-            j.needless?.length ? t('No germ to kill: the {list} only bred resistance.', { list: lc(names(j.needless)) }) : ''].filter(Boolean).join(' ');
+            j.needless?.length ? t('No germ to kill: the {list} only bred resistance.', { list: lc(names(j.needless)) }) : '',
+            j.causes?.length ? t('Why the blood was thin: {list}.', { list: j.causes.map(causeName).join(', ') }) : '',
+            j.caught?.length ? t('Caught on your waiting bench: {list}.', { list: j.caught.map((c) => COND.get(c)?.name ?? c).join(', ') }) : ''].filter(Boolean).join(' ');
           detail.append(h('div', { class: 'entry' }, h('small', {}, `${t('Day {n}', { n: day(v.t) })} ${clock(v.t)}`), h('b', {}, t('You thought: {dx}', { dx: v.dx.map((d) => COND.get(d)?.name ?? d).join(', ') || '—' })),
             h('p', {}, v.rx.length ? t('Gave: {list}', { list: v.rx.map(tm).join('; ') }) : t('No medicine.')), v.instr.length ? h('p', { class: 'dim' }, t('Advice: {list}', { list: v.instr.map(gaveName).join(', ') })) : null, v.refer ? h('p', {}, t('Referred.')) : null,
             (p.dead || p.recovered) ? h('p', { class: j.dxRight ? 'good' : 'bad' }, hindsight) : null));
@@ -639,7 +659,7 @@ export function makeUI(G) {
         h('p', { class: 'hint' }, t('Higher fees keep the poorest away; they pay in eggs and maize when coins run short.')));
     } else if (S.ledTab === 'post') {
       const cart = (S.cart ||= {});
-      for (const [title, cat] of [[t('Medicines'), 'medicine'], [t('Tools'), 'tool']]) {
+      for (const [title, cat] of [[t('Medicines'), 'medicine'], [t('Tools'), 'tool'], [t('Laboratory supplies'), 'lab'], [t('Equipment'), 'build']]) {
         list.append(h('h4', {}, title));
         for (const it of catalogueItems(G.C).filter((x) => x.cat === cat)) {
           const n = cart[it.id] || 0;
@@ -667,6 +687,37 @@ export function makeUI(G) {
         h('p', { class: 'hint' }, t('Imported herbs come weeks later, and about one sack in three holds another species altogether — far more for antler.') + ' ', h('span', { class: 'cite' }, cite(IMPORT.ref))));
       const pend = G.meta.orders || [];
       if (pend.length) detail.append(h('h4', {}, t('On the way')), h('ul', {}, pend.map((o) => h('li', {}, o.goods.length > 1 ? t('No. {n}: {count} items, due day {day}', { n: o.n, count: o.goods.length, day: day(o.due) }) : t('No. {n}: {count} item, due day {day}', { n: o.n, count: o.goods.length, day: day(o.due) })))));
+    } else if (S.ledTab === 'village') {
+      // the valley as people tell it: each place, how it is eating, and the news that reached you (no tallies: you
+      // hear what neighbours and patients say)
+      const { P, L } = population(G);
+      for (const hm of [G.W.R.village, ...G.W.R.hamlets]) {
+        const n = [...L.values()].filter((q) => q.h === hm.id).length, food = P.epi[hm.id]?.food;
+        const word = food == null ? '' : food < 0.7 ? t('going hungry') : food < 0.9 ? t('eating less') : t('eating well');
+        list.append(h('button', { class: 'recipe' + (S.ledSel === hm.id ? ' sel' : '') + (food != null && food < 0.85 ? ' dead' : ''), onclick: () => { S.ledSel = hm.id; render(); } }, h('span', {}, personName(hm.name)), h('small', {}, `${t('{n} people', { n })} · ${word}`)));
+      }
+      const hm = S.ledSel && hamletRow(G.W.R, S.ledSel);
+      if (hm) {
+        const ill = Object.keys(P.rec).filter((id) => L.get(id)?.h === hm.id && P.rec[id].conds.length).length;
+        detail.append(h('h3', {}, personName(hm.name)), h('p', {}, ill ? t('About {n} people there are ill at home now, they say.', { n: Math.max(1, Math.round(ill / 2) * 2) }) : t('Nobody there is badly ill, they say.')));
+      }
+      detail.append(h('h4', {}, t('What you have heard')), (cl.vlog || []).length ? h('ul', {}, [...cl.vlog].reverse().slice(0, 30).map((e) => h('li', { class: e.kind === 'village' ? 'dim' : '' }, `${t('D{n}', { n: day(e.t) })} · `, tm(e.msg)))) : h('p', { class: 'hint' }, t('Nothing yet.')));
+    } else if (S.ledTab === 'staff') {
+      const staff = cl.staff || [];
+      list.append(h('h4', {}, t('Working for you')));
+      if (!staff.length) list.append(h('p', { class: 'hint' }, t('Nobody yet.')));
+      for (const s of staff) {
+        const q = population(G).L.get(s.who), nm = q ? personName(personNow(G, q, G.W.time).name) : '?';
+        list.append(h('div', { class: 'trow' }, h('span', {}, nm, h('small', {}, ` · ${tm(roleMsg(s.role))} · ${tm(skillMsg(s.skill))} · ${sh(s.wage)} ${t('a day')}${s.unpaid ? ' · ' + t('unpaid {n} days', { n: s.unpaid }) : ''}`)),
+          s.role === 'gatherer' ? h('select', { onchange: (e) => { s.task = e.target.value || null; render(); } }, [h('option', { value: '' }, t('Gather what?')), ...Object.keys(G.p.known).filter((id) => HERB.get(id)).sort((a, b) => HERB.get(a).name.localeCompare(HERB.get(b).name)).map((id) => h('option', { value: id, selected: s.task === id }, HERB.get(id).name))]) : null,
+          h('button', { onclick: () => { if (confirm(t('Let {name} go?', { name: nm }))) { dismiss(G, s.who); render(); } } }, t('Let go'))));
+      }
+      const role = S.hireRole || 'hunter';
+      detail.append(h('h4', {}, t('Hire')), h('div', { class: 'chips' }, Object.keys(ROLES).map((r) => h('button', { class: role === r ? 'on' : '', onclick: () => { S.hireRole = r; render(); } }, tm(roleMsg(r))))),
+        h('p', { class: 'hint' }, { hunter: t('Brings meat: half to his own family\'s pot, half to your shelf. Too many hunters empty the bush for years.'), gatherer: t('Brings the plant you name from around her home, to your drying rack. Sometimes she brings a lookalike, less as she learns.'), lab: t('Takes samples and reads slides and counts while you see patients. Better with every slide, faster when you check the slides yourself.') }[role]),
+        h('ul', {}, candidates(G, role).map((c) => h('li', {}, `${personName(c.name)} (${c.age}) · ${personName(c.hamlet)} · ${c.apt > 0.55 ? t('suited to it') : c.apt > 0.35 ? t('willing') : t('unsure')} `, h('button', { onclick: () => { hire(G, c.who, role); sfx('coin'); render(); } }, t('Hire for {n} a day', { n: sh(ROLES[role].wage) }))))));
+      const wild = wildOf(G), low = Object.values(wild).reduce((a, v) => Math.min(a, v), 1);
+      if (staff.some((s) => s.role === 'hunter')) detail.append(h('p', { class: 'hint' }, low < 0.4 ? t('The hunters say the game is getting scarce.') : t('The hunters say there is game in the bush.')));
     } else if (S.ledTab === 'metrics') {
       const days = S.kpiDays === undefined ? 10 : S.kpiDays;
       const M = clinicMetrics(cl, G.W.time, days);

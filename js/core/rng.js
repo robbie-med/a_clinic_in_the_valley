@@ -33,3 +33,8 @@ export function weighted(entries, r) {
   for (const e of entries) { t -= e[1]; if (t < 0) return e[0]; }
   return entries[entries.length - 1][0];
 }
+
+/** Salts for stateless per-person rolls: hashf(seed, strHash(person id), day, STREAM.x). One roll per person per day
+ *  per purpose, so the order people are visited in (which changes when a save is reloaded) never matters, and adding
+ *  a new purpose never reshuffles an old one. Never renumber; add new purposes at the end. */
+export const STREAM = { death: 101, conceive: 102, loss: 103, birth: 104, body: 105, food: 106, seek: 107, sched: 108, look: 109, aptitude: 110, hunt: 111, gather: 112, starve: 113, urgent: 114, seekAt: 115, slowDeath: 116, staff: 117, lab: 118, inf: 1000 };

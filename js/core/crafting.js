@@ -32,7 +32,7 @@ export function blocker(G, r, times = 1) {
   return null;
 }
 /** A station as a mid-sentence noun in the current language ("a hearth"). */
-export const stationName = (s) => ({ hearth: t('hearth'), rack: t('drying rack'), jar: t('steeping jar'), bench: t('workbench') }[s] || s);
+export const stationName = (s) => ({ hearth: t('hearth'), rack: t('drying rack'), jar: t('steeping jar'), bench: t('workbench'), kiln: t('kiln'), lab: t('laboratory bench'), analyser: t('blood counter') }[s] || s);
 /** A herb's gathered part, any form ("white willow bark"), capitalized as a name: English from the fresh item's name. */
 export function herbPartName(C, herbId) {
   const h = HERB.get(herbId);
@@ -61,8 +61,10 @@ export function make(G, r, times = 1) {
   const now = W.time;
   // take the inputs, remembering how strong the herb parts were
   let qSum = 0, qW = 0;
+  const inQ = {};
   for (const [spec, n] of r.in) {
     const need = n * times;
+    if (!spec.startsWith('#')) { let k = 0, w = 0; for (const sl of p.inv.slots) if (sl?.id === spec) { k += (sl.q ?? 1) * sl.n; w += sl.n; } inQ[spec] = w ? k / w : 1; }
     if (spec.startsWith('#') || C.items.get(spec)?.cat === 'herb') {
       // weighted potency of what we take
       let left = need;
@@ -81,6 +83,13 @@ export function make(G, r, times = 1) {
   const gauss = Math.sqrt(-2 * Math.log(Math.max(1e-9, rng()))) * Math.cos(2 * Math.PI * rng());
   let q = qW ? qSum / qW : 1;
   if (r.herb) q *= Math.exp(gauss * Math.max(0.06, 0.22 - lv * 0.02));       // method, heat, timing
+  // glasswork: a first melt is cloudy, bubbled and brittle; a practised hand makes clearer glass (estimate). Slides
+  // keep the quality of the glass they were drawn from.
+  if (r.skill === 'glass') {
+    const glassQ = r.out === 'slide' ? inQ.glass ?? 1 : 1;
+    q = Math.min(1, Math.max(0.2, 0.35 + 0.1 * level(p.skills.glass) + 0.12 * gauss));
+    if (r.out === 'slide') q = Math.min(q, glassQ + 0.1);
+  }
   if (r.out === 'ors_sugar' || r.out === 'ors_cereal') {
     // salt measured by hand vs a level spoon — the classic danger of home ORS
     const spoons = count(p.inv, 'spoons') > 0;
@@ -102,8 +111,9 @@ export function make(G, r, times = 1) {
     ev.push(['gain', out.id, out.n - left]);
   }
   G.meta.time += r.min * times;
-  const lvUp = gainXp(p, r.build ? 'build' : 'herbal', r.build ? 2 : 3 * times);
-  if (lvUp) ev.push(['level', r.build ? 'build' : 'herbal', lvUp]);
+  const skill = r.build ? 'build' : r.skill || (r.work ? 'build' : 'herbal');
+  const lvUp = gainXp(p, skill, r.build || r.work ? 2 * times : 3 * times);
+  if (lvUp) ev.push(['level', skill, lvUp]);
   ev.push(['sound', 'craft']);
   return { ok: true, ev, out };
 }

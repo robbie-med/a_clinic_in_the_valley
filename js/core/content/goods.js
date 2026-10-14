@@ -34,6 +34,7 @@ export const TOOLS = [
   { id: 'bp_cuff', name: 'Blood pressure cuff', price: 45, icon: 'heart-beats', color: '#4060a0', note: 'High blood pressure in pregnancy is pre-eclampsia until proved otherwise.' },
   { id: 'mortar', name: 'Mortar and pestle', price: 5, icon: 'pestle-mortar', color: '#a09080', note: 'Grind dried herbs to powder, crush garlic and neem.' },
   { id: 'cooking_pot', name: 'Cooking pot', price: 5, icon: 'cooking-pot', color: '#6a6a6a', note: 'Boil water, brew teas and decoctions.' },
+  { id: 'bellows', name: 'Bellows', price: 4, icon: 'swap-bag', color: '#8a6040', note: 'Blows a kiln hot enough to melt glass.' },
 ];
 
 export const MATERIALS = [
@@ -43,6 +44,12 @@ export const MATERIALS = [
   { id: 'plank', name: 'Plank', stack: 40, price: 1.5, icon: 'planks', color: '#b08850' },
   { id: 'nails', name: 'Nails (handful)', stack: 50, price: 0.5, icon: 'hammer-nails', color: '#909090' },
   { id: 'clay_jar', name: 'Clay jar', stack: 10, price: 1, icon: 'mason-jar', color: '#b07a50' },
+  // ——— glass from the valley's own sand: silica from the river, soda and potash from wood ash, lime from burnt stone
+  { id: 'sand', name: 'River sand (basket)', stack: 40, price: 0.1, icon: 'stone-pile', color: '#d8c080', note: 'Washed river sand: the silica glass is made of.' },
+  { id: 'stone', name: 'Limestone', stack: 40, price: 0.1, icon: 'stone-pile', color: '#c8c0b0', note: 'Burnt in a kiln it becomes quicklime.' },
+  { id: 'wood_ash', name: 'Wood ash', stack: 40, price: 0.05, icon: 'powder-bag', color: '#a0a0a0', note: 'From the hearth: the alkali that lets sand melt at a fire\'s heat.' },
+  { id: 'quicklime', name: 'Quicklime', stack: 40, price: 0.3, icon: 'powder-bag', color: '#f0f0e8', note: 'Makes glass hard and keeps it from dissolving in water.' },
+  { id: 'glass', name: 'Lump of glass', stack: 40, price: 1, icon: 'stone-block', color: '#a0d0c0', note: 'Greenish and full of bubbles: enough for a dozen slides.' },
 ];
 
 /** What patients who cannot pay in coin bring instead. Traders buy them back. */
@@ -53,6 +60,20 @@ export const PRODUCE = [
   { id: 'beans', name: 'Beans (kg)', stack: 20, price: 1.2, icon: 'peas', color: '#8a4a3a' },
   { id: 'cassava', name: 'Cassava root', stack: 30, price: 0.5, icon: 'potato', color: '#c0a080' },
   { id: 'firewood', name: 'Firewood bundle', stack: 30, price: 0.5, icon: 'wood-pile', color: '#8a6a40' },
+  // what a hunter brings: fresh it keeps two days; smoked over the hearth, weeks
+  { id: 'meat', name: 'Fresh meat (kg)', stack: 30, price: 4, icon: 'chicken-leg', color: '#c05050', shelfDays: 2 },
+  { id: 'smoked_meat', name: 'Smoked meat (kg)', stack: 30, price: 5, icon: 'chicken-leg', color: '#7a4030', shelfDays: 60 },
+];
+/** Making things that are not medicines (and not furniture): ash at the hearth, lime, glass and slides at the kiln,
+ *  bellows at the workbench, smoking meat. `skill`: the skill that steadies the hand (glass: crude at first). */
+export const WORKS = [
+  { id: 'make_wood_ash', out: 'wood_ash', in: [['firewood', 2]], station: 'hearth', min: 40, yields: 1 },
+  { id: 'make_smoked_meat', out: 'smoked_meat', in: [['meat', 2], ['firewood', 1]], station: 'hearth', min: 90, yields: 2 },
+  { id: 'make_bellows', out: 'bellows', in: [['plank', 1], ['pole', 1], ['cloth', 2]], station: 'bench', min: 40, yields: 1 },
+  { id: 'make_quicklime', out: 'quicklime', in: [['stone', 2], ['firewood', 2]], station: 'kiln', min: 180, yields: 1 },
+  // soda-lime glass: about 3 parts sand to 1 of alkali and a little lime (estimate for a crude wood-fired melt)
+  { id: 'make_glass', out: 'glass', in: [['sand', 3], ['wood_ash', 2], ['quicklime', 1], ['firewood', 4]], station: 'kiln', tool: 'bellows', min: 300, yields: 1, skill: 'glass' },
+  { id: 'make_slide', out: 'slide', in: [['glass', 1], ['firewood', 1]], station: 'kiln', min: 60, yields: 12, skill: 'glass' },
 ];
 // Shown text translates on read (i18n.js); the Korean lives in i18n/ko/items.js.
 for (const rows of [INGREDIENTS, TOOLS, MATERIALS, PRODUCE]) localize(rows, ['name', 'note']);

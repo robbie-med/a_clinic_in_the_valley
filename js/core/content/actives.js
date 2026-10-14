@@ -348,6 +348,20 @@ export const ACTIVES = [
     ref: 'WTND p.366; White NJ. Clin Pharmacokinet 1985;10:187; Riou B et al. N Engl J Med 1988;318:1; Smith ER, Klein-Schwartz W. J Emerg Med 2005;28:437; WHO Guidelines for malaria 2023',
   },
   {
+    id: 'sp', name: 'Sulfadoxine–pyrimethamine', channel: 'systemic', class: 'antimalarial (prevention in pregnancy)',
+    // Counted in mg of pyrimethamine (25 mg with 500 mg sulfadoxine a tablet). Pyrimethamine t½ ~4 days, Vd ~3 L/kg
+    // (Winstanley PA et al. Br J Clin Pharmacol 1992;33:143); slow to clear parasites, so it guards against new
+    // infections for weeks more than it cures one. East Africa's parasites mostly carry the dhfr/dhps mutations that
+    // blunt it (WHO Guidelines for malaria 2023), yet monthly doses from the second trimester still cut low birth
+    // weight and the mother's anaemia (Radeva-Petrova D et al. Cochrane 2014;CD000169). prr and ec50 are estimates.
+    pk: { F: 0.9, ka: 0.5, half: 96, vd: 3, spread: 0.3 },
+    effects: [{ on: 'plasmodium', prr: 2, ec50: 0.03, hill: 2 }],
+    idio: [{ per: 2e-5, days: [5, 21], hours: 336, sign: 'sjs', text: 'blisters and peeling skin, sores in the mouth and eyes (severe reaction to the sulfa)', harm: 0.03 }],
+    foetal: [{ weeks: [36, 41], at: 1, harm: 'jaundice', per: 9e-5, ref: 'Silverman WA et al. Pediatrics 1956;18:614 (sulfonamides near term)' }],
+    cautions: ['Not in the first three months of pregnancy.'],
+    ref: 'WHO Guidelines for malaria 2023 (IPTp-SP); Radeva-Petrova D et al. Cochrane Database Syst Rev 2014;CD000169; Winstanley PA et al. Br J Clin Pharmacol 1992;33:143',
+  },
+  {
     id: 'artemether', name: 'Artemether', channel: 'systemic', class: 'antimalarial',
     pk: { F: 0.4, ka: 1.5, half: 1.6, vd: 7, spread: 0.45, induce: { max: 3, days: 3 } },
     // calibrated: prr here is a kill rate while drug is present (only a few hours a day), fitted with artesunate's

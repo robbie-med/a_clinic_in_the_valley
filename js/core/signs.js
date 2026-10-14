@@ -14,6 +14,7 @@ import { ACTIVES } from './content/actives.js';
 import { ttProtected } from './people.js';
 import { tetanusVaccinated } from './disease.js';
 import { msg, tm, raw, en } from './i18n.js';
+import { hbSet, ferritin, GENES } from './blood.js';
 
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -565,4 +566,77 @@ function followUp(p, t, set) {
   const kept = (x) => x.kept / x.seen;
   set('advice_kept', adv.length ? adv.map((x) => (kept(x) > 0.85 ? msg('{advice}: yes, every day.', { advice: x.name }) : kept(x) > 0.5 ? msg('{advice}: most days.', { advice: x.name }) : msg('{advice}: only now and then.', { advice: x.name }))) : msg('You gave no advice.'),
     adv.some((x) => kept(x) <= 0.5));
+}
+
+// ————————————————————————————————————————————— the blood and stool as they really are (for the lab, lab.js)
+/** A patient's genes: their own (blood.js), or for someone from outside the valley, drawn from the seed at the valley's
+ *  rates (GENES), so a stranger's blood is as real as a neighbour's. */
+function genesOf(p) {
+  if (p.blood?.g != null) return p.blood.g;
+  const u = hashf(p.seed, 3, 3, 7303), v = hashf(p.seed, 4, 4, 7303), q = GENES.alpha;
+  const s = u < GENES.ss * 0.3 ? 2 : u < GENES.ss * 0.3 + GENES.as ? 1 : 0;
+  return s * 3 + (v < q * q ? 2 : v < q * q + 2 * q * (1 - q) ? 1 : 0);
+}
+/**
+ * Everything a laboratory could find in the blood and stool now, before any method's error (lab.js adds that):
+ *   hb (g/dL), mcv (fL), retic (% of red cells), wbc (×10⁹/L), diff { n, l, e, m } (% of white cells), para (malaria
+ *   parasites per µL), epg { hookworm, ascaris } (eggs per gram of stool), sickle (0 none, 1 trait, 2 disease), thal,
+ *   ferritin (µg/L), morph (what a stained film shows: ids).
+ * A body with its own blood (blood.js) reports it as it is; a patient without (strangers, tests) gets a picture inferred
+ * from their illnesses. White cells: neutrophils rise with a bacterial infection, fall with typhoid and HIV; worms bring
+ * eosinophils (Kato-Katz eggs per gram: ~25 per hookworm and ~1000 per roundworm, estimates).
+ */
+export function bloodPicture(p, t) {
+  const V = vitals(p, t), cond = (id) => p.conds.find((c) => c.id === id), model = (c) => COND.get(c.id).model;
+  const g = genesOf(p), s = Math.floor(g / 3), th = g % 3, b = p.blood;
+  const hb = V.hb, child = p.age < 12;
+  const mal = cond('malaria'), hw = cond('hookworm'), asc = cond('ascaris'), hiv = cond('hiv'), anae = cond('anaemia');
+  let mcv, retic, fer;
+  if (b) {
+    mcv = b.mcv ?? 88;
+    retic = clamp((b.r ?? 1) * (hbSet(p.age, p.sex, p.pregnant, g) / Math.max(2, hb)) * 1, 0.2, 25);
+    fer = ferritin(b.fe, 0);
+  } else {
+    // inferred: iron-poor small cells with hookworm or iron-deficiency anaemia, large with folate lack
+    mcv = (child ? 80 : 88) - [0, 5, 12][th] - (hw && hb < 10 ? 12 : 0) - (anae?.by === 'iron' ? 14 : 0) + (anae?.by === 'folate' ? 18 : 0);
+    retic = mal && mal.para < 500 && hb < 10 ? 4 : s === 2 ? 10 : 1;
+    fer = anae?.by === 'iron' || (hw && hb < 10) ? 6 : 60;
+  }
+  const inflam = p.conds.some((c) => ['malaria', 'hiv', 'mycobacterial', 'bacterial'].includes(model(c)) && (c.s || 0) > 0.1) ? 1 : 0;
+  fer *= 1 + 2 * inflam; // an acute-phase protein: inflammation hides an empty store
+  let bact = 0, viral = 0;
+  for (const c of p.conds) { const m = model(c); if (m === 'bacterial' || m === 'wound') bact = Math.max(bact, clamp(c.s || 0, 0, 1)); else if (m === 'viral') viral = Math.max(viral, clamp(c.s || 0, 0, 1)); }
+  const typh = cond('typhoid');
+  let wbc = (p.age < 1 ? 11 : child ? 9 : 7) * (1 + 1.6 * bact - 0.25 * viral) * (typh ? 0.6 : 1) * (hiv ? clamp(hiv.cd4 / 700, 0.4, 1) : 1);
+  const eos = clamp(2 + ((hw?.W || 0) / 40) * 6 + ((asc?.W || 0) / 30) * 4, 1, 25);
+  const neut = clamp(55 + 25 * bact - 20 * viral - (typh ? 10 : 0), 15, 92), mono = 6;
+  const diff = { n: neut, e: eos, m: mono, l: Math.max(3, 100 - neut - eos - mono) };
+  const morph = [];
+  if (mcv < 78) morph.push('microcytic');
+  if (mcv > 100) morph.push('macrocytic');
+  if (s === 2) morph.push('sickle');
+  if (s === 2 || th >= 1) morph.push('target');
+  if (retic > 3) morph.push('polychromasia');
+  if ((b && b.fol < 3) || (!b && anae?.by === 'folate')) morph.push('hyperseg');
+  if (mal?.para > 50) morph.push('ring_forms');
+  return { hb, mcv, retic, wbc, diff, para: mal?.para || 0, epg: { hookworm: (hw?.W || 0) * 25, ascaris: (asc?.W || 0) * 1000 }, sickle: s, thal: th, ferritin: fer, morph };
+}
+
+/**
+ * Why this person's blood is thin (hindsight in the ledger; never shown during a visit): ids among iron, folate,
+ * malaria, hookworm, sickle, thal, hiv, inflammation, bleeding, pregnancy. From the blood itself where there is one.
+ */
+export function anaemiaCauses(p) {
+  const out = [], b = p.blood, g = genesOf(p);
+  if (b) { if (b.fe < 20) out.push('iron'); if (b.fol < 4) out.push('folate'); }
+  else if (p.conds.find((c) => c.id === 'anaemia')?.by) out.push(p.conds.find((c) => c.id === 'anaemia').by === 'iron' ? 'iron' : 'folate');
+  if (p.conds.some((c) => c.id === 'malaria')) out.push('malaria');
+  if (p.conds.some((c) => c.id === 'hookworm')) out.push('hookworm');
+  if (Math.floor(g / 3) === 2) out.push('sickle');
+  if (g % 3 >= 1) out.push('thal');
+  if (p.conds.some((c) => c.id === 'hiv')) out.push('hiv');
+  if (p.conds.some((c) => c.id === 'tb')) out.push('inflammation');
+  if (p.conds.some((c) => COND.get(c.id).model === 'bleeding')) out.push('bleeding');
+  if (p.pregnant >= 14) out.push('pregnancy');
+  return out;
 }

@@ -77,11 +77,11 @@ export const ORGANISMS = [
   },
   {
     id: 'p_falciparum', name: 'Malaria parasite (Plasmodium falciparum)', parasite: true, scatter: false,
-    mic: { chloroquine: 1, quinine: 1, artemisinin: 1, artemether: 1, artesunate: 1, lumefantrine: 1 },
+    mic: { chloroquine: 1, quinine: 1, artemisinin: 1, artemether: 1, artesunate: 1, lumefantrine: 1, sp: 1 },
     // pfcrt K76T raises chloroquine IC50 ~5–10×; kelch13 mutants clear slowly under artemisinins (partial
     // resistance, now spreading in East Africa); quinine and lumefantrine susceptibility has drifted little.
-    fold: { chloroquine: 8, quinine: 3, artemisinin: 2.5, artemether: 2.5, artesunate: 2.5, lumefantrine: 3 },
-    resist0: { chloroquine: 0.6, quinine: 0.03, artemisinin: 0.04, artemether: 0.04, artesunate: 0.04, lumefantrine: 0.03 },
+    fold: { chloroquine: 8, quinine: 3, artemisinin: 2.5, artemether: 2.5, artesunate: 2.5, lumefantrine: 3, sp: 10 },
+    resist0: { chloroquine: 0.6, quinine: 0.03, artemisinin: 0.04, artemether: 0.04, artesunate: 0.04, lumefantrine: 0.03, sp: 0.7 }, // sp: dhfr/dhps quintuple mutants, most of East Africa (WHO 2023)
     ref: 'WHO World malaria report 2023 (drug efficacy and resistance); Mwanza S et al. Malar J 2016;15:584 (chloroquine sensitivity returning after withdrawal); Balikagala B et al. N Engl J Med 2021;385:1163 (artemisinin partial resistance, Uganda)',
   },
 

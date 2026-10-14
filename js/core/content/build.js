@@ -23,6 +23,13 @@ export const PLACEABLES = [
     note: 'A clean place to lie the patient down: examining the belly and chest is easier and more accurate.' },
   { id: 'herb_bed', name: 'Garden bed', garden: true, blocks: false, flat: true, sprite: { gi: 'flower-pot', c: '#7a5a3a' }, cost: [['pole', 2]], price: 1, tier: 0,
     note: 'Plant cuttings, roots and seeds of garden herbs.' },
+  // ——— the laboratory (content/lab.js)
+  { id: 'lab_bench', name: 'Laboratory bench', station: 'lab', blocks: true, sprite: { gi: 'microscope', c: '#7a8aa0' }, cost: [['plank', 4], ['nails', 2], ['cloth', 1]], price: 8, tier: 1,
+    note: 'A steady table by the window: films, counts and stool smears are read here, with a microscope.' },
+  { id: 'kiln', name: 'Kiln', station: 'kiln', blocks: true, sprite: { gi: 'fire-bowl', c: '#c06030' }, cost: [['mud_brick', 16], ['stone', 4]], price: 10, tier: 1,
+    note: 'Burns limestone to lime, and with bellows melts sand and ash into glass.' },
+  { id: 'analyser', name: 'Blood counter (solar)', station: 'analyser', blocks: true, sprite: { gi: 'heart-beats', c: '#3a5a7a' }, cost: [], price: 900, tier: 2, post: true,
+    note: 'Counts the blood in minutes: haemoglobin, white cells and their kinds, cell size. Needs a reagent pack each test and a control each day; it can break down.' },
   { id: 'wall_mud', name: 'Mud-brick wall', wall: true, blocks: true, sprite: { d: 'dngn/wall/sandstone_wall2', t: '#d0a078' }, cost: [['mud_brick', 4]], price: 1, tier: 0 },
   { id: 'door_wood', name: 'Door', door: true, blocks: false, sprite: { d: 'dngn/doors/closed_door' }, cost: [['plank', 2], ['nails', 1]], price: 3, tier: 0 },
   { id: 'floor_packed', name: 'Packed earth floor', floor: true, flat: true, ground: 'clinic_floor', cost: [['mud_brick', 1]], price: 0.3, tier: 0 },

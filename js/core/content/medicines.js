@@ -30,6 +30,7 @@ export const MEDICINES = [
   tab('codeine_30', 'Codeine 30 mg tablets', { codeine: 30 }, 0.05, '#e0e0ff', { ref: 'WTND p.383' }),
 
   tab('cq_150', 'Chloroquine 150 mg base tablets', { chloroquine: 150 }, 0.01, '#f0f0f0', { ref: 'WTND p.366', note: '250 mg chloroquine phosphate = 150 mg base. Doses are counted in base.' }),
+  tab('sp_tab', 'Sulfadoxine–pyrimethamine tablets (500/25 mg)', { sp: 25 }, 0.03, '#f0e8d0', { ref: 'WHO Guidelines for malaria 2023 (IPTp-SP)', note: 'Malaria prevention in pregnancy: 3 tablets once a month from the fourth month, swallowed in front of you.' }),
   tab('al_20_120', 'Artemether–lumefantrine 20/120 mg tablets', { artemether: 20, lumefantrine: 120 }, 0.08, '#f0e0a0', { ref: 'WTND p.364', note: 'Coartem. 6 doses over 3 days: at 0, 8, 24, 36, 48 and 60 hours, with food or milk.' }),
   tab('as_50', 'Artesunate 50 mg tablets', { artesunate: 50 }, 0.12, '#f8f0e0', { ref: 'WTND p.364' }),
   tab('qn_300', 'Quinine sulfate 300 mg tablets', { quinine: 250 }, 0.06, '#ffffff', { ref: 'WTND p.365', note: '300 mg quinine sulfate ≈ 250 mg quinine base.' }),

@@ -12,8 +12,10 @@ import actives from './actives.js';
 import items from './items.js';
 import flora from './flora.js';
 import boot from './boot.js';
+import village from './village.js';
+import lab from './lab.js';
 
-export const PARTS = { boot, ui, signs, clinic, world, conditionsA, conditionsB, actives, items, flora };
+export const PARTS = { boot, ui, signs, clinic, world, conditionsA, conditionsB, actives, items, flora, village, lab };
 // {who:이} with who = '저' (a patient speaking of themselves) reads 제가; an empty var takes no particle.
 function attach(v, p) {
   if (v === '') return '';

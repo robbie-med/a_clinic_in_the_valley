@@ -51,7 +51,7 @@ export const VENDORS = [
       ['benzathine_pen', [0, 20], 1.2], ['benzylpen_1mu', [0, 30], 1.2], ['ceftriaxone_1g', [0, 20], 1.2], ['adrenaline_1mg', [5, 20], 1.2], ['syringe', [1, 4], 1.2],
       // ——— chronic illness and emergencies
       ['salb_4', [100, 300], 1.15], ['salb_syrup', [0, 500], 1.15], ['pred_5', [100, 300], 1.15], ['pheno_30', [100, 500], 1.15], ['diaz_5', [0, 100], 1.2], ['diaz_rectal', [0, 10], 1.2],
-      ['hctz_25', [100, 500], 1.15], ['amlo_5', [100, 500], 1.15], ['folic_5', [100, 300], 1.15], ['antacid_500', [100, 300], 1.15], ['omep_20', [0, 200], 1.2],
+      ['hctz_25', [100, 500], 1.15], ['amlo_5', [100, 500], 1.15], ['folic_5', [100, 300], 1.15], ['sp_tab', [0, 300], 1.15], ['antacid_500', [100, 300], 1.15], ['omep_20', [0, 200], 1.2],
       ['rutf_sachet', [0, 150], 1.1], ['iodized_oil', [0, 100], 1.15], ['snake_av', [0, 4], 1.2], ['scorpion_av', [0, 2], 1.2],
       // ——— infections (WTND chapters 13–18, 21)
       ['rhze_fdc', [0, 600], 1.1], ['rh_fdc', [0, 600], 1.1], ['inh_100', [0, 300], 1.1], ['rif_300', [0, 200], 1.15], ['pza_400', [0, 200], 1.15], ['emb_400', [0, 200], 1.15], ['strep_1g', [0, 30], 1.2],
@@ -63,6 +63,10 @@ export const VENDORS = [
 export const VENDOR = new Map(VENDORS.map((v) => [v.id, v]));
 
 // ——— childbirth and the newborn: the mission stores also carry these (WTND chapter 19; Green Pages)
+// ——— the laboratory (content/lab.js): consumables from the mission stores, the cheap instruments from the peddler
+VENDOR.get('stores').sells.push(['lancet', [100, 400], 1.15], ['slide', [50, 200], 1.15], ['giemsa', [0, 500], 1.2], ['methanol', [0, 500], 1.2], ['immersion_oil', [0, 50], 1.2],
+  ['hcl', [0, 500], 1.2], ['turk', [0, 200], 1.2], ['nmb', [0, 100], 1.2], ['metabisulfite', [0, 100], 1.2], ['kk_kit', [0, 100], 1.2], ['hb_scale', [0, 2], 1.2], ['sahli_set', [0, 1], 1.2]);
+VENDOR.get('peddler').sells.push(['neubauer', [0, 1], 1.25], ['bellows', [0, 1], 1.2]);
 VENDOR.get('stores').sells.push(['oxytocin_10iu', [0, 20], 1.2], ['miso_200', [0, 60], 1.2], ['ergometrine_02', [0, 20], 1.2], ['mgso4_5g', [0, 10], 1.2],
   ['diazepam_10inj', [0, 10], 1.2], ['ampicillin_500', [0, 40], 1.2], ['gentamicin_80', [0, 40], 1.2], ['tt_vaccine', [10, 40], 1.2], ['dmpa_150', [0, 20], 1.2]);
 

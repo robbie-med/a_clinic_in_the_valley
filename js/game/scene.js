@@ -10,6 +10,8 @@ import { hash, makeRng } from '../core/rng.js';
 import { IconAtlas, tileFrame } from './icons.js';
 import { sfx } from './sfx.js';
 import { t, getLang, personName } from '../core/i18n.js';
+import { villagersIn } from '../core/schedule.js';
+import { population, personNow, hamletRow } from '../core/people.js';
 
 const Phaser = window.Phaser;
 const T = 32;
@@ -57,12 +59,15 @@ export class ClinicScene extends Phaser.Scene {
     this.dark = this.add.rectangle(0, 0, 10, 10, 0x0a0c20, 0).setOrigin(0).setDepth(900).setScrollFactor(0);
 
     this.walkers = new Map();   // id → { kind: 'patient'|'vendor', id, x, y, path, doll, label }
+    this.ambient = new Map();   // villagers going about their day, only those in view (core/schedule.js)
+    // is the waiting bench under a roof? (core/contagion.js: a closed room passes airborne germs far more than open air)
+    G.benchIndoor = () => { const c = W.R.clinic; for (let y = c.out.y - 2; y <= c.out.y + 6; y++) for (let x = c.out.x - 7; x <= c.out.x + 7; x++) if (W.objDef(x, y)?.seat && W.indoor(x, y)) return true; return false; };
     this.keys = this.input.keyboard.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT,SHIFT,SPACE,E', false);
     this.input.keyboard.on('keydown', (e) => this.onKey(e));
     this.input.on('pointerdown', (ptr) => this.onPointer(ptr));
     this.input.on('pointermove', (ptr) => { this.hover = this.ptrTile(ptr); });
     this.input.on('wheel', (ptr, o, dx, dy) => this.setZoom(this.zoom * (dy > 0 ? 0.9 : 1.1)));
-    this.acc = { arrive: 0, home: 0, catch: 0, save: 0, hud: 0, vend: 0 };
+    this.acc = { arrive: 0, home: 0, catch: 0, save: 0, hud: 0, vend: 0, folk: 0 };
     this.moveTarget = null;
     // patients who were walking or waiting when the game was closed come back to the bench
     for (const pt of Object.values(G.meta.clinic.patients)) {
@@ -111,7 +116,8 @@ export class ClinicScene extends Phaser.Scene {
     const { G } = this;
     const R = G.W.R;
     if (this.walkers.has(pt.id)) return;
-    const rng = makeRng(pt.seed, 'look');
+    // someone from the valley looks the same on your bench as in their field (villagerDoll)
+    const rng = pt.who ? makeRng(G.meta.seed, 'look', pt.who) : makeRng(pt.seed, 'look');
     const [b, h] = (pt.sex === 'f' ? LOOKS_F : LOOKS_M)[Math.floor(rng() * 4)];
     const doll = this.makeDoll(b, h, BODIES[Math.floor(rng() * BODIES.length)], pt.age < 2 ? 0.55 : pt.age < 13 ? 0.72 : 1, 0xffffff - Math.floor(rng() * 0x404040));
     doll.setDepth(18);
@@ -124,6 +130,47 @@ export class ClinicScene extends Phaser.Scene {
     w.bubble = bubble;
     this.walkers.set(pt.id, w);
     this.walkTo(w, this.waitSpot(pt.id));
+  }
+  /** A villager's paper doll, from their own look (the same stream a patient's uses). */
+  villagerDoll(id) {
+    const { G } = this, q = population(G).L.get(id);
+    const age = q ? (G.W.time / DAY + 1 - q.born) / 40 : 30;
+    const rng = makeRng(G.meta.seed, 'look', id);
+    const [b, h] = (q?.sex === 'f' ? LOOKS_F : LOOKS_M)[Math.floor(rng() * 4)];
+    return this.makeDoll(b, h, BODIES[Math.floor(rng() * BODIES.length)], age < 2 ? 0.55 : age < 13 ? 0.72 : 1, 0xffffff - Math.floor(rng() * 0x404040)).setDepth(17);
+  }
+  /** Who of the valley is out and about in view: draw them (pooled, nearest first, a cap for phones), drop the rest. */
+  updateVillagers() {
+    const v = this.cam.worldView, cap = Math.min(window.innerWidth, window.innerHeight) < 600 ? 24 : 40;
+    const want = villagersIn(this.G, { x0: v.x / T - 1, y0: v.y / T - 1, x1: (v.x + v.width) / T + 1, y1: (v.y + v.height) / T + 1 }).slice(0, cap);
+    const keep = new Set(want.map((w) => w.id));
+    for (const [id, a] of this.ambient) if (!keep.has(id) || this.walkers.has(id)) { a.doll.destroy(); this.ambient.delete(id); }
+    for (const w of want) {
+      let a = this.ambient.get(w.id);
+      if (!a) { a = { id: w.id, x: w.x, y: w.y, doll: this.villagerDoll(w.id) }; this.ambient.set(w.id, a); }
+      a.tx = w.x; a.ty = w.y; a.act = w.act;
+    }
+  }
+  stepVillagers(dt) {
+    for (const a of this.ambient.values()) {
+      const k = Math.min(1, dt * 5), dx = a.tx - a.x;
+      a.x += dx * k; a.y += (a.ty - a.y) * k;
+      if (Math.abs(dx) > 0.01) a.doll.setScale(Math.abs(a.doll.scaleX) * (dx < 0 ? -1 : 1), a.doll.scaleY);
+      a.doll.setPosition(a.x * T, a.y * T - 4);
+    }
+  }
+  /** Tapping a villager: who they are and what they are doing. */
+  aboutVillager(a) {
+    const { G } = this, q = population(G).L.get(a.id);
+    if (!q) return;
+    const who = personNow(G, q, G.W.time), place = hamletRow(G.W.R, q.h).name;
+    const doing = { water: t('fetching water'), field: t('working in the field'), bush: t('gathering firewood'), market: t('at the market'), cook: t('cooking'), yard: t('at home'), walk: t('on the way') }[a.act] || t('at home');
+    G.ui.toast(t('{name} of {place}: {doing}.', { name: personName(who.name), place: personName(place), doing }));
+  }
+  villagerAt(wx, wy, r = 0.7) {
+    let best = null, bd = r;
+    for (const a of this.ambient.values()) { const d = Math.hypot(a.x - wx, a.y - 0.2 - wy); if (d < bd) { bd = d; best = a; } }
+    return best;
   }
   /** Bench seats near the clinic door, in queue order. */
   waitSpot(id) {
@@ -172,6 +219,8 @@ export class ClinicScene extends Phaser.Scene {
     const w = this.walkerAt(t.wx, t.wy);
     if (G.placing) { this.act(t.x, t.y); return; }
     if (w) { this.moveTarget = { x: w.x, y: w.y, walker: w }; return; }
+    const folk = this.villagerAt(t.wx, t.wy);
+    if (folk) { this.aboutVillager(folk); return; }
     const p = G.p;
     if (Math.hypot(t.x + 0.5 - p.x, t.y + 0.5 - p.y) <= REACH && G.W.obj(t.x, t.y)) { this.act(t.x, t.y); return; }
     const path = findPath(G.W, Math.floor(p.x), Math.floor(p.y), t.x, t.y, 6000, true);
@@ -230,7 +279,7 @@ export class ClinicScene extends Phaser.Scene {
       else if (e[0] === 'open') G.ui.openContainer(e[1], e[2]);
       else if (e[0] === 'brew') G.ui.openJar(e[1], e[2]);
       else if (e[0] === 'placed') { if (!G.p.inv.slots[G.p.hot] || G.p.inv.slots[G.p.hot].id !== e[3]) { G.placing = null; this.ghost.setVisible(false); } }
-      else if (e[0] === 'level') { const n = e[2]; G.ui.banner(e[1] === 'herbal' ? t('Herbal craft level {n}', { n }) : e[1] === 'diagnosis' ? t('Diagnosis level {n}', { n }) : t('Building level {n}', { n }), t('Skill')); sfx('level'); }
+      else if (e[0] === 'level') { const n = e[2]; G.ui.banner(e[1] === 'herbal' ? t('Herbal craft level {n}', { n }) : e[1] === 'diagnosis' ? t('Diagnosis level {n}', { n }) : e[1] === 'glass' ? t('Glasswork level {n}', { n }) : e[1] === 'lab' ? t('Laboratory level {n}', { n }) : t('Building level {n}', { n }), t('Skill')); sfx('level'); }
     }
     G.ui.refresh();
   }
@@ -257,11 +306,13 @@ export class ClinicScene extends Phaser.Scene {
       this.movePlayer(dt);
     }
     this.stepWalkers(dt, modal);
-    this.acc.arrive += dt; this.acc.home += dt; this.acc.catch += dt; this.acc.save += dt; this.acc.hud += dt; this.acc.vend += dt;
+    this.stepVillagers(dt);
+    this.acc.arrive += dt; this.acc.home += dt; this.acc.catch += dt; this.acc.save += dt; this.acc.hud += dt; this.acc.vend += dt; this.acc.folk += dt;
     if (this.acc.arrive > 1) { this.acc.arrive = 0; for (const id of dueArrivals(G)) this.spawnPatient(G.meta.clinic.patients[id]); this.giveUp(); }
     if (this.acc.home > 8) { this.acc.home = 0; for (const n of tickHome(G)) G.ui.news(n); }
     if (this.acc.catch > 4) { this.acc.catch = 0; for (const e of G.W.catchUp()) G.ui.toast(e.text); }
     if (this.acc.vend > 2) { this.acc.vend = 0; this.updateVendors(); this.sampleStations(); }
+    if (this.acc.folk > 0.5) { this.acc.folk = 0; this.updateVillagers(); }
     if (this.acc.save > 30) { this.acc.save = 0; G.save(); }
     this.player.setPosition(G.p.x * T, G.p.y * T - 4);
     this.drawGhost();

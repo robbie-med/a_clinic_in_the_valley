@@ -8,7 +8,11 @@ import { COND } from './content/conditions.js';
 import { addItem } from './inventory.js';
 import { deliverOrders } from './economy.js';
 import { ORGANISMS, baseResistance } from './content/organisms.js';
-import { tickPeople, drawResident, personNow, hold, patientEvents } from './people.js';
+import { tickPeople, drawResident, personNow, hold, patientEvents, population, householdKey } from './people.js';
+import { seekers, walkIn } from './village.js';
+import { benchExposure, immune } from './contagion.js';
+import { kindFrom } from './food.js';
+import { staffDay } from './staff.js';
 import { homeRemedyOnArrival } from './homecare.js';
 import { t, tc, tm, msg, person, en } from './i18n.js';
 import { say, withEn, withCtx } from './patient.js';
@@ -59,47 +63,89 @@ export function healthReport(G) {
   return cl.report;
 }
 const feeFactor = (fee) => clamp(1.15 - fee * 0.07, 0.4, 1.15);
+/** What the valley has told of since the last look: deaths at home, the harvest, hunger (village.js), as news lines. */
+export function villageNews(G) {
+  const { P } = population(G), cl = G.meta.clinic, out = P.news.map((n) => ({ kind: n.kind, text: say(n.msg), msg: n.msg }));
+  P.news = [];
+  // the valley's own news, kept for the ledger (last 60 lines)
+  if (out.length) cl.vlog = [...(cl.vlog || []), ...out.map((n) => ({ t: G.W.time, kind: n.kind, msg: n.msg }))].slice(-60);
+  return out;
+}
+/** The waiting bench since the last look: what passes between those sitting there (contagion.js). The scene says
+ *  whether the bench is under a roof (G.benchIndoor). */
+function bench(G) {
+  const cl = G.meta.clinic, t = G.W.time, mins = Math.min(120, t - (cl.benchT ?? t));
+  cl.benchT = t;
+  const sitting = Object.values(cl.patients).filter((p) => p.status === 'waiting');
+  if (mins <= 0 || sitting.length < 2) return;
+  // a neighbour from the valley may be immune already (an earlier bout, the measles vaccine): contagion.js immune
+  const { P } = population(G), d = day(t);
+  const isProtected = (p, row) => !!p.who && immune(G.meta.seed, p.who, row, d, p.age, p.who.startsWith('b') ? 0 : Math.max(0, p.age - (d - P.day0) / 40), P.imm[p.who]);
+  benchExposure(G.meta.seed, sitting, t, mins, !!G.benchIndoor?.(), isProtected);
+}
 
-/** Today's arrivals (decided once, at the start of the day). */
+// People from beyond the valley (travellers, a visiting relative) who come in a day: an estimate, so a healthy valley
+// still sees the odd stranger.
+const STRANGERS = 0.4;
+/** Today's arrivals, decided once at the day's start: the valley's sick who decide to come (village.js seekers) and a
+ *  few strangers, in the order they reach the clinic. More than the bench can hold do not come today. */
 export function dayPlan(G, d) {
   const cl = G.meta.clinic;
   if (cl.sched[d]) return cl.sched[d];
+  tickPeople(G); // the valley up to the start of today
   const R = G.W.R;
   const rng = makeRng(G.meta.seed, 'arrivals', d);
   const seats = G.seats?.() ?? 3;
-  const lam = (1.6 + 5.5 * cl.rep) * feeFactor(cl.fee);
+  const list = seekers(G, d, OPEN + 20, LAST_ARRIVAL).map((s) => ({ key: `${d}-${s.who}`, t: s.t, hamlet: s.hamlet, who: s.who, spawned: false }));
+  const lam = STRANGERS * ((0.3 + cl.rep) / 0.6) * feeFactor(cl.fee);
   let n = 0, L = Math.exp(-lam), pr = 1;
   do { n++; pr *= rng(); } while (pr > L && n < 30);
-  n = Math.min(n - 1, 3 + seats * 2);
   const places = [[R.village, 2.2], ...R.hamlets.map((h) => [h, 1 / (1 + h.dist / 35)])];
-  const list = [];
-  for (let k = 0; k < n; k++) {
+  for (let k = 0; k < n - 1; k++) {
     const h = weighted(places, rng());
-    list.push({ key: `${d}-${k}`, t: (d - 1) * DAY + OPEN + 20 + rng() * (LAST_ARRIVAL - OPEN - 20), hamlet: h.id, spawned: false });
+    list.push({ key: `${d}-s${k}`, t: (d - 1) * DAY + OPEN + 20 + rng() * (LAST_ARRIVAL - OPEN - 20), hamlet: h.id, stranger: true, spawned: false });
   }
   list.sort((a, b) => a.t - b.t);
+  list.length = Math.min(list.length, 3 + seats * 2);
   cl.sched[d] = list;
   for (const k of Object.keys(cl.sched)) if (+k < d - 1) delete cl.sched[k];
   return list;
 }
 export const hamletOf = (G, id) => (id === 'village' ? G.W.R.village : G.W.R.hamlets.find((h) => h.id === id)) || G.W.R.village;
 
-/** New arrivals and returning patients who should be on their way now. Returns patient ids. */
+/** New arrivals, emergencies carried in, and returning patients who should be on their way now. Returns patient ids. */
 export function dueArrivals(G) {
   const cl = G.meta.clinic, t = G.W.time, d = day(t);
   const out = [];
   if (minuteOfDay(t) < OPEN || minuteOfDay(t) > CLOSE) return out;
+  const arrive = (p, at) => {
+    if (p.who) hold(G, p);
+    p.status = 'arriving'; p.firstSeen = at;
+    if (G.W.obj) homeRemedyOnArrival(G, p);
+    cl.patients[p.id] = p;
+    out.push(p.id);
+  };
   for (const a of dayPlan(G, d)) {
     if (a.spawned || a.t > t) continue;
     a.spawned = true;
     if (t - a.t > 3 * HOUR) { cl.missed = (cl.missed || 0) + 1; continue; } // came while you were away, went home
-    const q = drawResident(G, a.hamlet, a.key); // someone who lives there (people.js)
-    const p = makePatient({ seed: G.meta.seed, key: a.key, t: a.t, season: season(a.t), hamlet: hamletOf(G, a.hamlet), resist: resistance(cl), who: q && personNow(G, q, a.t) });
-    if (p.who) hold(G, p);
-    p.status = 'arriving'; p.firstSeen = a.t;
-    if (G.W.obj) homeRemedyOnArrival(G, p);
-    cl.patients[p.id] = p;
-    out.push(p.id);
+    let p;
+    if (a.who) p = walkIn(G, a.who, a.t); // someone from the valley, with what they have (village.js)
+    else if (a.stranger) p = makePatient({ seed: G.meta.seed, key: a.key, t: a.t, season: season(a.t), hamlet: hamletOf(G, a.hamlet), resist: resistance(cl) });
+    else { // a save from before the living valley: someone who lives there, with an illness drawn for them
+      const q = drawResident(G, a.hamlet, a.key);
+      p = makePatient({ seed: G.meta.seed, key: a.key, t: a.t, season: season(a.t), hamlet: hamletOf(G, a.hamlet), resist: resistance(cl), who: q && personNow(G, q, a.t) });
+    }
+    if (p) arrive(p, a.t);
+  }
+  // an emergency at home: the family carries them in (village.js urgent); at night they wait for the morning
+  for (const u of [...(cl.urgent || [])]) {
+    if (u.t > t) continue;
+    cl.urgent.splice(cl.urgent.indexOf(u), 1);
+    const p = walkIn(G, u.who, t);
+    if (!p) continue;
+    p.urgent = u.why;
+    arrive(p, t);
   }
   for (const r of [...cl.returns]) {
     if (r.t > t) continue;
@@ -120,6 +166,10 @@ export function tickHome(G) {
   const news = [];
   fadeResistance(cl, day(t));
   tickPeople(G);
+  news.push(...villageNews(G));
+  bench(G);
+  // a working day for your staff, once a day (staff.js)
+  for (cl.staffDay ??= day(t); cl.staffDay < day(t); cl.staffDay++) for (const n of staffDay(G, cl.staffDay + 1)) news.push({ kind: n.kind, text: say(n.msg), msg: n.msg });
   for (const p of Object.values(cl.patients)) {
     if (!['home', 'leaving', 'hospital'].includes(p.status)) continue;
     const ev = simulate(p, t);
@@ -205,20 +255,31 @@ export function ageWords(a) { return tm(ageMsg(a)); }
 // English for the `text` kept beside each saved msg
 export const whoEn = (p) => (p.age < 13 ? `${p.name} (${p.age < 1 ? `${Math.max(1, Math.round(p.age * 12))} months` : `${Math.floor(p.age)} years`})` : p.name);
 
-/** What the visit costs, and how it is paid: { total, cash, kind:[[id,n]], debt }. */
+/** The household a valley patient lives in (food.js), or null for a stranger. */
+export function householdOf(G, p) {
+  if (!p.who || !G.W?.R) return null;
+  const { P, L } = population(G), q = L.get(p.who);
+  return q ? P.hh[householdKey(q)] || null : null;
+}
+/** What the visit costs, and how it is paid: { total, cash, kind:[[id,n]], debt }. Payment comes out of the family's
+ *  money and stores at once. */
 export function payment(G, p, charges) {
   const cl = G.meta.clinic;
   const total = Math.round((cl.fee + charges * cl.markup) * 10) / 10;
-  const wallet = Math.round((p.wealth * 14 + 1) * 10) / 10;
+  // a family from the valley pays from its own money and stores (food.js): a hungry house has little of either
+  const hh = householdOf(G, p);
+  const wallet = Math.round(Math.min(p.wealth * 14 + 1, hh ? Math.max(0, hh.cash) : Infinity) * 10) / 10;
   const cash = Math.min(total, wallet);
   let rest = Math.round((total - cash) * 10) / 10;
   const kind = [];
   const rng = makeRng(p.seed, 'pay', p.visits.length);
-  while (rest > 0.2 && p.wealth < 0.6 && kind.length < 3) {
+  if (hh) { const k = kindFrom(hh, p.wealth < 0.6 ? rest : 0, rng); kind.push(...k.kind); rest = k.left; }
+  else while (rest > 0.2 && p.wealth < 0.6 && kind.length < 3) {
     const [id, worth] = rest >= 6 && rng() < 0.4 ? ['chicken', 6] : rest >= 1.2 && rng() < 0.5 ? ['beans', 1.2] : rng() < 0.5 ? ['eggs', 0.4] : ['maize', 0.3];
     const n = Math.max(1, Math.min(id === 'chicken' ? 1 : 12, Math.floor(rest / worth)));
     kind.push([id, n]); rest = Math.round((rest - n * worth) * 10) / 10;
   }
+  if (hh) hh.cash = Math.round((hh.cash - cash) * 10) / 10;
   return { total, cash, kind, debt: Math.max(0, rest) };
 }
 

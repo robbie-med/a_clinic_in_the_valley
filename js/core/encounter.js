@@ -16,6 +16,10 @@ import { stackPotency } from './crafting.js';
 import { makeRng } from './rng.js';
 import { gather, giveTea } from './homecare.js';
 import { reactsTo } from './disease.js';
+import { LAB_TESTS, LAB_TEST, LAB_POINTS } from './content/lab.js';
+import { takeSample, readSample, labBlocker, playerSkill } from './lab.js';
+import { labStaff, readBy } from './staff.js';
+import { anaemiaCauses } from './signs.js';
 import { visitKind } from './metrics.js';
 
 // Advice, one thing each, grouped. `for`: who it can apply to (age, sex, pregnancy, a newborn), never the diagnosis, so
@@ -89,10 +93,11 @@ function returnLine(p) {
 }
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
-/** Tools in your bag + those built into the clinic. */
+/** Tools in your bag, and those kept on the clinic's shelves (the microscope stays on its shelf). */
 export function toolsAt(G) {
   const s = new Set();
   for (const sl of G.p.inv.slots) if (sl && G.C.items.get(sl.id).tool) s.add(sl.id);
+  for (const sh of G.W.shelves?.() || []) for (const sl of sh.inv.slots) if (sl && G.C.items.get(sl.id).tool) s.add(sl.id);
   return s;
 }
 
@@ -153,12 +158,95 @@ export function examine(G, enc, xid) {
   return { ok: true, text: say(seen) };
 }
 
+// ——— the laboratory (content/lab.js, lab.js)
+export const labTests = () => LAB_TESTS;
+/** Can this test be done now (and by whom)? null, or why not. */
+export const labWhyNot = (G, testId) => labBlocker(G, LAB_TEST.get(testId), stockOf, toolsAt(G));
+/** The blood counter: a control run on its first test of the day (one more reagent pack), and now and then a fault
+ *  that needs the repair kit by post (estimates). Returns why it cannot run, or null. */
+function counterReady(G) {
+  const cl = G.meta.clinic, d = day(G.W.time);
+  if (cl.counterBroken) {
+    if (stockOf(G, 'counter_repair') < 1) return t('The blood counter shows a fault. It needs the repair kit (by post).');
+    dispense(G, 'counter_repair', 1); cl.counterBroken = false;
+  }
+  if (cl.counterQC !== d) { if (stockOf(G, 'fbc_pack') < 2) return t('The blood counter needs a control run first: two reagent packs today.'); dispense(G, 'fbc_pack', 1); cl.counterQC = d; }
+  return null;
+}
+/**
+ * Do a test. by: 'you' (it takes your minutes; you read it with your lab skill) or 'staff' (your best laboratory
+ * assistant takes the sample and reads it in their own time; the result comes when ready: labReady). The sample is
+ * kept on the encounter (enc.samples) so you can read it again (recheck).
+ */
+export function runLab(G, enc, testId, by = 'you') {
+  const p = G.meta.clinic.patients[enc.pid], T = LAB_TEST.get(testId);
+  const why = labBlocker(G, T, stockOf, toolsAt(G)) || (T.method === 'counter' ? counterReady(G) : null);
+  if (why) return { ok: false, text: why };
+  const staff = by === 'staff' ? labStaff(G)[0] : null;
+  if (by === 'staff' && !staff) return { ok: false, text: t('You have no laboratory assistant.') };
+  let slideQ = 1;
+  for (const [id, n] of T.uses) { const got = dispense(G, id, n); if (id === 'slide') slideQ = got.q; }
+  // glass breaks now and then (lab.js LAB_TOOLS `breaks`)
+  for (const id of T.needs) { const it = G.C.items.get(id); if (it.breaks && makeRng(p.seed, 'break', id, Math.floor(G.W.time))() < it.breaks) { removeTool(G, id); enc.log.push({ who: EXAM, text: msg('The {tool} broke.', { tool: en(it, 'name') }) }); } }
+  if (T.method === 'counter' && makeRng(p.seed, 'counter', Math.floor(G.W.time))() < 0.003) G.meta.clinic.counterBroken = true;
+  const now = G.W.time, sample = takeSample(p, testId, now, slideQ);
+  (enc.samples ||= []).push(sample);
+  enc.done.add(testId);
+  if (staff) {
+    // the assistant works at their own pace, quicker as they learn (estimate)
+    const ready = now + T.min * (1.4 - 0.6 * staff.skill);
+    (enc.labQ ||= []).push({ sample, by: staff.who, ready });
+    enc.log.push({ who: YOU, text: msg('{test}: sent to the laboratory.', { test: en(T, 'label') }) });
+    return { ok: true, text: t('Sent to the laboratory. The result will come.'), pending: true };
+  }
+  G.meta.time += T.min;
+  const lv = gainXp(G.p, 'lab', 2);
+  return { ...showLab(G, enc, p, sample, playerSkill(G.p), 'you'), level: lv };
+}
+/** Results the assistant has finished by now (call while the encounter is open). Returns the texts. */
+export function labReady(G, enc) {
+  const p = G.meta.clinic.patients[enc.pid], out = [];
+  for (const j of [...(enc.labQ || [])]) {
+    if (G.W.time < j.ready) continue;
+    enc.labQ.splice(enc.labQ.indexOf(j), 1);
+    const s = (G.meta.clinic.staff || []).find((x) => x.who === j.by);
+    const r = showLab(G, enc, p, j.sample, s ? s.skill : 0.3, j.by);
+    j.sample.readBy = j.by;
+    if (s) readBy(s);
+    out.push(r.text);
+  }
+  return out;
+}
+/** Read a slide again yourself (quality control): your own reading of the same cells. If an assistant read it first,
+ *  telling them what you found teaches them twice as fast (staff.js readBy). */
+export function recheck(G, enc, i) {
+  const p = G.meta.clinic.patients[enc.pid], sample = enc.samples?.[i];
+  if (!sample || !LAB_TEST.get(sample.test).bench) return { ok: false, text: t('Nothing to look at again.') };
+  G.meta.time += Math.round(LAB_TEST.get(sample.test).min / 2);
+  const s = sample.readBy && (G.meta.clinic.staff || []).find((x) => x.who === sample.readBy);
+  if (s) readBy(s, true);
+  gainXp(G.p, 'lab', 1);
+  return showLab(G, enc, p, sample, playerSkill(G.p), 'recheck');
+}
+function showLab(G, enc, p, sample, skill, who) {
+  const F = readSample(p, sample, skill, who), T = LAB_TEST.get(sample.test), lines = [];
+  for (const [k, f] of Object.entries(F)) { enc.found[k] = f; lines.push(f.m); }
+  const seen = lines.length ? parts(lines) : msg('Nothing remarkable.');
+  enc.log.push({ who: EXAM, text: msg('{exam}: {text}', { exam: en(T, 'label'), text: seen }), lab: sample.test });
+  return { ok: true, text: say(seen) };
+}
+/** Take one instrument out of the bag or off a shelf (it broke). */
+function removeTool(G, id) {
+  if (count(G.p.inv, id)) { remove(G.p.inv, id, 1); return; }
+  for (const sh of G.W.shelves()) if (count(sh.inv, id)) { remove(sh.inv, id, 1); return; }
+}
+
 /** Ranked differential from what you found so far: [{ id, name, score }]. */
 export function differential(enc) {
   const score = {};
   for (const [k, f] of Object.entries(enc.found)) {
     if (!f.pos) continue;
-    for (const [c, w] of Object.entries(POINTS[k] || {})) score[c] = (score[c] || 0) + w;
+    for (const [c, w] of Object.entries(POINTS[k] || LAB_POINTS[k] || {})) score[c] = (score[c] || 0) + w;
   }
   return Object.entries(score).map(([id, s]) => ({ id, name: COND.get(id).name, score: s })).sort((a, b) => b.score - a.score).slice(0, 6);
 }
@@ -380,5 +468,9 @@ export function judge(G, p, enc) {
   const needless = main.params.org ? [] : antibiotics;
   // a dangerous bacterial illness (dysentery, pneumonia, typhoid) sent home without an antibiotic needed the health centre
   const needsRefer = (main.model === 'bacterial' && main.params.hazard >= 0.001 && !antibiotics.length) || main.id === 'pre_eclampsia' || !!T.mustRefer;
-  return { dxRight, truth: en(main, 'name'), helped, harmed, needless, referredRight: needsRefer ? enc.refer : null };
+  // thin blood: why, in this body (signs.js anaemiaCauses); what they caught on your bench (contagion.js)
+  const anaemic = main.id === 'anaemia' || main.id === 'hookworm' || p.hb < 9;
+  const causes = anaemic ? anaemiaCauses(p) : undefined;
+  const caught = (p.caught || []).filter((c) => c.where === 'bench').map((c) => c.cond);
+  return { dxRight, truth: en(main, 'name'), helped, harmed, needless, referredRight: needsRefer ? enc.refer : null, causes, caught: caught.length ? caught : undefined };
 }

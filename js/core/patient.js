@@ -7,6 +7,7 @@ import { ACTIVES } from './content/actives.js';
 import { addCondition } from './disease.js';
 import { signs } from './signs.js';
 import { t, tm, msg, en, getLang } from './i18n.js';
+import { COMPRESS } from './time.js';
 
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -114,6 +115,8 @@ export function makePatient({ seed, key, t, season, hamlet, cond: forceCond, age
   if (who) Object.assign(p, { who: who.id, mother: who.mother, bf: who.bf, marks: who.marks, vacc: who.vacc, fpUntil: who.fpUntil });
   if (person.pp != null) p.delivered = t - person.pp * 24 * 60; // when she gave birth (game minutes)
   p.immMalaria = clamp((0.1 + (age - 0.5) / 13) * (pregnant ? 0.7 : 1) * lerp(0.6, 1.2, hamlet?.mosquito ?? 0.5) * lerp(0.35, 1.45, rng()), 0.08, 0.85);
+  // someone from the valley brings their own body and makings (people.js personNow): blood, weight, habits, allergy
+  if (who?.blood) residentBody(p, who, t, hamlet);
   // People come when they feel ill: draw how long they have had it until what they would say is true now (a
   // semi-immune adult carrying silent parasites does not walk in with a fever). If this illness would not bring them
   // today, they come with another that would; a forced illness (tests) keeps its best try.
@@ -234,4 +237,53 @@ const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 export function companion(p) {
   if (p.age >= 13) return null;
   return p.age < 5 ? t('carried by the mother') : t('with the mother');
+}
+
+/** Body and makings of a valley resident onto a patient record: their blood (blood.js), weight, how well they keep to
+ *  medicine, allergy, malaria immunity (sickle trait protects against severe malaria: Taylor SM et al. Lancet Infect
+ *  Dis 2012;12:457, OR 0.09; the size of the shift is an estimate). */
+function residentBody(p, who, t, hamlet) {
+  p.blood = { ...who.blood }; p.hb = who.blood.hb; p.res = true;
+  p.weight = Math.round((who.kg + 0.3 * (p.pregnant || 0)) * 10) / 10; p.nutrition = who.nutrition;
+  p.adh = who.adh; p.allergy = who.allergy; p.nauseaSev = who.nausea; p.wealth = who.wealth; p.trust = who.trust ?? 0.5;
+  const sickleTrait = Math.floor((who.blood.g ?? 0) / 3) === 1;
+  p.immMalaria = clamp(clamp((0.1 + (p.age - 0.5) / 13) * (p.pregnant ? 0.7 : 1) * lerp(0.6, 1.2, hamlet?.mosquito ?? 0.5) * (who.immF ?? 1), 0.08, 0.85) + (sickleTrait ? 0.15 : 0), 0.08, 0.9);
+}
+/**
+ * The record of a valley resident whose body the game now runs hour by hour (village.js): an illness has begun, or a
+ * pregnancy. The same shape as makePatient's, with no illness yet. who: people.js personNow.
+ */
+export function residentRecord({ seed, who, t, hamlet }) {
+  const key = `${who.id}@${Math.floor(t)}`;
+  const p = {
+    id: 'p' + key, key, seed: (seed ^ hashKey(key)) >>> 0, name: who.name, sex: who.sex, age: Math.round(who.age * 100) / 100,
+    weight: 0, nutrition: 1, hb: 12, pregnant: who.pregnant || 0, hamlet: hamlet?.id || null, wealth: 0.5, adh: 0.8, trust: 0.5,
+    nauseaSev: 0.8, pkv: {}, allergy: null, t, conds: [], hyd: 0, doses: { sys: {}, gut: [] }, rx: [], healed: [], flags: {}, toxSeen: {}, visits: [],
+    who: who.id, mother: who.mother, bf: who.bf, marks: who.marks, vacc: who.vacc, fpUntil: who.fpUntil,
+  };
+  residentBody(p, who, t, hamlet);
+  if (who.pp != null) p.delivered = t - (who.pp / COMPRESS) * 24 * 60; // pp: real days since the birth (game calendar)
+  return p;
+}
+/** Each drug's spread in this person's own clearance and volume (their own stream: the same person, the same body). */
+export function fillPkv(p, seed, personId) {
+  for (const a of ACTIVES) if (a.pk && !p.pkv?.[a.id]) { const r = makeRng(seed, 'pkv', personId, a.id); (p.pkv ||= {})[a.id] = [Math.exp(gauss(r) * a.pk.spread), Math.exp(gauss(r) * a.pk.spread * 0.6)]; }
+}
+/**
+ * What a resident says when they walk in: the illness they feel most (mainCond), how long they have had it, and a
+ * complaint whose every claim is true now (what they say first is true when they say it). Returns false if nothing
+ * troubles them.
+ */
+export function voice(p, t) {
+  const main = [...p.conds].sort((a, b) => (b.s || 0) - (a.s || 0))[0];
+  if (!main) return false;
+  const def = COND.get(main.id), F = signs(p, t);
+  p.mainCond = main.id;
+  p.since = Math.max(1, Math.round(((t - main.t0) / 60) * (def.params.pace || 1)));
+  const said = def.complaint.map((c) => ({ t: en(c, 't'), says: c.says.filter((x) => F[x]?.pos), all: c.says.every((x) => F[x]?.pos) }));
+  const ok = said.filter((c) => c.all);
+  const from = ok.length ? ok : [[...said].sort((a, b) => b.says.length - a.says.length)[0]];
+  const chosen = pickBy(from, makeRng(p.seed, 'voice', Math.floor(t))());
+  p.complaint = complaintText(p, chosen.t); p.complaintMsg = complaintMsg(p, chosen.t); p.says = chosen.says;
+  return true;
 }

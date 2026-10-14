@@ -22,12 +22,44 @@ compound, with sources.
 
   Where people live decides what they catch: malaria near standing water, diarrhoea where the
   river is the water source.
-- **People** (`people.js`, very basic for now): each hamlet has households whose people age, conceive, give
-  birth and die on the 40-day calendar year (rural East African birth and death rates), so the valley grows
-  over generations. Patients are drawn from them. A pregnant patient carries a foetus that takes in what her
-  blood carries: drugs (`foetal` data on actives: vitamin A early on, NSAIDs late, ...) and illness (malaria,
-  severe anaemia, high fever) add harm, and birth turns it into a stillbirth, a small baby or a marked one.
-  Babies join the mother's household. Drugs in a baby under 2 months have their own harms (`newborn` data).
+- **The living valley** (`people.js`, `village.js`, `blood.js`, `food.js`, `contagion.js`): every resident has a
+  body that persists, and the valley runs every game day whether or not you see it.
+  - Households grow maize and beans (sown with the rains, lifted at the end of the rains and the start of the cool
+    dry season), keep cassava in the ground, buy grain while they have money, sell a chicken or a goat, then eat
+    less. One year in six the rains fail; illness in the growing season costs the next harvest. Hunger thins people,
+    lowers fertility, weakens defence against infection and, past ~75% of the median weight, kills.
+  - Blood (`blood.js`): haemoglobin, the iron store, folate, red cell size and turnover, and the genes that shape
+    them (sickle trait and disease, α-thalassaemia, inherited by Mendel). Iron comes from food (a few per cent of it
+    from maize and beans, more when the store is empty, less while inflammation raises hepcidin) and from tablets;
+    it leaves with monthly bleeding, hookworms, haemorrhage and the growing baby (~1000 mg a pregnancy). So
+    anaemia in pregnancy is common, has several causes at once, and iron tablets mend only the part that wanted
+    iron: malaria, hookworm, HIV, sickle cell disease, thalassaemia trait and folate need their own answers, and
+    severe anaemia needs transfusion at the health centre.
+  - Illness arises the way it does in a valley: germs pass at home, in the hamlet and on your waiting bench
+    (`content/contagion.js`: faecal, airborne, skin, mosquito and sexual routes; measles, chickenpox and mumps
+    come as epidemics as births dilute immunity, the measles vaccine protects most children); the rest happens at
+    steady rates (`content/village.js`), and lifelong illness (high blood pressure, HIV, TB, worms…) is carried.
+  - Anyone ill or pregnant has a record the game runs hour by hour (`disease.js simulate`), so what they bring to
+    you is exactly what they have; every pregnancy runs as one, labour complications included. The sick decide
+    each day whether to walk to you (how ill they feel, a small child, the distance, your fee and name, their
+    means): that is who arrives. Emergencies at home are carried in. Deaths at home, the harvest and hunger come to
+    you as news (Ledger → The valley).
+  - A pregnant woman's foetus takes in what her blood carries: drugs (`foetal` data on actives) and illness
+    (malaria, severe anaemia, high fever); birth turns it into a stillbirth, a small baby or a marked one. Babies
+    join the mother's household with her genes and iron. Drugs in a baby under 2 months have their own harms.
+  - Villagers are on the map, but only those in view are drawn (`schedule.js`: water at dawn, the field in the
+    farming months, firewood, the market on market day, no cooking fire in a hungry house; the sick stay in).
+- **The laboratory** (`content/lab.js`, `lab.js`): buy glassware and a microscope (mission stores, the post), or
+  make crude glass in a kiln from river sand, wood ash and lime (cloudy slides read worse). Tests: haemoglobin by
+  colour scale, Sahli or meter; thick and thin films (malaria parasites, red cell shape, the differential); white
+  cell count in a counting chamber; reticulocytes; the sickling test; Kato-Katz stool for worm eggs; and a solar
+  blood counter by post (reagent packs, a daily control, now and then a fault). Each reads the true blood
+  (`signs.js bloodPicture`) through the method's own error and the reader's skill. Hindsight says why the blood was
+  thin.
+- **Staff** (`staff.js`, Ledger → Staff): hire people of the valley as a hunter (meat with haem iron for his family
+  and your shelf; too many empty the bush), a herb gatherer (the plant you name, sometimes a lookalike) or a
+  laboratory assistant (reads slides while you work, better with every slide, faster when you check them). Wages go
+  home and feed the household; days away cost the farm.
 - **Patients** (`patient.js`, `clinic.js`) each have:
   - a seeded age, sex, weight, nutrition, pregnancy and haemoglobin;
   - their own drug clearance;
@@ -197,7 +229,8 @@ remembered, and a first visit follows the browser's language.
     level only). He comes to town once your herbal skill is high enough; his price falls as your
     reputation rises. Hire him into a built dispensary and his work is faster, though it still takes
     real-world times.
-- **Phase 4:** clinic → hospital: lab, ward, maternity, theatre, staff, community health.
+- **Phase 4:** clinic → hospital: ward, maternity, theatre, community health (the lab, staff and the living valley are
+  done: see above).
 - **The world's materia medica (done, before phase 3).** Built from open data; see "The world's flora"
   above and `CREDITS.md`. What is still missing: HerbMedPro-style evidence grading per species, and
   patients bringing in the remedies they gathered (the hooks in `core/flora.js` are there for it).
@@ -233,9 +266,8 @@ remembered, and a first visit follows the browser's language.
   and trust in you, instead of one adherence number. Over-advising may then cost something.
 - **Faster time.** A control to speed the clock, with chronic illness (already compressed, `COMPRESS`) and the
   everyday clock running at different rates.
-- **People who persist and work for you.** Individuals live in their villages from visit to visit; hire them to
-  harvest, and make contracts to build (a field of drying racks) and to staff it (others to fill the racks with
-  herbs).
+- **Contracts.** People already persist and work for you (staff.js); still to come: contracts to build (a field of
+  drying racks) and to staff it.
 - **A bank** for loans.
 - **An ultrasound** to buy (pregnancy dating, the baby's position, fluid in the belly).
 - **Mechanics from the other apps** (e.g. `dont get lost`), where they fit.

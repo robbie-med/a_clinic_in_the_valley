@@ -50,6 +50,13 @@ independent.
 - New game-icon name: rebuild icons (`node tools/used-icons.mjs | python3 tools/build_icons.py <game-icons repo>`;
   a clone was used from the session scratchpad, so `git clone --depth 1 https://github.com/game-icons/icons`).
 - After gameplay changes, run `npm test` and `node tools/playtest.mjs <scratch dir>` (and `--mobile`).
+- **The living valley** (`village.js`): residents' rolls are hashed per (seed, id, day, purpose) with the salts in
+  `rng.js STREAM` (never renumber; add at the end), so visiting order never matters. Population saves live in
+  `clinic.pop` (`body`, `ill`, `rec`, `imm`, `hh`, `epi`); a resident who is ill or pregnant has a record run by
+  `simulate`, the clinic takes it over on arrival (`walkIn`). A body with `p.blood` runs `blood.js`; patients
+  without it (strangers, tests) keep the old per-condition Hb paths, so outcome bands in tests stay comparable.
+  Illness arises only through `content/village.js` and `content/contagion.js`; never pick a resident's illness by hand.
+- Lab results come from `signs.js bloodPicture` through `lab.js` method error; keep each method's error referenced.
 - Android WebView can't `fetch()` file:// URLs, so JSON loads via XHR (`js/game/icons.js`). This
   matters if an APK is made later.
 
